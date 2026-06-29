@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,
+                                   initial-scale=1.0">
+    <title>Arabidopsis Piano</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header>
+        <h1>
+            Arabidopsis Synthesizer
+        </h1>
+
+        <p> This project turns arabidopsis transcription patterns into sound! </p>
+            
+        <p> Here's a quick run-down of what that insane sentence means:</p>
+
+        <p> 
+            Arabidopsis thaliana is a model organism that plant scientists love to study. It has a 
+            relatively small genome and a relatively fast reproduction cycle, but is still a complex flowering plant, which makes it an 
+            ideal candidate to research.
+        </p>
+
+        <p> 
+            Transcription measurements reflect gene activity. Not all your genes are on all the time. Some 
+            are only on when needed (like wound repairing genes), or only in certain times 
+            during development (like puberty related genes). Others are synced to the day/night cycle (circadian genes). 
+            Scientists have measured the transcription levels of an entire Arabidopsis seedling over the course of 2 days. 
+            If you plot the transcription levels over time it would look something like this:
+        </p>
+        <p> Since it is data over time, we can turn this into sound and *LISTEN* to the transcription!</p>
+        
+        <h3> But why? Why would you do such a thing?</h3>
+        <ol>
+            <li>
+                Shushhhhhhhhh... don't ruin this for me.
+            </li>
+            <li>
+                As someone who's interested in samplers and synthesizers, the idea of converting biological data into sound 
+                is intriguing.
+            </li>
+            <li>
+                We know that whole number ratios of frequencies tend to sound pleasent in western music. For example, when you play a sound, 
+                then play another sound at twice the frequency, you would interpret that as an octave (same note but higher pitch). Not the most 
+                interesting sounding, but certainly harmonious. A 3:2 frequency ratio gives you a perfect Fifth (Do, and So), so on and so forth 
+                (see below for more on the music theory side of things). As such, if two genes sound "pleasent" together, it might suggest whole 
+                number ratios between their frequencies and might indicate biological relationships.
+            </li>
+        </ol>
+
+    </header>
+    <main>
+        <div id="SynthDiv">
+            <div id="Synth_Waveform_div">
+                <div class = "toolbar">
+                    <button id="reset"> reset </button>
+                    <button id="sine"> sine </button>
+                    <button id="square"> square </button>
+                    <button id="saw"> saw </button>
+                    <button id="triangle"> triangle </button>
+                    <button id="play_sample"> play sample </button>
+                </div>
+                <canvas id="Synth_Waveform" width="600" height="200"></canvas>
+            </div>
+            
+            <div id="Synth_Keyboard_div">
+            <canvas id="Synth_Keyboard" width="300" height="100"></canvas>
+            </div>
+
+            <div id="Synth_Plots_div">
+                <div id="read_counts"></div>
+                <div id="filter_slider"></div>
+                <div id="fft"></div>
+            </div>
+        </div>
+
+    </main>
+    <script type="module" src="./src/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.1.1/plotly.min.js"></script>
+</body>
+
+</html>
