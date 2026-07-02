@@ -36,16 +36,3 @@ async function start() {
 document.getElementById('play_sample').addEventListener('click', start)
 
 // Plot UMAPs
-const countUMAP = await plotUMAP(
-    "/dat/count_umap.bin", 
-    "/dat/bin_meta.json",
-    "read_counts",
-    "UMAP of Counts over 48 hrs"
-)
-
-const fftUMAP = await plotUMAP(
-    "/dat/fft_umap.bin", 
-    "/dat/bin_meta.json",
-    "fft",
-    "UMAP of waveform FFT"
-)
