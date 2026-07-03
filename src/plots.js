@@ -85,6 +85,16 @@ const bus = {
     }
 }
 
+function indexToColor(i) {
+    const r = ( i >> 16 ) & 0xff
+    const g = ( i >> 8  ) & 0xff
+    const b = ( i )       & 0xff
+    return `rgb(${r}, ${g}, ${b})`
+}
+
+function colorToIndex(r,g,b) {
+    return (r << 16) | (g << 8) | b
+}
 
 function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
 
@@ -102,47 +112,79 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     .range([innerHeight, 0])
     .nice()
 
-    const svg = d3.select('#'.concat(div_name))
+    //Allow zooming
+    let currentXScale = xScale
+    let currentYScale = yScale
+
+    //Set up svg (axis + titles etc) & visCanvas (points) & hitCanvas(rgb code)
+
+    const svg = d3.select('#' + div_name)
         .append("svg")
         .attr('width', width)
         .attr('height', height)
+        .style('position', 'absolute')
+        .style('top', '0')
+        .style('left', '0')
+        .style('pointer-events', 'none')
+        .style('outline', '2px solid red')
 
     const plotArea = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`)
 
-    // clip out of bounds points
-    const clipId = `clip-${div_name}`
-
-    // interactive portion
-    const zoomRect = plotArea.append('rect')
+    const visCanvas = d3.select("#" + div_name)
+        .append('canvas')
         .attr('width', innerWidth)
         .attr('height', innerHeight)
-        .style('fill', 'none')
-        .style('pointer-events', 'all')
+        .style('position', 'absolute')
+        .style('top', margin.top + 'px')
+        .style('left', margin.left + 'px')
+        .style('outline', '2px solid orange')
+    
+    const hitCanvas = d3.select("#" + div_name)
+        .append('canvas')
+        .attr('width', innerWidth)
+        .attr('height', innerHeight)
+        .style('position', 'absolute')
+        .style('top', margin.top + 'px')
+        .style('left', margin.left + 'px')
+        .style('opacity', 0)
+        .style('pointer-events', 'none')
+        .style('outline', '2px solid blue')
+    
+    const visCtx = visCanvas.node().getContext('2d')
+    const hitCtx = hitCanvas.node().getContext('2d', { willReadFrequently: true })
 
-    const plotContent = plotArea.append("g")
-        .attr("clip-path", `url(#${clipId})`)
+    let currentHighlight = null
+    
+    const notHighlightPointSize = 2
+    const HighlightPointSize = 6
 
-    svg.append("defs").append("clipPath")
-        .attr("id", clipId)
-        .append("rect")
-            .attr('width', innerWidth)
-            .attr('height', innerHeight)
+    function drawPoints(xSc, ySc) {
+        //Clear canvas
+        visCtx.clearRect(0,0,innerWidth, innerHeight)
+        hitCtx.clearRect(0,0,innerWidth, innerHeight)
 
-    const points = plotContent.selectAll('circle')
-        .data(umap_arr)
-        .join('circle')
-        .attr('cx', d => xScale(d.x))
-        .attr('cy', d => yScale(d.y))
-        .attr('r', 2)
-        .attr('fill', 'steelblue')
-        .attr('opacity', 0.25)
-        .on('mouseover', (event, d) => {
-            bus.execute_event('point_hover', d.id) //emit point_hover signal
+        umap_arr.forEach((d,i) => {
+            const cx = xSc(d.x)
+            const cy = ySc(d.y)
+
+            if (cx < 0 || cx > innerWidth || cy < 0 || cy > innerHeight) return
+
+            const isHighlighted = d.id === currentHighlight
+
+            visCtx.beginPath()
+            visCtx.arc(cx, cy, isHighlighted ? HighlightPointSize : notHighlightPointSize, 0, 2 * Math.PI)
+            visCtx.fillStyle = isHighlighted? 'red' : 'steelblue'
+            visCtx.fill()
+
+            hitCtx.beginPath()
+            hitCtx.arc(cx, cy, notHighlightPointSize + 2, 0, 2 * Math.PI)
+            hitCtx.fillStyle = indexToColor(i)
+            hitCtx.fill()
         })
-        .on('mouseout', (event, d) => {
-            bus.execute_event('point_hover', null) //emit point_hover signal
-        })
+    }
+
+    drawPoints(xScale, yScale)
 
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
@@ -181,6 +223,41 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .attr("text-anchor", "left")
         .attr("font-size", "12px")
 
+    // Custom mouse over behavior
+
+    let lastEmitted = null
+
+    visCanvas.on('mousemove', (event) => {
+        const [mx, my] = d3.pointer(event)
+        const [r,g,b,a] = hitCtx.getImageData(mx, my, 1, 1).data
+        console.log(r,g,b,a)
+
+        if ( a !== 255 ) {
+            if (lastEmitted !== null) {
+                lastEmitted = null
+                bus.execute_event('point_hover', null)
+            }
+            return
+        }
+
+        const idx = colorToIndex(r,g,b)
+        if (idx < 0 || idx >= umap_arr.length) return //safety check
+        const d = umap_arr[idx]
+        if (!d) return
+
+        if (d.id !== lastEmitted){
+            lastEmitted = d.id
+            bus.execute_event('point_hover', d.id)
+        }
+    })
+
+    visCanvas.on('mouseleave', () => {
+        if (lastEmitted !== null) {
+            lastEmitted = null
+            bus.execute_event('point_hover', null)
+        }
+    })
+
     let rafId = null
     const zoom = d3.zoom()
         .scaleExtent([1, 20])
@@ -188,35 +265,36 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .on("zoom", (event) => {
             const zx = event.transform.rescaleX(xScale)
             const zy = event.transform.rescaleY(yScale)
+            currentXScale = zx
+            currentYScale = zy
+
             if (rafId) cancelAnimationFrame(rafId)
             rafId = requestAnimationFrame(() => {
-                points
-                    .attr('cx', d => zx(d.x))
-                    .attr('cy', d => zy(d.y))
-        
-
-            xAxis.call(d3.axisBottom(zx))
-            yAxis.call(d3.axisLeft(zy))
+                drawPoints(zx, zy)
+                xAxis.call(d3.axisBottom(zx))
+                yAxis.call(d3.axisLeft(zy))
             })
         })
         .on("end", (event) => {
             const zx = event.transform.rescaleX(xScale)
             const zy = event.transform.rescaleY(yScale)
+            currentXScale = zx
+            currentYScale = zy
+            drawPoints(zx, zy)   
             xAxis.call(d3.axisBottom(zx))
             yAxis.call(d3.axisLeft(zy))
         })
 
-    plotArea.call(zoom)
-    plotArea.on('dblclick.zoom', null)
-    plotArea.on('dblclick', () => {
-        plotArea.transition().duration(300).call(zoom.transform, d3.zoomIdentity)
+    visCanvas.call(zoom)
+    visCanvas.on('dblclick.zoom', null)
+    visCanvas.on('dblclick', () => {
+        visCanvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
     })
 
     //subscribe to bus events
     bus.subscribe_to("point_hover", div_name, (GeneID) => {
-        points
-            .attr('r', d => d.id === GeneID ? 8 : 2)
-            .attr('fill', d => d.id === GeneID ? 'red' : 'steelblue')
+        currentHighlight = GeneID
+        drawPoints(currentXScale, currentYScale)
         if (displayGeneID) hoverLabel.text(GeneID ?? '')
     })
 
