@@ -116,7 +116,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     let currentXScale = xScale
     let currentYScale = yScale
 
-    //Set up svg (axis + titles etc) & visCanvas (points) & hitCanvas(rgb code)
+    //Set up svg (axis + titles etc) & mainCanvas (points)
 
     const svg = d3.select('#' + div_name)
         .append("svg")
@@ -131,7 +131,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     const plotArea = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`)
 
-    const visCanvas = d3.select("#" + div_name)
+    const mainCanvas = d3.select("#" + div_name)
         .append('canvas')
         .attr('width', innerWidth)
         .attr('height', innerHeight)
@@ -140,29 +140,33 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .style('left', margin.left + 'px')
         .style('outline', '2px solid orange')
     
-    const hitCanvas = d3.select("#" + div_name)
+    const highlightCanvas = d3.select("#" + div_name)
         .append('canvas')
         .attr('width', innerWidth)
         .attr('height', innerHeight)
         .style('position', 'absolute')
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
-        .style('opacity', 0)
-        .style('pointer-events', 'none')
         .style('outline', '2px solid blue')
+        .style('pointer-events', 'none')
     
-    const visCtx = visCanvas.node().getContext('2d')
-    const hitCtx = hitCanvas.node().getContext('2d', { willReadFrequently: true })
+    let quadtree = null
+    function rebuildQuadtree(xSc, ySc) {
+        quadtree = d3.quadtree()
+            .x(d => xSc(d.x))
+            .y(d => ySc(d.y))
+            .addAll(umap_arr)
+    }
 
-    let currentHighlight = null
-    
+    const mainCtx = mainCanvas.node().getContext('2d', { willReadFrequently: true })
+    const hlightCtx = highlightCanvas.node().getContext('2d')
+
     const notHighlightPointSize = 2
     const HighlightPointSize = 6
 
     function drawPoints(xSc, ySc) {
         //Clear canvas
-        visCtx.clearRect(0,0,innerWidth, innerHeight)
-        hitCtx.clearRect(0,0,innerWidth, innerHeight)
+        mainCtx.clearRect(0,0,innerWidth, innerHeight)
 
         umap_arr.forEach((d,i) => {
             const cx = xSc(d.x)
@@ -170,21 +174,30 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
             if (cx < 0 || cx > innerWidth || cy < 0 || cy > innerHeight) return
 
-            const isHighlighted = d.id === currentHighlight
-
-            visCtx.beginPath()
-            visCtx.arc(cx, cy, isHighlighted ? HighlightPointSize : notHighlightPointSize, 0, 2 * Math.PI)
-            visCtx.fillStyle = isHighlighted? 'red' : 'steelblue'
-            visCtx.fill()
-
-            hitCtx.beginPath()
-            hitCtx.arc(cx, cy, notHighlightPointSize + 2, 0, 2 * Math.PI)
-            hitCtx.fillStyle = indexToColor(i)
-            hitCtx.fill()
+            mainCtx.beginPath()
+            mainCtx.arc(cx, cy, notHighlightPointSize, 0, 2 * Math.PI)
+            mainCtx.fillStyle = 'steelblue'
+            mainCtx.fill()
         })
     }
 
+    // Build a quick look up from GeneID -> Index
+    const GeneID_Lookup = new Map(umap_arr.map(r => [r.id, r]))
+
+    function drawHighlight(xSc, ySc, GeneID) {
+        hlightCtx.clearRect(0,0,innerWidth, innerHeight)
+        const d = GeneID_Lookup.get(GeneID)
+        const cx = xSc(d.x)
+        const cy = ySc(d.y)
+
+        hlightCtx.beginPath()
+        hlightCtx.arc(cx, cy, HighlightPointSize, 0, 2 * Math.PI)
+        hlightCtx.fillStyle = 'red'
+        hlightCtx.fill()
+    }
+
     drawPoints(xScale, yScale)
+    rebuildQuadtree(xScale, yScale)
 
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
@@ -225,35 +238,36 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     // Custom mouse over behavior
 
-    let lastEmitted = null
+    let lastEmittedRow = null //To avoid repeated signal
 
-    visCanvas.on('mousemove', (event) => {
+    mainCanvas.on('mousemove', (event) => {
         const [mx, my] = d3.pointer(event)
-        const [r,g,b,a] = hitCtx.getImageData(mx, my, 1, 1).data
-        console.log(r,g,b,a)
+        const d = quadtree.find(mx, my, 4)
 
-        if ( a !== 255 ) {
-            if (lastEmitted !== null) {
-                lastEmitted = null
+        if (!d) {
+            if (lastEmittedRow !== null) {
+                lastEmittedRow = null
                 bus.execute_event('point_hover', null)
             }
             return
         }
 
-        const idx = colorToIndex(r,g,b)
-        if (idx < 0 || idx >= umap_arr.length) return //safety check
-        const d = umap_arr[idx]
-        if (!d) return
-
-        if (d.id !== lastEmitted){
-            lastEmitted = d.id
-            bus.execute_event('point_hover', d.id)
+        if (lastEmittedRow){
+            if (d.id !== lastEmittedRow.id){
+                lastEmittedRow = d
+                bus.execute_event('point_hover', d.id)
+            }
+        } else {
+            lastEmittedRow = d
+            bus.execute_event('point_hover', d.id) 
         }
+
+
     })
 
-    visCanvas.on('mouseleave', () => {
-        if (lastEmitted !== null) {
-            lastEmitted = null
+    mainCanvas.on('mouseleave', () => {
+        if (lastEmittedRow !== null) {
+            lastEmittedRow = null
             bus.execute_event('point_hover', null)
         }
     })
@@ -271,6 +285,8 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             if (rafId) cancelAnimationFrame(rafId)
             rafId = requestAnimationFrame(() => {
                 drawPoints(zx, zy)
+                // drawHighlight(zx, zy)
+                rebuildQuadtree(zx, zy)
                 xAxis.call(d3.axisBottom(zx))
                 yAxis.call(d3.axisLeft(zy))
             })
@@ -280,21 +296,22 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             const zy = event.transform.rescaleY(yScale)
             currentXScale = zx
             currentYScale = zy
-            drawPoints(zx, zy)   
+            drawPoints(zx, zy)
+            // drawHighlight(zx, zy)
+            rebuildQuadtree(zx, zy)   
             xAxis.call(d3.axisBottom(zx))
             yAxis.call(d3.axisLeft(zy))
         })
 
-    visCanvas.call(zoom)
-    visCanvas.on('dblclick.zoom', null)
-    visCanvas.on('dblclick', () => {
-        visCanvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
+    mainCanvas.call(zoom)
+    mainCanvas.on('dblclick.zoom', null)
+    mainCanvas.on('dblclick', () => {
+        mainCanvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
     })
 
     //subscribe to bus events
     bus.subscribe_to("point_hover", div_name, (GeneID) => {
-        currentHighlight = GeneID
-        drawPoints(currentXScale, currentYScale)
+        drawHighlight(currentXScale, currentYScale, GeneID)
         if (displayGeneID) hoverLabel.text(GeneID ?? '')
     })
 
