@@ -49,10 +49,10 @@ let fft_umap_arr = await bin_to_array(
     "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json"
 )
 
-// const min_max_arr = await bin_to_array(
-//     "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/min_max_norm.bin", 
-//     "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json"
-// )
+const min_max_arr = await bin_to_array(
+    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/min_max_norm.bin", 
+    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json"
+)
 
 const min_max_meta = await meta_to_json(
     "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json",
@@ -186,14 +186,16 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     function drawHighlight(xSc, ySc, GeneID) {
         hlightCtx.clearRect(0,0,innerWidth, innerHeight)
-        const d = GeneID_Lookup.get(GeneID)
-        const cx = xSc(d.x)
-        const cy = ySc(d.y)
+        if (GeneID) {
+            const d = GeneID_Lookup.get(GeneID)
+            const cx = xSc(d.x)
+            const cy = ySc(d.y)
 
-        hlightCtx.beginPath()
-        hlightCtx.arc(cx, cy, HighlightPointSize, 0, 2 * Math.PI)
-        hlightCtx.fillStyle = 'red'
-        hlightCtx.fill()
+            hlightCtx.beginPath()
+            hlightCtx.arc(cx, cy, HighlightPointSize, 0, 2 * Math.PI)
+            hlightCtx.fillStyle = 'red'
+            hlightCtx.fill()
+        }
     }
 
     drawPoints(xScale, yScale)
@@ -285,7 +287,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             if (rafId) cancelAnimationFrame(rafId)
             rafId = requestAnimationFrame(() => {
                 drawPoints(zx, zy)
-                // drawHighlight(zx, zy)
+                bus.execute_event('point_hover', null)
                 rebuildQuadtree(zx, zy)
                 xAxis.call(d3.axisBottom(zx))
                 yAxis.call(d3.axisLeft(zy))
@@ -297,7 +299,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             currentXScale = zx
             currentYScale = zy
             drawPoints(zx, zy)
-            // drawHighlight(zx, zy)
+            bus.execute_event('point_hover', null)
             rebuildQuadtree(zx, zy)   
             xAxis.call(d3.axisBottom(zx))
             yAxis.call(d3.axisLeft(zy))
@@ -318,6 +320,121 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     return plotArea.node()
 }
 
+function buildLogMeanCountArray(min_max_arr, list_of_id){
+    const out_arr = min_max_arr.map(x => ({ log_mean_count : x.log_mean_count}))
+    return append_id_to_array(out_arr, list_of_id)
+}
+
+const logMeanArr = buildLogMeanCountArray(min_max_arr, ids)
+
+function plotViolin(width, height, logMeanArr, div_name){
+    const margin = { top: 20, right: 20, bottom: 20, left: 50 }
+    const innerWidth = width - margin.left - margin.right
+    const innerHeight = height - margin.top - margin.bottom
+
+    const svg = d3.select("#" + div_name)
+        .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+        .style('outline', '2px solid salmon')
+    
+        const plotArea = svg.append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`)
+    
+    const yScale = d3.scaleLinear()
+        .domain(d3.extent(logMeanArr, d => d.log_mean_count))
+        .range([innerHeight, 0])
+        .nice()
+    
+    const xScale = d3.scaleBand()
+        .range([0, innerWidth])
+        .domain([""])
+    
+    plotArea.append("g").call( d3.axisLeft(yScale) )
+    plotArea.append("text")
+        .attr("transform", "rotate(90)")
+        .attr("x", + innerHeight/2)
+        .attr("y", + 35)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .text("log(average count over 48hrs)")
+
+    const histogram = d3.histogram()
+        .domain(yScale.domain())
+        .thresholds(yScale.ticks(20))
+        .value(d => d.log_mean_count)
+
+    const bins = histogram(logMeanArr)   
+    const binScale = d3.scaleLinear()
+        .domain([0, d3.max(bins, d => d.length)])
+        .range([0, xScale.bandwidth()])
+
+    const curveDat = bins.map(d => ({
+        y: yScale((d.x0 + d.x1)/2 ),
+        x: binScale(d.length) 
+    }))
+
+    const curve = d3.line()
+        .x(d => d.x)
+        .y(d => d.y)
+        .curve(d3.curveCatmullRom)
+
+    plotArea.append("path")
+        .datum(curveDat)
+        .style("stroke", "none")
+        .style("fill", "pink")
+        .attr("d", curve)
+
+    // Add quantile
+    function widthAtY(y) {
+        for (let i = 0; i < curveDat.length - 1; i++) {
+            const a = curveDat[i];
+            const b = curveDat[i + 1];
+
+            if ((a.y >= y && b.y <= y) || (a.y <= y && b.y >= y)) {
+                const t = (y - a.y) / (b.y - a.y);
+                return a.x + t * (b.x - a.x);
+            }
+        }
+        return 0;
+    }
+
+    function plotQuantile(quant){
+        const qval = quantile(logMeanArr, quant)
+        plotArea.append("line")
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .attr("x1", binScale(0))
+            .attr("y1", yScale(qval))
+            .attr("x2", widthAtY(yScale(qval)))
+            .attr("y2", yScale(qval))
+    }
+
+    plotQuantile(0.25)
+    plotQuantile(0.50)
+    plotQuantile(0.75)
+
+}
+
+const quantile = (arr, q) => { //https://stackoverflow.com/questions/48719873/how-to-get-median-and-quartiles-percentiles-of-an-array-in-javascript-or-php
+    const asc = arr => arr.sort((a, b) => a - b);
+    const new_arr = new Array(arr.length)
+    arr.map((val, idx) => {
+        new_arr[idx] = val.log_mean_count
+    })
+    const sorted = asc(new_arr);
+    const pos = (sorted.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (sorted[base + 1] !== undefined) {
+        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    } else {
+        return sorted[base];
+    }
+};
+
+
+
 const count_svg = plotUMAP(400, 300, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
 const fft_svg = plotUMAP(400, 300, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
-
+plotViolin(100, 300, logMeanArr, "filter_slider")
