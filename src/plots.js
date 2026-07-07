@@ -60,17 +60,20 @@ const min_max_meta = await meta_to_json(
 )
 
 const ids = min_max_meta.rownames
-
-function append_id_to_array(input_array, list_of_id){
-    const out_arr = input_array.map((val, idx) => (
-        {...val, id: list_of_id[idx]}
+const logCount = min_max_arr.map((val, idx) => val.log_mean_count)
+function append_id_logCount_to_array(input_array, list_of_id, list_of_logCount){
+    return input_array.map((val, idx) => (
+        {
+            ...val, 
+            log_mean_count: list_of_logCount[idx],
+            id: list_of_id[idx]
+        }
     ))
-    return out_arr
 }
 
 // Add the GeneID (id) field
-count_umap_arr = append_id_to_array(count_umap_arr, ids)
-fft_umap_arr = append_id_to_array(fft_umap_arr, ids)
+count_umap_arr = append_id_logCount_to_array(count_umap_arr, ids, logCount)
+fft_umap_arr = append_id_logCount_to_array(fft_umap_arr, ids, logCount)
 
 
 // add a bus for communication between plots
@@ -164,7 +167,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     const notHighlightPointSize = 2
     const HighlightPointSize = 6
 
-    function drawPoints(xSc, ySc) {
+    function drawPoints(xSc, ySc, high_val = null, low_val = null) {
         //Clear canvas
         mainCtx.clearRect(0,0,innerWidth, innerHeight)
 
@@ -174,11 +177,39 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
             if (cx < 0 || cx > innerWidth || cy < 0 || cy > innerHeight) return
 
+
             mainCtx.beginPath()
             mainCtx.arc(cx, cy, notHighlightPointSize, 0, 2 * Math.PI)
-            mainCtx.fillStyle = 'steelblue'
+            if (high_val && low_val){
+                if (d.log_mean_count < high_val && d.log_mean_count > low_val){
+                    mainCtx.fillStyle = 'rgba(255,0,0,1)'
+                } else {mainCtx.fillStyle = 'rgba(255,0,0,0)'}
+            } else {mainCtx.fillStyle = 'rgba(255,0,0,1)'}
+            
             mainCtx.fill()
         })
+
+        // mainCtx.fillStyle = "steelblue"
+        // mainCtx.beginPath()
+        // for (let i=0; i< umap_arr.length; i++){
+        //     const d = umap_arr[i]
+        //     if (d.log_mean_count < low_val || d.log_mean_count > high_val){
+        //         mainCtx.moveTo(xSc(d.x) + 3, ySc(d.y))
+        //         mainCtx.arc(xSc(d.x), ySc(d.y), 3, 0, 2 * Math.PI)
+        //     }
+        // }
+        // mainCtx.fill()
+
+        // mainCtx.fillStyle = "purple"
+        // mainCtx.beginPath()
+        // for (let i=0; i< umap_arr.length; i++){
+        //     const d = umap_arr[i]
+        //     if (d.log_mean_count >= low_val && d.log_mean_count <= high_val){
+        //         mainCtx.moveTo(xSc(d.x) + 3, ySc(d.y))
+        //         mainCtx.arc(xSc(d.x), ySc(d.y), 3, 0, 2 * Math.PI)
+        //     }
+        // }
+        // mainCtx.fill()
     }
 
     // Build a quick look up from GeneID -> Index
@@ -311,21 +342,25 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         mainCanvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
     })
 
+    function applyFilter(high_val, low_val){
+
+    }
+
+
     //subscribe to bus events
     bus.subscribe_to("point_hover", div_name, (GeneID) => {
         drawHighlight(currentXScale, currentYScale, GeneID)
         if (displayGeneID) hoverLabel.text(GeneID ?? '')
     })
 
+    bus.subscribe_to("gene_filtering", div_name, ([high_val, low_val]) => {
+        drawPoints(currentXScale, currentYScale, high_val, low_val)
+    })
+
     return plotArea.node()
 }
 
-function buildLogMeanCountArray(min_max_arr, list_of_id){
-    const out_arr = min_max_arr.map(x => ({ log_mean_count : x.log_mean_count}))
-    return append_id_to_array(out_arr, list_of_id)
-}
-
-const logMeanArr = buildLogMeanCountArray(min_max_arr, ids)
+const logMeanArr = min_max_arr
 
 function plotViolin(width, height, logMeanArr, div_name){
     const margin = { top: 20, right: 20, bottom: 20, left: 50 }
@@ -414,6 +449,123 @@ function plotViolin(width, height, logMeanArr, div_name){
     plotQuantile(0.50)
     plotQuantile(0.75)
 
+    // ----- Add Scrubber -----
+    const [ymin, ymax] = yScale.domain()
+    let [low_val, high_val] = [ymin, ymax] // The all these vals are in log(mean_count)
+
+    // rectangle
+    const scrubber_rect = plotArea.append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', innerWidth)
+        .attr('height', yScale(low_val) - yScale(high_val))
+        .attr('stroke', 'none')
+        .attr('fill', 'orange')
+        .attr('opacity', 0.3)
+        .attr('rx', 5)
+
+    // Top bar
+    const SCRUBBER_HANDLES_HEIGHT = 6
+    const scrubber_handle_top = plotArea.append('rect')
+        .attr('x', 0)
+        .attr('y', yScale(high_val) - SCRUBBER_HANDLES_HEIGHT / 2)
+        .attr('width', innerWidth)
+        .attr('height', SCRUBBER_HANDLES_HEIGHT)
+        .attr('stroke', 'none')
+        .attr('fill', 'orange')
+        .attr('opacity', 0)
+        
+    // Bot bar
+    const scrubber_handle_bot = plotArea.append('rect')
+        .attr('x', 0)
+        .attr('y', yScale(low_val) - SCRUBBER_HANDLES_HEIGHT / 2)
+        .attr('width', innerWidth)
+        .attr('height', SCRUBBER_HANDLES_HEIGHT)
+        .attr('stroke', 'none')
+        .attr('fill', 'orange')
+        .attr('opacity', 0)
+        
+    // Circle Handles (visual only)
+    const scrubber_top_circle = plotArea.append('circle')
+        .attr('cx', innerWidth / 2)
+        .attr('cy', yScale(high_val))
+        .attr('r', 3)
+        .attr('stroke', "none")
+        .attr('fill', 'orange')
+        .attr('pointer-events', 'none')
+    const scrubber_bot_circle = plotArea.append('circle')
+        .attr('cx', innerWidth / 2)
+        .attr('cy', yScale(low_val))
+        .attr('r', 3)
+        .attr('stroke', "none")
+        .attr('fill', 'orange')
+        .attr('pointer-events', 'none')
+
+    // scrubbing
+
+    let current_filtered_gene_list = new Array()
+
+    function areArraySame(a, b) {
+        if (a.length !== b.length) return false
+        const setA = new Set(a.map(x => x.id))
+        const setB = new Set(b.map(x => x.id))
+        if (setA.size !== setB.size) return false
+        for (const id of setA) if (!setB.has(id)) return false
+        return true
+    }
+
+    function updateScrubber(){
+        scrubber_handle_top.attr("y", yScale(high_val) - SCRUBBER_HANDLES_HEIGHT / 2)
+        scrubber_handle_bot.attr("y", yScale(low_val) - SCRUBBER_HANDLES_HEIGHT / 2)
+        scrubber_top_circle.attr("cy", yScale(high_val))
+        scrubber_bot_circle.attr("cy", yScale(low_val))
+        scrubber_rect.attr("y", yScale(high_val))
+        scrubber_rect.attr('height', yScale(low_val) - yScale(high_val))
+
+        bus.execute_event("gene_filtering", [high_val, low_val])
+    }
+
+    const dragTop = d3.drag().on("drag", (event) => {
+        high_val = Math.min(
+            ymax, Math.max(
+                low_val,
+                yScale.invert(event.y)
+            )
+        )
+        updateScrubber()
+    })
+
+    const dragBot = d3.drag().on("drag", (event) => {
+        low_val = Math.max(
+            ymin, Math.min(
+                high_val,
+                yScale.invert(event.y)
+            )
+        )
+        updateScrubber()
+    })
+
+    const dragRect = d3.drag().on("drag", (event) => {
+        const window_height = high_val - low_val
+        high_val = Math.min(
+            ymax, Math.max(
+                ymin + (high_val - low_val),
+                high_val - (ymax - yScale.invert(event.dy))
+            )
+        )
+
+        low_val = high_val - window_height
+
+        if (low_val < ymin) {
+            low_val = ymin
+            high_val = ymin + window_height
+        }
+        
+        updateScrubber()
+    })
+    scrubber_handle_top.call(dragTop)
+    scrubber_handle_bot.call(dragBot)
+    scrubber_rect.call(dragRect)
 }
 
 const quantile = (arr, q) => { //https://stackoverflow.com/questions/48719873/how-to-get-median-and-quartiles-percentiles-of-an-array-in-javascript-or-php
