@@ -88,17 +88,6 @@ const bus = {
     }
 }
 
-function indexToColor(i) {
-    const r = ( i >> 16 ) & 0xff
-    const g = ( i >> 8  ) & 0xff
-    const b = ( i )       & 0xff
-    return `rgb(${r}, ${g}, ${b})`
-}
-
-function colorToIndex(r,g,b) {
-    return (r << 16) | (g << 8) | b
-}
-
 function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
 
     const margin = { top: 20, right: 20, bottom: 40, left: 50 }
@@ -115,7 +104,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     .range([innerHeight, 0])
     .nice()
 
-    //Allow zooming
+    //Allow current scale to be passed via bus
     let currentXScale = xScale
     let currentYScale = yScale
 
@@ -142,6 +131,134 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
         .style('outline', '2px solid orange')
+
+    // ---- trying WebGL ----
+    const gl = mainCanvas.node().getContext('webgl') || mainCanvas.node().getContext('experimental-webgl')
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    if (!gl) {
+        //fallback
+        console.warn('WebGL not supported, interactive visual elements may have slower performance')
+        const mainCtx = mainCanvas.node().getContext('2d', { willReadFrequently: true })
+        return
+    }
+
+    // vertex shader
+    const vertSrc = `
+        attribute vec2 position; //input: position in clip space
+        attribute float selected; //0.0 or 1.0 ; talks to outside
+        varying float vSelected;  // talks between the two shaders
+
+        void main() {
+            vSelected = selected;
+            gl_Position = vec4(position, 0.0, 1.0); //output: where on screen
+            gl_PointSize = 5.0; //output: pixel size
+        }
+    `
+    // fragment shader
+    const fragSrc = `
+        precision mediump float;
+        varying float vSelected;
+
+        void main() {
+            if (vSelected > 0.5) {
+                gl_FragColor = vec4(0.8, 0.4, 0.47, 1.0); //vec4(0.27, 0.67, 0.6, 1.0)
+            } else {
+                gl_FragColor = vec4(0.6, 0.6, 0.6, 0.0);    
+            }
+        }
+    `
+    function compileShader(type, src){
+        const shader = gl.createShader(type) //allocate blank shader (vertex or fragment) object to GPU
+        gl.shaderSource(shader, src) //upload glsl string above
+        gl.compileShader(shader)
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader compile error:', gl.getShaderInfoLog(shader))
+            gl.deleteShader(shader)
+            return null
+        }
+        return shader
+    }
+
+    const vertShader = compileShader(gl.VERTEX_SHADER, vertSrc)
+    const fragShader = compileShader(gl.FRAGMENT_SHADER, fragSrc)
+
+    //link two shaders together into one program
+    const program = gl.createProgram()
+    gl.attachShader(program, vertShader)
+    gl.attachShader(program, fragShader)
+    gl.linkProgram(program)
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program))
+    }
+
+    gl.useProgram(program)
+
+    // uploading coordinates
+    const positions = new Float32Array(umap_arr.length * 2)
+    for (let i=0; i < umap_arr.length; i++){
+        const px = xScale(umap_arr[i].x)
+        const py = yScale(umap_arr[i].y)
+
+        positions[i*2] = (px / innerWidth) * 2 - 1
+        positions[i*2 + 1] = -(py / innerHeight) * 2 + 1
+    }
+
+    const positionBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer) //set active buffer
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW)
+
+    // note, this binds the Attribute (i.e. position) to the buffer that's currently created
+    // so now attribute slot n = read from positionBuffer according to rule specified below
+    const positionLoc = gl.getAttribLocation(program, 'position') // Get which slot the position attribute is stored (int number)
+    gl.enableVertexAttribArray(positionLoc)
+    gl.vertexAttribPointer( // always read from ARRAY_BUFFER
+        positionLoc, // the data being read goes into this slot (i.e. represents position)
+        2, // 2 consecutive floats (x,y)
+        gl.FLOAT,
+        false, // skip normalization for floats
+        0, // stride 0 (points are adjacent with no padding)
+        0 // no offset, read from start
+    )
+
+    // Color by Scrubber
+    const selectedArr = new Float32Array(umap_arr.length).fill(1.0)
+    const selectedBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, selectedBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, selectedArr, gl.DYNAMIC_DRAW)
+
+    const selectedLoc = gl.getAttribLocation(program, 'selected')
+    gl.enableVertexAttribArray(selectedLoc)
+    gl.vertexAttribPointer(
+        selectedLoc,
+        1,
+        gl.FLOAT,
+        false,
+        0,
+        0
+    )
+
+    function renderGL() {
+        gl.clearColor(0,0,0,0) //Defines what clear means
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        gl.drawArrays(gl.POINTS, 0, umap_arr.length) // style, start, count
+    }
+
+    renderGL()
+
+
+    function udpateSelected(low_val, high_val) {
+        for (let i=0; i < umap_arr.length; i++){
+            selectedArr[i] = (
+                umap_arr[i].log_mean_count >= low_val &&
+                umap_arr[i].log_mean_count <= high_val
+            ) ? 1.0 : 0.0
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, selectedBuffer)
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, selectedArr) //currently still re-writing whole buffer but does so inplace
+
+        renderGL()
+    }
     
     const highlightCanvas = d3.select("#" + div_name)
         .append('canvas')
@@ -161,13 +278,14 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             .addAll(umap_arr)
     }
 
-    const mainCtx = mainCanvas.node().getContext('2d', { willReadFrequently: true })
+    
     const hlightCtx = highlightCanvas.node().getContext('2d')
 
     const notHighlightPointSize = 2
     const HighlightPointSize = 6
 
-    function drawPoints(xSc, ySc, high_val = null, low_val = null) {
+    //CPU fallback
+    function drawPointsCanvas(xSc, ySc, high_val = null, low_val = null) {
         //Clear canvas
         mainCtx.clearRect(0,0,innerWidth, innerHeight)
 
@@ -229,7 +347,8 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         }
     }
 
-    drawPoints(xScale, yScale)
+    if (!gl){drawPointsCanvas(xScale, yScale)}
+    //TODO
     rebuildQuadtree(xScale, yScale)
 
     const xAxis = plotArea.append('g')
@@ -305,6 +424,21 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         }
     })
 
+    function updatePositions(xSc, ySc) {
+        for (let i=0; i < umap_arr.length; i++){
+            const px = xSc(umap_arr[i].x)
+            const py = ySc(umap_arr[i].y)
+
+            positions[i * 2] = (px / innerWidth) * 2 - 1
+            positions[i * 2 + 1] = - (py / innerHeight) * 2 + 1
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions)
+
+        renderGL()
+    }
+
     let rafId = null
     const zoom = d3.zoom()
         .scaleExtent([1, 20])
@@ -317,7 +451,8 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
             if (rafId) cancelAnimationFrame(rafId)
             rafId = requestAnimationFrame(() => {
-                drawPoints(zx, zy)
+                if (!gl) {drawPointsCanvas(zx, zy)}
+                else {updatePositions(zx, zy)}
                 bus.execute_event('point_hover', null)
                 rebuildQuadtree(zx, zy)
                 xAxis.call(d3.axisBottom(zx))
@@ -329,7 +464,8 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             const zy = event.transform.rescaleY(yScale)
             currentXScale = zx
             currentYScale = zy
-            drawPoints(zx, zy)
+            if (!gl) {drawPointsCanvas(zx, zy)}
+            else {updatePositions(zx, zy)}
             bus.execute_event('point_hover', null)
             rebuildQuadtree(zx, zy)   
             xAxis.call(d3.axisBottom(zx))
@@ -354,7 +490,8 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     })
 
     bus.subscribe_to("gene_filtering", div_name, ([high_val, low_val]) => {
-        drawPoints(currentXScale, currentYScale, high_val, low_val)
+        if (!gl) {drawPointsCanvas(currentXScale, currentYScale, high_val, low_val)}
+        else {udpateSelected(low_val, high_val)}
     })
 
     return plotArea.node()
