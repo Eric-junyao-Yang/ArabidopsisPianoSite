@@ -159,7 +159,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         out vec2 vUV;                // corner position doubles as UV bounds
         out float vSelected;         // talks between the two shaders
 
-        uniform float pointRadius;    // size of point
+        uniform float pointRadius;   // size of point
 
         void main() {
             vSelected = selected;
@@ -175,8 +175,12 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         in float vSelected;
         out vec4 fragColor;
 
+        uniform float renderPass;    // plot selected & unselected separately for overlap fixing
+
         void main() {
-            
+            if (renderPass > 0.5 && vSelected < 0.5) discard; // Pass0, keep selected
+            if (renderPass < 0.5 && vSelected > 0.5) discard; // Pass1, keep unselected
+
             float dist = dot(vUV, vUV);
             if (dist > 1.0) discard;
 
@@ -185,7 +189,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             if (vSelected > 0.5) {
                     fragColor = vec4(0.8, 0.4, 0.47, alpha); //vec4(0.27, 0.67, 0.6, 1.0)
                 } else {
-                    fragColor = vec4(0.6, 0.6, 0.6, alpha * 0.2);    
+                    fragColor = vec4(0.6, 0.6, 0.6, alpha * 0.8);    
                 }
         }
     `
@@ -246,6 +250,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
     const quadVertexLoc = gl.getAttribLocation(program, 'quadVertex')
     const instancePosLoc = gl.getAttribLocation(program, 'instancePos') // Get which slot the position attribute is stored (int number)
     const selectedLoc = gl.getAttribLocation(program, 'selected')
+    const renderPassLoc = gl.getUniformLocation(program, 'renderPass')
 
     // ----- create VAO -----
     const vao = gl.createVertexArray()
@@ -298,11 +303,22 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         gl.clearColor(0,0,0,0) //Defines what clear means
         gl.clear(gl.COLOR_BUFFER_BIT)
         gl.bindVertexArray(vao)
+
+        //pass0
+        gl.uniform1f(renderPassLoc, 0.0)
         gl.drawArraysInstanced(
             gl.TRIANGLE_STRIP,
             0, //start vertex
             4, //verticies per instance
             umap_arr.length)
+        //pass1
+        gl.uniform1f(renderPassLoc, 1.0)
+        gl.drawArraysInstanced(
+            gl.TRIANGLE_STRIP,
+            0, //start vertex
+            4, //verticies per instance
+            umap_arr.length)
+
         gl.bindVertexArray(null)
     }
 
@@ -662,6 +678,10 @@ function plotViolin(width, height, logMeanArr, div_name){
         .attr('fill', 'orange')
         .attr('opacity', 0.3)
         .attr('rx', 5)
+        .on("dblclick", function(event){
+            [low_val, high_val] = [ymin, ymax]
+            updateScrubber(true)
+        })
 
     // Top bar
     const SCRUBBER_HANDLES_HEIGHT = 6
@@ -713,13 +733,24 @@ function plotViolin(width, height, logMeanArr, div_name){
         return true
     }
 
-    function updateScrubber(){
-        scrubber_handle_top.attr("y", yScale(high_val) - SCRUBBER_HANDLES_HEIGHT / 2)
-        scrubber_handle_bot.attr("y", yScale(low_val) - SCRUBBER_HANDLES_HEIGHT / 2)
-        scrubber_top_circle.attr("cy", yScale(high_val))
-        scrubber_bot_circle.attr("cy", yScale(low_val))
-        scrubber_rect.attr("y", yScale(high_val))
-        scrubber_rect.attr('height', yScale(low_val) - yScale(high_val))
+    function updateScrubber(animate = false){
+        const duration = animate ? 400 : 0
+
+        const applyTransition = (selection) => 
+            animate ? selection.transition().duration(duration).ease(d3.easeCubicOut) 
+                    : selection
+
+        applyTransition(scrubber_handle_top)
+            .attr("y", yScale(high_val) - SCRUBBER_HANDLES_HEIGHT / 2)
+        applyTransition(scrubber_handle_bot)
+            .attr("y", yScale(low_val) - SCRUBBER_HANDLES_HEIGHT / 2)
+        applyTransition(scrubber_top_circle)
+            .attr("cy", yScale(high_val))
+        applyTransition(scrubber_bot_circle)
+            .attr("cy", yScale(low_val))
+        applyTransition(scrubber_rect)
+            .attr("y", yScale(high_val))
+            .attr("height", yScale(low_val) - yScale(high_val))
 
         bus.execute_event("gene_filtering", [high_val, low_val])
     }
