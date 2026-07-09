@@ -91,8 +91,12 @@ const bus = {
 function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
 
     const margin = { top: 20, right: 20, bottom: 40, left: 50 }
+    const dpr = window.devicePixelRatio || 1
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
+    const physicalWidth = innerWidth * dpr
+    const physicalHeight = innerHeight * dpr
+    
 
     const xScale = d3.scaleLinear()
     .domain(d3.extent(umap_arr, d => d.x))
@@ -125,47 +129,64 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     const mainCanvas = d3.select("#" + div_name)
         .append('canvas')
-        .attr('width', innerWidth)
-        .attr('height', innerHeight)
+        .attr('width', physicalWidth)
+        .attr('height', physicalHeight)
+        .style('width', innerWidth + 'px')
+        .style('height', innerHeight + 'px')
         .style('position', 'absolute')
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
         .style('outline', '2px solid orange')
 
     // ---- trying WebGL ----
-    const gl = mainCanvas.node().getContext('webgl') || mainCanvas.node().getContext('experimental-webgl')
+    const gl = mainCanvas.node().getContext('webgl2')
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     if (!gl) {
         //fallback
-        console.warn('WebGL not supported, interactive visual elements may have slower performance')
+        console.warn('WebGL2 not supported, interactive visual elements may have slower performance with Canvas 2D')
         const mainCtx = mainCanvas.node().getContext('2d', { willReadFrequently: true })
         return
     }
 
     // vertex shader
-    const vertSrc = `
-        attribute vec2 position; //input: position in clip space
-        attribute float selected; //0.0 or 1.0 ; talks to outside
-        varying float vSelected;  // talks between the two shaders
+    const vertSrc = `#version 300 es
+
+        in vec2 quadVertex;          //input: corners per isntance  
+        in vec2 instancePos;         //input: position in clip space
+        in float selected;           //0.0 or 1.0 ; talks to outside
+        
+        out vec2 vUV;                // corner position doubles as UV bounds
+        out float vSelected;         // talks between the two shaders
+
+        uniform float pointRadius;    // size of point
 
         void main() {
             vSelected = selected;
-            gl_Position = vec4(position, 0.0, 1.0); //output: where on screen
-            gl_PointSize = 5.0; //output: pixel size
+            vUV = quadVertex;
+            gl_Position = vec4(instancePos + quadVertex * pointRadius, 0.0, 1.0); //output: where on screen
         }
     `
     // fragment shader
-    const fragSrc = `
+    const fragSrc = `#version 300 es
         precision mediump float;
-        varying float vSelected;
+
+        in vec2 vUV;
+        in float vSelected;
+        out vec4 fragColor;
 
         void main() {
+            
+            float dist = dot(vUV, vUV);
+            if (dist > 1.0) discard;
+
+            float alpha = smoothstep(1.0, 0.8, dist);
+
             if (vSelected > 0.5) {
-                gl_FragColor = vec4(0.8, 0.4, 0.47, 1.0); //vec4(0.27, 0.67, 0.6, 1.0)
-            } else {
-                gl_FragColor = vec4(0.6, 0.6, 0.6, 0.0);    
-            }
+                    fragColor = vec4(0.8, 0.4, 0.47, alpha); //vec4(0.27, 0.67, 0.6, 1.0)
+                } else {
+                    fragColor = vec4(0.6, 0.6, 0.6, alpha * 0.2);    
+                }
         }
     `
     function compileShader(type, src){
@@ -194,40 +215,71 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     gl.useProgram(program)
 
-    // uploading coordinates
-    const positions = new Float32Array(umap_arr.length * 2)
+    // Set up point size
+    const radiusPx = 4
+    const pointRadius = (radiusPx * dpr) / (physicalWidth / 2)
+    const pointRadiusLoc = gl.getUniformLocation(program, 'pointRadius')
+    gl.uniform1f(pointRadiusLoc, pointRadius) 
+
+    // Set up verticies
+    const quadVerticies = new Float32Array([
+        -1, -1,
+        1, -1,
+        -1, 1,
+        1, 1,
+    ])
+
+    // Set up coordinates (in clip space)
+    const instancePositions = new Float32Array(umap_arr.length * 2)
     for (let i=0; i < umap_arr.length; i++){
         const px = xScale(umap_arr[i].x)
         const py = yScale(umap_arr[i].y)
 
-        positions[i*2] = (px / innerWidth) * 2 - 1
-        positions[i*2 + 1] = -(py / innerHeight) * 2 + 1
+        instancePositions[i*2] = (px / innerWidth) * 2 - 1
+        instancePositions[i*2 + 1] = -(py / innerHeight) * 2 + 1
     }
 
+    // Set up default selected array
+    const selectedArr = new Float32Array(umap_arr.length).fill(1.0)
+
+    // Get Attribute Locations
+    const quadVertexLoc = gl.getAttribLocation(program, 'quadVertex')
+    const instancePosLoc = gl.getAttribLocation(program, 'instancePos') // Get which slot the position attribute is stored (int number)
+    const selectedLoc = gl.getAttribLocation(program, 'selected')
+
+    // ----- create VAO -----
+    const vao = gl.createVertexArray()
+    gl.bindVertexArray(vao) // start recording
+
+    // Quad Buffer
+    const quadBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, quadVerticies, gl.STATIC_DRAW)
+    gl.enableVertexAttribArray(quadVertexLoc)
+    gl.vertexAttribPointer(quadVertexLoc, 2, gl.FLOAT, false, 0, 0)
+    gl.vertexAttribDivisor(instancePosLoc, 0) // advance once per vertex (its the default, technically this line is not needed)
+
+    // Position Buffer
     const positionBuffer = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer) //set active buffer
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW)
-
+    gl.bufferData(gl.ARRAY_BUFFER, instancePositions, gl.STATIC_DRAW) //upload data
     // note, this binds the Attribute (i.e. position) to the buffer that's currently created
     // so now attribute slot n = read from positionBuffer according to rule specified below
-    const positionLoc = gl.getAttribLocation(program, 'position') // Get which slot the position attribute is stored (int number)
-    gl.enableVertexAttribArray(positionLoc)
+    gl.enableVertexAttribArray(instancePosLoc)
     gl.vertexAttribPointer( // always read from ARRAY_BUFFER
-        positionLoc, // the data being read goes into this slot (i.e. represents position)
+        instancePosLoc, // the data being read goes into this slot (i.e. represents position)
         2, // 2 consecutive floats (x,y)
         gl.FLOAT,
         false, // skip normalization for floats
         0, // stride 0 (points are adjacent with no padding)
         0 // no offset, read from start
     )
+    gl.vertexAttribDivisor(selectedLoc, 1) // advance once per instance (i.e. repeat 6x as defined in drawArraysInstanced)
 
     // Color by Scrubber
-    const selectedArr = new Float32Array(umap_arr.length).fill(1.0)
     const selectedBuffer = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, selectedBuffer)
     gl.bufferData(gl.ARRAY_BUFFER, selectedArr, gl.DYNAMIC_DRAW)
-
-    const selectedLoc = gl.getAttribLocation(program, 'selected')
     gl.enableVertexAttribArray(selectedLoc)
     gl.vertexAttribPointer(
         selectedLoc,
@@ -237,17 +289,27 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         0,
         0
     )
+    gl.vertexAttribDivisor(instancePosLoc, 1) // advance once per instance
+    
+    gl.bindVertexArray(null)
+    // ---- create VAO ---- 
 
     function renderGL() {
         gl.clearColor(0,0,0,0) //Defines what clear means
         gl.clear(gl.COLOR_BUFFER_BIT)
-        gl.drawArrays(gl.POINTS, 0, umap_arr.length) // style, start, count
+        gl.bindVertexArray(vao)
+        gl.drawArraysInstanced(
+            gl.TRIANGLE_STRIP,
+            0, //start vertex
+            4, //verticies per instance
+            umap_arr.length)
+        gl.bindVertexArray(null)
     }
 
     renderGL()
 
 
-    function udpateSelected(low_val, high_val) {
+    function updateSelected(low_val, high_val) {
         for (let i=0; i < umap_arr.length; i++){
             selectedArr[i] = (
                 umap_arr[i].log_mean_count >= low_val &&
@@ -429,12 +491,12 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             const px = xSc(umap_arr[i].x)
             const py = ySc(umap_arr[i].y)
 
-            positions[i * 2] = (px / innerWidth) * 2 - 1
-            positions[i * 2 + 1] = - (py / innerHeight) * 2 + 1
+            instancePositions[i * 2] = (px / innerWidth) * 2 - 1
+            instancePositions[i * 2 + 1] = - (py / innerHeight) * 2 + 1
         }
 
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions)
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, instancePositions)
 
         renderGL()
     }
@@ -491,7 +553,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     bus.subscribe_to("gene_filtering", div_name, ([high_val, low_val]) => {
         if (!gl) {drawPointsCanvas(currentXScale, currentYScale, high_val, low_val)}
-        else {udpateSelected(low_val, high_val)}
+        else {updateSelected(low_val, high_val)}
     })
 
     return plotArea.node()
