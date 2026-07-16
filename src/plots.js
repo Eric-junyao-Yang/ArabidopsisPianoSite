@@ -4,14 +4,14 @@
 //     return originalGetContext.call(this, type, ...args)
 // }
 
-async function meta_to_json(path_to_meta, file_name){
+export async function meta_to_json(path_to_meta, file_name){
     const resp_meta = await fetch(path_to_meta)
     const meta_json = await resp_meta.json()
     const meta_json_dat = meta_json[file_name]
     return meta_json_dat
 }
 
-async function bin_to_array(path_to_bin, path_to_meta){
+export async function bin_to_array(path_to_bin, path_to_meta){
     const file_name = path_to_bin.split("/").pop()
     const meta_json_dat = await meta_to_json(path_to_meta, file_name)
 
@@ -34,29 +34,7 @@ async function bin_to_array(path_to_bin, path_to_meta){
     return arr
 }
 
-let count_umap_arr = await bin_to_array(
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/count_umap.bin", 
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json"
-)
-
-let fft_umap_arr = await bin_to_array(
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/fft_umap.bin", 
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json"
-)
-
-const min_max_arr = await bin_to_array(
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/min_max_norm.bin", 
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json"
-)
-
-const min_max_meta = await meta_to_json(
-    "/run/media/yeti1t3y/Extreme SSD/My_Codes/ArabidopsisPiano/Processed_Data/bin_meta.json",
-    "min_max_norm.bin"
-)
-
-const ids = min_max_meta.rownames
-const logCount = min_max_arr.map((val, idx) => val.log_mean_count)
-function append_id_logCount_to_array(input_array, list_of_id, list_of_logCount){
+export function append_id_logCount_to_array(input_array, list_of_id, list_of_logCount){
     return input_array.map((val, idx) => (
         {
             ...val, 
@@ -64,23 +42,6 @@ function append_id_logCount_to_array(input_array, list_of_id, list_of_logCount){
             id: list_of_id[idx]
         }
     ))
-}
-
-// Add the GeneID (id) field
-count_umap_arr = append_id_logCount_to_array(count_umap_arr, ids, logCount)
-fft_umap_arr = append_id_logCount_to_array(fft_umap_arr, ids, logCount)
-
-
-// add a bus for communication between plots
-const bus = {
-    _listeners: {},
-    subscribe_to(event, id, fn){
-        if (!this._listeners[event]) this._listeners[event] = {}
-        this._listeners[event][id] = fn
-    },
-    execute_event(event, data) {
-        Object.values(this._listeners[event] || {}).forEach(fn => fn(data))
-    }
 }
 
 class ScatterGL {
@@ -355,7 +316,7 @@ class ScatterGL {
 
 
 
-function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
+export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
 
     const margin = { top: 20, right: 20, bottom: 40, left: 50 }
     const dpr = window.devicePixelRatio || 1
@@ -388,7 +349,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .style('top', '0')
         .style('left', '0')
         .style('pointer-events', 'none')
-        .style('outline', '2px solid red')
+        // .style('outline', '2px solid red')
 
     const plotArea = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`)
@@ -402,7 +363,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .style('position', 'absolute')
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
-        .style('outline', '2px solid orange')
+        // .style('outline', '2px solid orange')
 
     // ---- WebGL ----
     const scatter = new ScatterGL(
@@ -460,7 +421,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         .style('position', 'absolute')
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
-        .style('outline', '2px solid blue')
+        // .style('outline', '2px solid blue')
         .style('pointer-events', 'none')
     
     let quadtree = null
@@ -480,17 +441,28 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     // Build a quick look up from GeneID -> Index
     const GeneID_Lookup = new Map(umap_arr.map(r => [r.id, r]))
+    var GeneID_select_current = null
 
-    function drawHighlight(xSc, ySc, GeneID) {
+    function drawHighlight(xSc, ySc, GeneID_hover, GeneID_select) {
         hlightCtx.clearRect(0,0,innerWidth, innerHeight)
-        if (GeneID) {
-            const d = GeneID_Lookup.get(GeneID)
-            const cx = xSc(d.x)
-            const cy = ySc(d.y)
+        if (GeneID_hover) {
+            const d_hover = GeneID_Lookup.get(GeneID_hover)
+            const cx_hover = xSc(d_hover.x)
+            const cy_hover = ySc(d_hover.y)
 
             hlightCtx.beginPath()
-            hlightCtx.arc(cx, cy, HighlightPointSize, 0, 2 * Math.PI)
+            hlightCtx.arc(cx_hover, cy_hover, HighlightPointSize, 0, 2 * Math.PI)
             hlightCtx.fillStyle = 'rgba(68, 170, 153, 1)'
+            hlightCtx.fill()
+        }
+        if (GeneID_select) {
+            const d_select = GeneID_Lookup.get(GeneID_select)
+            const cx_select = xSc(d_select.x)
+            const cy_select = ySc(d_select.y)
+
+            hlightCtx.beginPath()
+            hlightCtx.arc(cx_select, cy_select, HighlightPointSize, 0, 2 * Math.PI)
+            hlightCtx.fillStyle = 'rgba(221, 204, 119, 1)'
             hlightCtx.fill()
         }
     }
@@ -572,6 +544,47 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         }
     })
 
+    // Tell apart click from drag
+    var mouseDownInit = null
+    const DRAG_THRESHOLD = 4 //pixels
+    // Tell single from double click
+    var clickTimeout = null
+    const DOUBLE_CLICK_GUARD = 150 //ms
+
+    mainCanvas.on('mousedown', (event) => {
+        const [mx, my] = d3.pointer(event)
+        mouseDownInit = [mx, my]
+    })
+
+    mainCanvas.on('click', (event) => {
+        if (!mouseDownInit) return
+        
+        const [mx, my] = d3.pointer(event)
+        const dx = mx - mouseDownInit[0]
+        const dy = my - mouseDownInit[1]
+        const dist = Math.sqrt(dx*dx + dy*dy)
+        mouseDownInit = null
+        if (dist > DRAG_THRESHOLD) return
+        
+        
+        if (clickTimeout) {
+            clearTimeout(clickTimeout)
+            clickTimeout = null
+            return
+        }
+
+        clickTimeout = setTimeout(() => {
+            clickTimeout = null
+            const d = quadtree.find(mx, my, 4)
+            if (d) {
+                bus.execute_event('point_select', d.id)
+            }
+            else {
+                bus.execute_event('point_select', null)
+            }
+        }, DOUBLE_CLICK_GUARD)
+    })
+
     let rafId = null
     const zoom = d3.zoom()
         .scaleExtent([1, 20])
@@ -585,6 +598,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
                 if (!scatter.isSupported) {drawPointsCanvas(mainCtx, zx, zy, internal_high_val, internal_low_val)}
                 else {scatter.updateTransform(event.transform)}
                 bus.execute_event('point_hover', null)
+                drawHighlight(zx, zy, lastEmittedRow?.id, GeneID_select_current)
                 rebuildQuadtree(zx, zy)
                 xAxis.call(d3.axisBottom(zx))
                 yAxis.call(d3.axisLeft(zy))
@@ -598,6 +612,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
             if (!scatter.isSupported) {drawPointsCanvas(mainCtx, zx, zy, internal_high_val, internal_low_val)}
             else {scatter.updateTransform(event.transform)}
             bus.execute_event('point_hover', null)
+            drawHighlight(zx, zy, lastEmittedRow?.id, GeneID_select_current)
             rebuildQuadtree(zx, zy)   
             xAxis.call(d3.axisBottom(zx))
             yAxis.call(d3.axisLeft(zy))
@@ -611,7 +626,7 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
 
     //subscribe to bus events
     bus.subscribe_to("point_hover", div_name, (GeneID) => {
-        drawHighlight(currentXScale, currentYScale, GeneID)
+        drawHighlight(currentXScale, currentYScale, GeneID, GeneID_select_current)
         if (displayGeneID) hoverLabel.text(GeneID ?? '')
     })
 
@@ -624,12 +639,15 @@ function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID =
         else {scatter.updateSelected(low_val, high_val)}
     })
 
+    bus.subscribe_to("point_select", div_name, (GeneID) => {
+        drawHighlight(currentXScale, currentYScale, GeneID, GeneID)
+        GeneID_select_current = GeneID
+    })
+
     return plotArea.node()
 }
 
-const logMeanArr = min_max_arr
-
-function plotViolin(width, height, logMeanArr, div_name){
+export function plotViolin(width, height, logMeanArr, div_name, bus){
     const margin = { top: 20, right: 20, bottom: 20, left: 50 }
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
@@ -638,7 +656,7 @@ function plotViolin(width, height, logMeanArr, div_name){
         .append("svg")
             .attr("width", width)
             .attr("height", height)
-        .style('outline', '2px solid salmon')
+        // .style('outline', '2px solid salmon')
     
         const plotArea = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`)
@@ -866,9 +884,3 @@ const quantile = (arr, q) => { //https://stackoverflow.com/questions/48719873/ho
         return sorted[base];
     }
 };
-
-
-
-const count_svg = plotUMAP(400, 300, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
-const fft_svg = plotUMAP(400, 300, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
-plotViolin(100, 300, logMeanArr, "filter_slider")

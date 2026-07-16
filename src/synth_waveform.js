@@ -1,16 +1,33 @@
 import {interpolate_waveform} from "/src/catmullrom.js"
 
 export class Synth_Waveform {
-    constructor(canvas, onChange = () => {}) { //onChange is going to be used to pass this.points
+    constructor(canvas, bus, min_max_arr, onChange = () => {}) { //onChange is going to be used to pass this.points
         this.canvas = canvas
         this.ctx = canvas.getContext("2d")
         this.n_bars = 48
         this.points = Array(this.n_bars).fill(0.5)
         this.dragging = false
         this.onChange = onChange
+        this.min_max_arr = min_max_arr
+
+        this.bus = bus
+        // suscribe to bus
+        this.bus.subscribe_to("point_select", null, (GeneID) => {
+            if (!GeneID){
+                this.reset()
+                return
+            }
+            this.updatePointsWithGeneID(GeneID)
+            this.onChange(this.points)
+            this.draw()
+        })
+        
+        this.GeneID_Lookup = new Map(min_max_arr.map(r => [r.id, r]))
+
         this.resizeCanvas()
         this.setupEvents()
         this.draw()
+
     }
 
     get barsWidth() {
@@ -29,7 +46,7 @@ export class Synth_Waveform {
 
             const curDotPos = this.points[i]
             
-            ctx.lineWidth = 1
+            ctx.lineWidth = (i-1) % 3 == 0? 3:1
             ctx.strokeStyle = 'black'
             ctx.beginPath()
             ctx.moveTo(curCenter, 0)
@@ -37,6 +54,7 @@ export class Synth_Waveform {
             ctx.stroke()
 
             ctx.beginPath()
+            ctx.lineWidth = 1
             ctx.arc(
                 curCenter,
                 (1 - curDotPos) * this.canvas.height,
@@ -44,8 +62,7 @@ export class Synth_Waveform {
                 0,
                 2 * Math.PI
             )
-
-            ctx.fillStyle = "rgba(51,34,136,1.0)"
+            ctx.fillStyle = (i-1) % 3 == 0? "rgba(136,34,85,1.0)":"rgba(51,34,136,1.0)" 
             ctx.fill()
             ctx.stroke()
         }
@@ -78,6 +95,18 @@ export class Synth_Waveform {
         )
         this.draw_waveform(ctx)
         this.draw_interpolation(ctx)
+    }
+
+    updatePointsWithGeneID(GeneID){
+        // load 16 data points
+        const cur_row = this.GeneID_Lookup.get(GeneID)
+        const cur_values = Object.values(cur_row).slice(0, 16)
+        const norm_values = new Array(cur_values.length)
+        cur_values.map((val, idx) => {
+            norm_values[idx] = (val + 1) / 2
+        })
+        const interpolated_values = interpolate_waveform(norm_values, 48)
+        this.points = interpolated_values
     }
 
     setupEvents() {
