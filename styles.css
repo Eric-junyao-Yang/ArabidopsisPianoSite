@@ -65,3 +65,37 @@ body {
     width: 600px; 
     height: 500px;
 }
+
+/* ---- Step Sequencer ---- */
+
+#SequencerDiv {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    outline: 2px solid purple;
+}
+
+#SeqLeft {
+    outline: 2px solid orange;
+}
+
+#SeqRight {
+    display: grid;
+    grid-template-rows: 1fr 1fr 1fr 1fr;
+    outline: 2px solid blue;
+}
+
+#SeqRightButtons{
+    outline: 2px solid red;
+}
+
+#SeqRightSearchBar{
+    outline: 2px solid yellow;
+}
+
+#SeqRightSelectedGeneDisplay{
+    outline: 2px solid green;
+}
+
+#SeqRightPlot{
+    outline: 2px solid maroon;
+}

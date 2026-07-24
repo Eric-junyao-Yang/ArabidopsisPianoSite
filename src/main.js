@@ -29,6 +29,7 @@ min_max_arr = append_id_logCount_to_array(min_max_arr, ids, logCount)
 
 
 // ---- Synth Waveform ----
+// TODO: Fix and check if circle match data (I think currently wrong poitns are highlighted) ; make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes)
 let node = null
 
 const synth_waveform_canvas =

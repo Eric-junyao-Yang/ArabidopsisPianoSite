@@ -319,7 +319,7 @@ class ScatterGL {
 export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
 
     const margin = { top: 20, right: 20, bottom: 40, left: 50 }
-    const dpr = window.devicePixelRatio || 1
+    const dpr = window.devicePixelRatio || 1 //1 css coordinate = typically 2x2 physical pixel
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
     const physicalWidth = innerWidth * dpr
