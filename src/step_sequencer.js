@@ -16,25 +16,45 @@ async function load_waveforms(path_to_bin, path_to_meta){
     const bin = await fetch(path_to_bin)
     const buff = await bin.arrayBuffer()
     const flat_arr = new Float32Array(buff)
-
+    
     const BYTE_OFFSET = meta_json.BYTE_OFFSET
     const N_GRID = meta_json.N_GRID
     const N_SAMPLES = meta_json.N_SAMPLES
     const N_WAVES = meta_json.N_WAVES
     const WAVE_KEYS = meta_json.WAVE_KEYS
-    
-    const arr = Array.from({length: meta_json.meta.length}, (_, r) => {
-        const row = {}
-        for (let i=0; i<N_WAVES; i++){
-            row[WAVE_KEYS[i]] = flat_arr.slice(256 * i, 256 * i + 256)
-        }
-        return row
-    })
+    const N_FLOATS = N_GRID * N_WAVES
+    const BLOCK = N_WAVES * N_GRID
+    const bytesPerFloat = 4
 
-    return [arr, meta_json]
+    const nrows = meta_json.meta.length
+    const audio_waves = new Array(nrows)
+    const mu = new Array(nrows)
+    const std = new Array(nrows)
+    
+    for (let i=0; i<nrows; i++){
+        const base = BLOCK * i
+
+        audio_waves[i] = new Float32Array(
+            flat_arr.buffer,
+            flat_arr.byteOffset + base * bytesPerFloat,
+            N_GRID * N_SAMPLES
+        )
+        mu[i] = new Float32Array(
+            flat_arr.buffer,
+            flat_arr.byteOffset + (base + N_GRID * N_SAMPLES) * bytesPerFloat,
+            N_GRID * 1
+        )
+        std[i] = new Float32Array(
+            flat_arr.buffer,
+            flat_arr.byteOffset + (base + N_GRID * (N_SAMPLES + 1)) * bytesPerFloat,
+            N_GRID * 1
+        )
+    }
+
+    return [audio_waves, mu, std, meta_json]
 }
 
-const [wav, meta] = await load_waveforms("/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms.bin", "/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms_meta.json")
+const [wav, mu, std, meta] = await load_waveforms("/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms.bin", "/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
 //min-max norm fap then scale to 1 ~ 10
 const fap = period_phase_fap.map(d => d.fap)
@@ -44,9 +64,11 @@ for (let i=0; i<fap.length; i++){
     period_phase_fap[i]['sweep_frequency'] = 1 + (fap[i] - fap_min) * 9 / (fap_max - fap_min)
 }
 
+//lookup tables
 const period_phase_fap_lookup = new Map(period_phase_fap.map(r => [r.GeneID, r]))
 const wav_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, wav[idx]]))
-
+const mu_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, mu[idx]]))
+const std_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, std[idx]]))
 
 // --------- Plot period vs phase ---------
 function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequencer", period_phase_fap, bus){
@@ -208,14 +230,14 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
 
     // ---------- Check if selected gene should be triggered ---------
     function checkSelectedGenes(tm1, t0){
-        const notes_to_trigger = new Set()
         current_selection.forEach(item => {
             const xpos = item.phase
             if (xpos > tm1 && xpos < t0){
-                notes_to_trigger.add(item)
+                const cur_GeneID = item.GeneID
+                const cur_wav = wav_lookup.get(cur_GeneID)
+                bus.execute_event("playNote", cur_wav)
             }
         })
-        bus.execute_event("playNotes", notes_to_trigger)
     }
 
     // ---------- Set up Axis and labels -----------
@@ -365,18 +387,6 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     })
 }
 
-// --------- handle sound waves -----------
-
-// sound wave merging
-
-function mergeWav(GeneID, wav_lookup, period_phase_fap_lookup){
-    const cur_ppf = period_phase_fap_lookup.get(GeneID)
-    const cur_wav = wav_lookup.get(GeneID)
-    const sweep = cur_ppf.sweep_frequency
-
-}
-
-
 // ----------- handle button presses -----------
 const playPauseButton = document.getElementById("SeqPlayPause")
 const stopButton = document.getElementById("SeqStop")
@@ -388,3 +398,6 @@ function seqPlayPauseClick(){bus.execute_event("seqPlayPause", null)}
 plotMain(600, 400, "#StepSequencer", period_phase_fap, bus)
 // const [a, b] = mergeWav("AT1G14980", wav_lookup, period_phase_fap_lookup)
 // console.log(a, b)
+
+
+bus.subscribe_to("playNote", "me", (wav) => {console.log(wav)})
