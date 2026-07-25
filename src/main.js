@@ -38,11 +38,7 @@ const synth_waveform_canvas =
     )
 
 const synth_waveform =
-    new Synth_Waveform(synth_waveform_canvas, bus, min_max_arr, (points) => {
-        if (node) {
-            node.port.postMessage({type: "updatePoints", points: points})
-        }
-    })
+    new Synth_Waveform(synth_waveform_canvas, bus, min_max_arr)
 
 // setup synth_waveform_buttons
 document.getElementById("reset").addEventListener("click", () => synth_waveform.reset())
@@ -56,9 +52,9 @@ const context = new AudioContext()
 
 async function start() {
   await context.audioWorklet.addModule('/src/audio_processor.js')
-  node = new AudioWorkletNode(context, 'audio-processor')
+  node = new AudioWorkletNode(context, 'synth-audio-processor')
   node.connect(context.destination)
-  await context.resume();
+  await context.resume()
   node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
 }
 
@@ -68,3 +64,9 @@ document.getElementById('play_sample').addEventListener('click', start)
 const count_svg = plotUMAP(600, 500, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
 const fft_svg = plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
 plotViolin(130, 500, min_max_arr, "filter_slider", bus)
+
+
+// ---- main.js bus subscription ----
+bus.subscribe_to("synth_waveform_changed", "main", points => {
+    node.port.postMessage({type: "updatePoints", points})
+})

@@ -1,13 +1,12 @@
 import {interpolate_waveform} from "/src/catmullrom.js"
 
 export class Synth_Waveform {
-    constructor(canvas, bus, min_max_arr, onChange = () => {}) { //onChange is going to be used to pass this.points
+    constructor(canvas, bus, min_max_arr) { 
         this.canvas = canvas
         this.ctx = canvas.getContext("2d")
         this.n_bars = 48
         this.points = Array(this.n_bars).fill(0.5)
         this.dragging = false
-        this.onChange = onChange
         this.min_max_arr = min_max_arr
 
         this.bus = bus
@@ -18,16 +17,19 @@ export class Synth_Waveform {
                 return
             }
             this.updatePointsWithGeneID(GeneID)
-            this.onChange(this.points)
+            this.bus_execute(this.points)
             this.draw()
         })
-        
         this.GeneID_Lookup = new Map(min_max_arr.map(r => [r.id, r]))
 
         this.resizeCanvas()
         this.setupEvents()
         this.draw()
 
+    }
+
+    bus_execute(points){
+        this.bus.execute_event("synth_waveform_changed", this.points)
     }
 
     get barsWidth() {
@@ -138,7 +140,7 @@ export class Synth_Waveform {
                 this.points[index] =
                     (this.canvas.height - e.offsetY) / this.canvas.height
 
-                this.onChange(this.points)
+                this.bus_execute(this.points)
                 this.draw()
             }
         )
@@ -156,7 +158,7 @@ export class Synth_Waveform {
         this.canvas.height =
             this.canvas.clientHeight
 
-        this.onChange(this.points)
+        this.bus_execute(this.points)
         this.draw()
     }
 
@@ -165,7 +167,7 @@ export class Synth_Waveform {
     // Reset
     reset() {
         this.points = Array(this.n_bars).fill(0.5)
-        this.onChange(this.points)
+        this.bus_execute(this.points)
         this.draw()
     }
 
@@ -174,7 +176,7 @@ export class Synth_Waveform {
         for (let i=0; i < this.n_bars; i++){
             this.points[i] = (Math.sin((2*Math.PI / this.n_bars) * i) + 1 ) / 2
         }
-        this.onChange(this.points)
+        this.bus_execute(this.points)
         this.draw()
     }
 
@@ -189,7 +191,7 @@ export class Synth_Waveform {
                 this.points[i] = 0
             }
         }
-        this.onChange(this.points)
+        this.bus_execute(this.points)
         this.draw()
     }
 
@@ -203,7 +205,7 @@ export class Synth_Waveform {
                 this.points[i] = (1/this.n_bars) * i - 0.5
             }
         }
-        this.onChange(this.points)
+        this.bus_execute(this.points)
         this.draw()
     }
 
@@ -220,7 +222,7 @@ export class Synth_Waveform {
                 this.points[i] = 8/(4*this.n_bars) * i - 1.5
             }
         }
-        this.onChange(this.points)
+        this.bus_execute(this.points)
         this.draw()
     }
 }

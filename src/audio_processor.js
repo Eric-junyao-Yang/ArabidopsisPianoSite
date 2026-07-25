@@ -2,7 +2,7 @@ import { interpolate_waveform } from "/src/catmullrom.js"
 
 const TABLE_SIZE = 2048
 
-class AudioProcessor extends AudioWorkletProcessor {
+class SynthAudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super()
         this.phase = 0
@@ -12,12 +12,11 @@ class AudioProcessor extends AudioWorkletProcessor {
         this.port.onmessage = (event) => {
             if (event.data.type === "updatePoints") {
                 this.table = interpolate_waveform(event.data.points, TABLE_SIZE)
-                console.log("audio_processor.js")
             }
         }
     }
 
-    process(inputs, outputs) {
+    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
         const output = outputs[0]
         const left = output[0]
         const increment = this.freq * TABLE_SIZE / sampleRate
@@ -31,4 +30,4 @@ class AudioProcessor extends AudioWorkletProcessor {
     }
 }
 
-registerProcessor("audio-processor", AudioProcessor)
+registerProcessor("synth-audio-processor", SynthAudioProcessor)

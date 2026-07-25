@@ -36,6 +36,14 @@ async function load_waveforms(path_to_bin, path_to_meta){
 
 const [wav, meta] = await load_waveforms("/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms.bin", "/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
+//min-max norm fap then scale to 1 ~ 10
+const fap = period_phase_fap.map(d => d.fap)
+const fap_min = Math.min(...fap)
+const fap_max = Math.max(...fap)
+for (let i=0; i<fap.length; i++){
+    period_phase_fap[i]['sweep_frequency'] = 1 + (fap[i] - fap_min) * 9 / (fap_max - fap_min)
+}
+
 const period_phase_fap_lookup = new Map(period_phase_fap.map(r => [r.GeneID, r]))
 const wav_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, wav[idx]]))
 
@@ -135,7 +143,82 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
         } else {return}
     }
 
-    // Set up Axis and labels
+    // ------------ Scrubber --------------
+    const SCRUBBER_HANDLE_WIDTH = 5
+    const SCRUBBER_HANDLE_HEIGHT = 10
+    const scrubber = plotArea.append('g')
+    const scrubber_needle = scrubber.append('line')
+        .attr("x1", xScale(0))
+        .attr("y1", 0 - SCRUBBER_HANDLE_HEIGHT)
+        .attr("x2", xScale(0))
+        .attr("y2", innerHeight)
+        .attr("stroke", "red")
+        .attr("stroke-width", "2")
+        .attr("stroke-linecap", "round")
+    const scrubber_handle = scrubber.append('rect')
+        .attr("x", xScale(0) - SCRUBBER_HANDLE_WIDTH/2)
+        .attr("y", 0 - SCRUBBER_HANDLE_HEIGHT)
+        .attr("width", SCRUBBER_HANDLE_WIDTH)
+        .attr("height", SCRUBBER_HANDLE_HEIGHT)
+        .attr("fill", "red")
+        .attr("stroke", "red")
+        .attr("stroke-width", "1")
+    
+    // Animate Scrubber
+    let scrubber_time = 0
+    let t_minus1 = null
+    const scrubber_velocity = 6 //move horizontally n hrs per second
+    function animateScrubber(t0){
+        if (t_minus1){
+            const dt = (t0 - t_minus1) / 1000
+            const scrubber_time_tm1 = scrubber_time //to check if note is passed
+            scrubber_time = (scrubber_time + dt * scrubber_velocity) % 24
+            const scrubber_time_t0 = scrubber_time //to check if note is passed
+            checkSelectedGenes(scrubber_time_tm1, scrubber_time_t0)
+            const new_x = currentXScale(scrubber_time)
+            scrubber.attr('transform', `translate(${new_x - PADDING},0)`) //if needle starts at 0 on scale, it needs to be shifted by padding for transform to work
+            t_minus1 = t0
+            if (isPlay){requestAnimationFrame(animateScrubber)} 
+            else {t_minus1 = null}
+        } else {
+            t_minus1 = t0
+            if (isPlay){requestAnimationFrame(animateScrubber)}
+        }
+    }
+    
+    // play pause cycle
+    let isPlay = false
+    function playPause(b){
+        isPlay = !isPlay
+        if (isPlay) {
+            requestAnimationFrame(animateScrubber)
+            playPauseButton.textContent = "Pause"
+        } else {
+            playPauseButton.textContent = "Play"
+        }
+    }
+
+    function playStop(){
+        isPlay = false
+        playPauseButton.textContent = "Play"
+        scrubber_time = 0
+        scrubber.attr('transform', `translate(0,0)`)
+    }
+
+
+    // ---------- Check if selected gene should be triggered ---------
+    function checkSelectedGenes(tm1, t0){
+        const notes_to_trigger = new Set()
+        current_selection.forEach(item => {
+            const xpos = item.phase
+            if (xpos > tm1 && xpos < t0){
+                notes_to_trigger.add(item)
+            }
+        })
+        bus.execute_event("playNotes", notes_to_trigger)
+    }
+
+    // ---------- Set up Axis and labels -----------
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
         .call(d3.axisBottom(xScale))
@@ -169,7 +252,6 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     let quadtree = null
     let current_hover = null
     let current_selection = new Set()
-    let current_selection_id = new Array()
 
     // special selection logic that preferentially returns selected points
     function findClosest(mx, my){
@@ -194,12 +276,10 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
         if (item){
             if (current_selection.has(item)) {
                 current_selection.delete(item)
-                current_selection_id = Array.from(current_selection, d => d.GeneID)
-                bus.execute_event("selection_modified", current_selection_id)
+                bus.execute_event("selection_modified", current_selection)
             } else {
                 current_selection.add(item)
-                current_selection_id = Array.from(current_selection, d => d.GeneID)
-                bus.execute_event("selection_modified", current_selection_id)
+                bus.execute_event("selection_modified", current_selection)
             }
         }
     }
@@ -217,7 +297,6 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
         const [mx, my] = d3.pointer(event)
         const item = findClosest(mx, my)
         if (item !== current_hover){
-            console.log(current_selection.has(item))
             current_hover = item
             if (current_hover == null){
                 bus.execute_event("point_hover", null)
@@ -275,8 +354,14 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     bus.subscribe_to("point_hover", "mainplot", (current_hover) => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     })
-    bus.subscribe_to("selection_modified", "mainplot", (current_selection_id) => {
+    bus.subscribe_to("selection_modified", "mainplot", (current_selection) => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
+    })
+    bus.subscribe_to("seqPlayPause", "mainplot", () => {
+        playPause()
+    })
+    bus.subscribe_to("seqStop", "mainplot", ()=> {
+        playStop()
     })
 }
 
@@ -287,9 +372,17 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
 function mergeWav(GeneID, wav_lookup, period_phase_fap_lookup){
     const cur_ppf = period_phase_fap_lookup.get(GeneID)
     const cur_wav = wav_lookup.get(GeneID)
-    const fap = cur_ppf.fap
-    
+    const sweep = cur_ppf.sweep_frequency
+
 }
+
+
+// ----------- handle button presses -----------
+const playPauseButton = document.getElementById("SeqPlayPause")
+const stopButton = document.getElementById("SeqStop")
+playPauseButton.addEventListener('click', () => seqPlayPauseClick())
+stopButton.addEventListener('click', () => bus.execute_event("seqStop", null))
+function seqPlayPauseClick(){bus.execute_event("seqPlayPause", null)}
 
 
 plotMain(600, 400, "#StepSequencer", period_phase_fap, bus)
