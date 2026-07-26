@@ -1,15 +1,4 @@
-const bus = {
-    _listeners: {},
-    subscribe_to(event, id, fn){
-        if (!this._listeners[event]) this._listeners[event] = {}
-        this._listeners[event][id] = fn
-    },
-    execute_event(event, data) {
-        Object.values(this._listeners[event] || {}).forEach(fn => fn(data))
-    }
-}
-
-async function load_waveforms(path_to_bin, path_to_meta){
+export async function load_waveforms(path_to_bin, path_to_meta){
     const resp_meta = await fetch(path_to_meta)
     const meta_json = await resp_meta.json()
     
@@ -82,25 +71,15 @@ async function load_waveforms(path_to_bin, path_to_meta){
     return [metaValues, meta_json, shared, mu, std]
 }
 
-const [metaValues, meta, shared, mu, std] = await load_waveforms("/dat/waveforms.bin", "/dat/waveforms_meta.json")
-const period_phase_fap = meta.meta
-
-//min-max norm fap then scale to 1 ~ 10
-const fap = period_phase_fap.map(d => d.fap)
-const fap_min = Math.min(...fap)
-const fap_max = Math.max(...fap)
-const sweep_max = 5
-const sweep_min = 1
-for (let i=0; i<fap.length; i++){
-    period_phase_fap[i]['sweep_frequency'] = 0.2 + (fap[i] - fap_min) * (sweep_max - sweep_min)/(fap_max - fap_min)
-    period_phase_fap[i]['index'] = i
-}
-
-//lookup tables
-const period_phase_fap_lookup = new Map(period_phase_fap.map(r => [r.GeneID, r]))
-
 // --------- Plot period vs phase ---------
-function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequencer", period_phase_fap, bus){
+export function plotMain(
+    canvasWidth = 600, 
+    canvasHeight = 400, 
+    div_name = "#StepSequencer", 
+    period_phase_fap, 
+    period_phase_fap_lookup, 
+    metaValues, 
+    bus){
     const margin = {"top": 30, "right": 30, "bottom": 40,"left": 100, }
     const innerHeight = canvasHeight - margin.top - margin.bottom
     const innerWidth = canvasWidth - margin.left - margin.right
@@ -351,19 +330,15 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     
     // play pause cycle
     let isPlay = false
-    function playPause(b){
-        isPlay = !isPlay
+    function playPause(playState){
+        isPlay = playState
         if (isPlay) {
             requestAnimationFrame(animateScrubber)
-            playPauseButton.textContent = "Pause"
-        } else {
-            playPauseButton.textContent = "Play"
         }
     }
 
     function playStop(){
         isPlay = false
-        playPauseButton.textContent = "Play"
         scrubber_time = 0
         scrubber.attr('transform', `translate(0,0)`)
     }
@@ -379,7 +354,7 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
                 const cur_Index = period_phase_fap_lookup.get(cur_GeneID).index
                 const cur_freq = 1/period_phase_fap_lookup.get(cur_GeneID).period * period_to_freq_scaled
                 const cur_sweep = period_phase_fap_lookup.get(cur_GeneID).sweep_frequency
-                bus.execute_event("playNote", [metaValues, shared, cur_GeneID, cur_Index, cur_freq, cur_sweep])
+                bus.execute_event("playNote", [metaValues, cur_GeneID, cur_Index, cur_freq, cur_sweep])
             }
         })
     }
@@ -530,83 +505,16 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     bus.subscribe_to("selection_modified", "mainplot", (current_selection) => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     })
-    bus.subscribe_to("seqPlayPause", "mainplot", () => {
-        playPause()
+    bus.subscribe_to("seqPlayPause", "mainplot", (playState) => {
+        playPause(playState)
     })
     bus.subscribe_to("seqStop", "mainplot", ()=> {
         playStop()
     })
 }
 
-// ----------- handle button presses -----------
-const playPauseButton = document.getElementById("SeqPlayPause")
-const stopButton = document.getElementById("SeqStop")
-playPauseButton.addEventListener('click', () => seqPlayPauseClick()) 
-stopButton.addEventListener('click', () => bus.execute_event("seqStop", null))
-async function seqPlayPauseClick(){
-    await initStepSeqAudio()
-    bus.execute_event("seqPlayPause", null)
-}
-
-
-plotMain(600, 400, "#StepSequencer", period_phase_fap, bus)
-
-
-// -------------- audioworklet -----------------
-// ---- Connect Audio Processor ----
-const activeVoices = new Set()
-let stepSeqAudioContext = null
-async function initStepSeqAudio() {
-    if (stepSeqAudioContext) return
-    stepSeqAudioContext = new AudioContext()
-    await stepSeqAudioContext.audioWorklet.addModule('/src/audio_processor.js')
-    await stepSeqAudioContext.resume()
-}
-
-function createVoice(metaValues, shared){
-    const node = new AudioWorkletNode(stepSeqAudioContext, 'stepseq-audio-processor', {
-        processorOptions: {
-            metaValues: metaValues,
-            shared: shared,
-        }
-    })
-    activeVoices.add(node)
-
-    // gain
-    const gain = stepSeqAudioContext.createGain()
-    const n = activeVoices.size
-    gain.gain.value = n > 0 ? 1 / Math.sqrt(n) : 0.8
-
-    node.connect(gain)
-    gain.connect(stepSeqAudioContext.destination)
-    // node.connect(stepSeqAudioContext.destination)
-
-    // terminate node
-    node.port.onmessage = e=>{
-        if (e.data.type === 'ended'){
-            node.disconnect()
-            gain.disconnect()
-            activeVoices.delete(node)
-        }
-    }
-    return node
-}
-
-
-bus.subscribe_to("playNote", "stepseq", ([metaValues, shared, GeneID, Index, freq, sweep]) =>{
-    const node = createVoice(metaValues, shared)
-    node.port.postMessage({
-        type: "geneSpecifics",
-        GeneID: GeneID,
-        Index: Index,
-        freq: freq,
-        sweep: sweep,
-        duration: 1, //s  maybe let user adjust this
-    })
-})
-
 // --------- gene selection display ---------
-function renderSelectionPanel(selected_genes){
+export function renderSelectionPanel(selected_genes){
     const panel = document.getElementById("SeqRightSelectedGeneDisplay")
     panel.innerHTML = ''
 
@@ -631,7 +539,3 @@ function renderSelectionPanel(selected_genes){
         panel.appendChild(tag)
     }
 }
-
-bus.subscribe_to("selection_modified", "main", (selection) => {
-    renderSelectionPanel(selection)
-})

@@ -78,19 +78,17 @@
             </div>
         </div>
 
-        <div id="SequencerDiv">
-            <div id="SeqLeft">
-                <canvas id="StepSequencer"></canvas>
-            </div>
-            <div id="SeqRight">
-                <div id="SeqRightButtons">
-                    <button>Play</button>
-                    <button>Stop</button>
-                    <button>Reset</button>
+        <div id="SequencerDiv" style="display: grid;grid-template-columns: 1fr 1fr;outline: 2px solid purple;">
+            <div id="StepSequencer" style="outline: 2px solid orange;"></div>
+            <div id="SeqRight" style="display: grid;grid-template-rows: 1fr 1fr 1fr 1fr;outline: 2px solid blue;">
+                <div id="SeqRightButtons" style="outline: 2px solid red;">
+                    <button id="SeqPlayPause">Play</button>
+                    <button id="SeqStop">Stop</button>
+                    <button id="SeqReset">Reset</button>
                 </div>
-                <div id="SeqRightSearchBar"></div>
-                <div id="SeqRightSelectedGeneDisplay"></div>
-                <div id="SeqRightPlot"></div>
+                <div id="SeqRightSearchBar" style="outline: 2px solid yellow;"></div>
+                <div id="SeqRightSelectedGeneDisplay" style="outline: 2px solid green;"></div>
+                <div id="SeqRightPlot" style="outline: 2px solid maroon;"></div>
             </div>
 
         </div>
