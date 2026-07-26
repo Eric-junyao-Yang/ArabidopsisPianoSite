@@ -15,64 +15,93 @@ async function load_waveforms(path_to_bin, path_to_meta){
     
     const bin = await fetch(path_to_bin)
     const buff = await bin.arrayBuffer()
-    const flat_arr = new Float32Array(buff)
     
-    const BYTE_OFFSET = meta_json.BYTE_OFFSET
-    const N_GRID = meta_json.N_GRID
-    const N_SAMPLES = meta_json.N_SAMPLES
-    const N_WAVES = meta_json.N_WAVES
-    const WAVE_KEYS = meta_json.WAVE_KEYS
-    const N_FLOATS = N_GRID * N_WAVES
-    const BLOCK = N_WAVES * N_GRID
-    const bytesPerFloat = 4
-
     const nrows = meta_json.meta.length
-    const audio_waves = new Array(nrows)
-    const mu = new Array(nrows)
-    const std = new Array(nrows)
-    
-    for (let i=0; i<nrows; i++){
-        const base = BLOCK * i
-
-        audio_waves[i] = new Float32Array(
-            flat_arr.buffer,
-            flat_arr.byteOffset + base * bytesPerFloat,
-            N_GRID * N_SAMPLES
-        )
-        mu[i] = new Float32Array(
-            flat_arr.buffer,
-            flat_arr.byteOffset + (base + N_GRID * N_SAMPLES) * bytesPerFloat,
-            N_GRID * 1
-        )
-        std[i] = new Float32Array(
-            flat_arr.buffer,
-            flat_arr.byteOffset + (base + N_GRID * (N_SAMPLES + 1)) * bytesPerFloat,
-            N_GRID * 1
-        )
+    const metaValues = {
+        'N_GRID' : meta_json.N_GRID,
+        "N_SAMPLES" : meta_json.N_SAMPLES,
+        "N_WAVES" : meta_json.N_WAVES,
+        "BLOCK" : meta_json.N_WAVES * meta_json.N_GRID,
+        "nrows" : meta_json.meta.length,
+        "WAVE_KEYS" : meta_json.WAVE_KEYS,
     }
 
-    return [audio_waves, mu, std, meta_json]
+    const shared = new SharedArrayBuffer(buff.byteLength) //This will be passed to audio_processor
+    const sharedView = new Float32Array(shared)
+    sharedView.set(new Float32Array(buff))
+
+    // pull mu and std info
+    const mu = new Array(nrows)
+    const std = new Array(nrows)
+
+    for (let i=0; i<nrows; i++){
+        const base = metaValues.N_GRID * metaValues.N_WAVES * i
+        mu[i] = new Float32Array(
+            shared,
+            (base + metaValues.N_GRID*metaValues.N_SAMPLES) * 4,
+            metaValues.N_GRID
+        ).slice()
+        std[i] = new Float32Array(
+            shared,
+            (base + metaValues.N_GRID*(metaValues.N_SAMPLES+1)) * 4,
+            metaValues.N_GRID
+        ).slice()
+    }
+
+    // mean-center, then normalize on the samples per gene, in place
+
+    for (let i=0; i < nrows; i++){
+        const base = metaValues.BLOCK * i
+
+        const allWaves = new Float32Array(shared, base * 4, metaValues.N_GRID * metaValues.N_SAMPLES)
+        
+        // mean shift
+        // let sum = 0
+        // for (let j=0; j < allWaves.length; j++){sum += allWaves[j]} 
+        // const mean = sum / allWaves.length
+        // for (let j=0;j<allWaves.length;j++){
+        //     allWaves[j] -= mean
+        // }
+
+        let vmin = Infinity, vmax = -Infinity
+        for (let j=0; j < allWaves.length; j++){
+            if (allWaves[j] < vmin) vmin = allWaves[j]
+            if (allWaves[j] > vmax) vmax = allWaves[j]
+        } 
+
+        const center = (vmax + vmin) / 2
+        const scale = (vmax - vmin) / 2 || 1.0
+        meta_json.meta[i].wave_min = vmin
+        meta_json.meta[i].wave_max = vmax
+        // meta_json.meta[i].wave_mean = mean
+
+        for (let j=0;j<allWaves.length;j++){
+            allWaves[j] = (allWaves[j] - center) / scale
+        }
+    }
+    return [metaValues, meta_json, shared, mu, std]
 }
 
-const [wav, mu, std, meta] = await load_waveforms("/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms.bin", "/home/yeti1t3y/Documents/ArabidopsisPiano/dat/waveforms_meta.json")
+const [metaValues, meta, shared, mu, std] = await load_waveforms("/dat/waveforms.bin", "/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
+
 //min-max norm fap then scale to 1 ~ 10
 const fap = period_phase_fap.map(d => d.fap)
 const fap_min = Math.min(...fap)
 const fap_max = Math.max(...fap)
+const sweep_max = 5
+const sweep_min = 1
 for (let i=0; i<fap.length; i++){
-    period_phase_fap[i]['sweep_frequency'] = 1 + (fap[i] - fap_min) * 9 / (fap_max - fap_min)
+    period_phase_fap[i]['sweep_frequency'] = 0.2 + (fap[i] - fap_min) * (sweep_max - sweep_min)/(fap_max - fap_min)
+    period_phase_fap[i]['index'] = i
 }
 
 //lookup tables
 const period_phase_fap_lookup = new Map(period_phase_fap.map(r => [r.GeneID, r]))
-const wav_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, wav[idx]]))
-const mu_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, mu[idx]]))
-const std_lookup = new Map(period_phase_fap.map((row,idx) => [row.GeneID, std[idx]]))
 
 // --------- Plot period vs phase ---------
 function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequencer", period_phase_fap, bus){
-    const margin = {"top": 30, "right": 30, "bottom": 40,"left": 50, }
+    const margin = {"top": 30, "right": 30, "bottom": 40,"left": 100, }
     const innerHeight = canvasHeight - margin.top - margin.bottom
     const innerWidth = canvasWidth - margin.left - margin.right
     const dpr = window.devicePixelRatio || 1
@@ -88,7 +117,7 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
 
     const yScale = d3.scaleLinear()
         .domain(d3.extent(period_phase_fap, d => d.period))
-        .range([innerHeight, 0])
+        .range([0, innerHeight])
         .nice()
 
     const container_div = d3.select(div_name)
@@ -165,6 +194,118 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
         } else {return}
     }
 
+    // ------------ draw piano ------------
+    const pitchNames = [
+        "A3", "A♯3/B♭3", "B3", 
+        "C4", "C♯4/D♭4", "D4", "D♯4/E♭4", "E4", "F4", "F♯4/G♭4", "G4", "G♯4/A♭4", "A4", "A♯4/B♭4", "B4", 
+        "C5", "C♯5/D♭5", "D5", "D♯5/E♭5", "E5", "F5", "F♯5/G♭5", "G5", "G♯5/A♭5", "A5", "A♯5/B♭5", "B5",
+        "C6", "C♯6/D♭6", "D6", "D♯6/E♭6", "E6", "F6", "F♯6/G♭6", "G6", "G♯6/A♭6", "A6"
+    ]
+    
+    const pitchTable = Array.from(pitchNames, (val, idx) => {
+        const pitchCenter = 220*Math.pow(Math.pow(2, 1/12), idx)
+        return {
+            ['pitchName'] : val,
+            ['pitchCenter'] : pitchCenter,
+            // ['topEdge'] : pitchCenter * Math.pow(2, 1/24),
+            // ['botEdge'] : pitchCenter / Math.pow(2, 1/24),
+            ['keyColor'] : val.includes("/")? "black":"white",
+        }
+    })
+
+    const halfSemi = Math.pow(2, 1/24)
+
+    for (let i=0; i<pitchTable.length; i++){
+        const key = pitchTable[i]
+
+        if (key.keyColor === "black") {
+            key.topEdge = key.pitchCenter * halfSemi
+            key.botEdge = key.pitchCenter / halfSemi
+            continue
+        }
+
+        const above = pitchTable[i + 1]
+        const below = pitchTable[i - 1]
+
+        if (above && above.keyColor === "black"){
+            key.topEdge = key.pitchCenter * halfSemi * halfSemi
+        } else {
+            key.topEdge = key.pitchCenter * halfSemi
+        }
+
+        if (below && below.keyColor === "black") {
+            key.botEdge = key.pitchCenter / (halfSemi * halfSemi)
+        } else {
+            key.botEdge = key.pitchCenter / halfSemi
+        }
+    }
+
+    const WHITE_KEY_LENGTH = 30
+    const BLACK_KEY_LENGTH = 20
+    // set up clip-path
+    svg.append('defs')
+        .append('clipPath')
+        .attr('id', 'left-axis-clip')
+        .append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', WHITE_KEY_LENGTH + margin.left)
+        .attr('height', innerHeight)
+    const leftAxisandKeys = svg.append('g')
+        .attr('transform', `translate(${margin.left - WHITE_KEY_LENGTH}, ${margin.top})`)
+        .attr('clip-path', 'url(#left-axis-clip)')
+
+    function drawPiano(pitchTable, ySc){
+
+        const whiteKeys = pitchTable.filter(d => d.keyColor === 'white')
+        const blackKeys = pitchTable.filter(d => d.keyColor === 'black')
+
+        leftAxisandKeys.selectAll('.white-key')
+            .data(whiteKeys, d=> d.pitchName)
+            .join('rect')
+            .attr('class', 'white-key')
+            .attr("x", 0)
+            .attr("y", d => ySc(10560/d.topEdge)) //10560 = 24hrs * 440 Hz scaling factor
+            .attr("width", WHITE_KEY_LENGTH)
+            .attr("height", d => ySc(10560/d.botEdge) - ySc(10560/d.topEdge))
+            .attr("fill", "white")
+            .attr("stroke", "black")
+            .attr("stroke-width", "1")
+
+        leftAxisandKeys.selectAll('.black-key')
+            .data(blackKeys, d => d.pitchName)
+            .join('rect')
+            .attr('class', 'black-key')
+            .attr("x", 0)
+            .attr("y", d => ySc(10560/d.topEdge)) //10560 = 24hrs * 440 Hz scaling factor
+            .attr("width", BLACK_KEY_LENGTH)
+            .attr("height", d => ySc(10560/d.botEdge) - ySc(10560/d.topEdge))
+            .attr("fill", "black")
+            .attr("stroke", "black")
+            .attr("stroke-width", "1")
+
+        leftAxisandKeys.selectAll('.white-key-label')
+            .data(whiteKeys, d => d.pitchName)
+            .join('text')
+            .attr('class', 'white-key-label')
+            .attr('x', WHITE_KEY_LENGTH * 0.9)
+            .attr('y', d => {
+                const top = ySc(10560 / d.topEdge)
+                const bot = ySc(10560 / d.botEdge)
+                return top + (bot - top) * 0.5
+            })
+            .attr('text-anchor', 'end')
+            .attr('dominant-baseline', 'middle')
+            .attr('font-size', d => {
+                const keyHeight = ySc(10560 / d.botEdge) - ySc(10560 / d.topEdge)
+                return Math.min(keyHeight * 0.3, 20) + 'px'
+            })
+            .attr('fill', '#333')
+            .attr('pointer-events', 'none')
+            .text(d => d.pitchName)
+    }
+
+    drawPiano(pitchTable, yScale)
     // ------------ Scrubber --------------
     const SCRUBBER_HANDLE_WIDTH = 5
     const SCRUBBER_HANDLE_HEIGHT = 10
@@ -189,7 +330,7 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     // Animate Scrubber
     let scrubber_time = 0
     let t_minus1 = null
-    const scrubber_velocity = 6 //move horizontally n hrs per second
+    const scrubber_velocity = 3 //move horizontally n hrs per second
     function animateScrubber(t0){
         if (t_minus1){
             const dt = (t0 - t_minus1) / 1000
@@ -227,6 +368,7 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
         scrubber.attr('transform', `translate(0,0)`)
     }
 
+    const period_to_freq_scaled = 440 / (1/24) // mapping 24 hours to 440Hz
 
     // ---------- Check if selected gene should be triggered ---------
     function checkSelectedGenes(tm1, t0){
@@ -234,8 +376,10 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
             const xpos = item.phase
             if (xpos > tm1 && xpos < t0){
                 const cur_GeneID = item.GeneID
-                const cur_wav = wav_lookup.get(cur_GeneID)
-                bus.execute_event("playNote", cur_wav)
+                const cur_Index = period_phase_fap_lookup.get(cur_GeneID).index
+                const cur_freq = 1/period_phase_fap_lookup.get(cur_GeneID).period * period_to_freq_scaled
+                const cur_sweep = period_phase_fap_lookup.get(cur_GeneID).sweep_frequency
+                bus.execute_event("playNote", [metaValues, shared, cur_GeneID, cur_Index, cur_freq, cur_sweep])
             }
         })
     }
@@ -244,8 +388,11 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
         .call(d3.axisBottom(xScale))
-        
-    const yAxis = plotArea.append("g")
+    
+    const yAxisLabel = svg.append('g')
+        .attr('transform', `translate(${margin.left - WHITE_KEY_LENGTH}, ${margin.top})`)
+
+    const yAxis = yAxisLabel.append("g") //use svg so it can be further left of plotArea
         .attr("transform", `translate(0, 0)`)
         .call(d3.axisLeft(yScale))
     
@@ -256,7 +403,9 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
         .attr("font-size", "12px")
         .text("Hours")
 
-    plotArea.append("text")
+
+
+    yAxisLabel.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", - innerHeight/2)
         .attr("y", -30)
@@ -343,6 +492,7 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
             rafId = requestAnimationFrame(() => {
                 drawPoints(CanvasCtx, zx, zy, RADIUS_NORMAL)
                 drawHighlight(HightlightCanvasCtx, zx, zy, RADIUS_HOVER, RADIUS_SELECT)
+                drawPiano(pitchTable, zy)
                 xAxis.call(d3.axisBottom(zx))
                 yAxis.call(d3.axisLeft(zy))
                 currentXScale = zx
@@ -354,6 +504,7 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
             const zy = event.transform.rescaleY(yScale)
             drawPoints(CanvasCtx, zx, zy, RADIUS_NORMAL)
             drawHighlight(HightlightCanvasCtx, zx, zy, RADIUS_HOVER, RADIUS_SELECT)
+            drawPiano(pitchTable, zy)
             xAxis.call(d3.axisBottom(zx))
             yAxis.call(d3.axisLeft(zy))
             currentXScale = zx
@@ -390,14 +541,67 @@ function plotMain(canvasWidth = 600, canvasHeight = 400, div_name = "#StepSequen
 // ----------- handle button presses -----------
 const playPauseButton = document.getElementById("SeqPlayPause")
 const stopButton = document.getElementById("SeqStop")
-playPauseButton.addEventListener('click', () => seqPlayPauseClick())
+playPauseButton.addEventListener('click', () => seqPlayPauseClick()) 
 stopButton.addEventListener('click', () => bus.execute_event("seqStop", null))
-function seqPlayPauseClick(){bus.execute_event("seqPlayPause", null)}
+async function seqPlayPauseClick(){
+    await initStepSeqAudio()
+    bus.execute_event("seqPlayPause", null)
+}
 
 
 plotMain(600, 400, "#StepSequencer", period_phase_fap, bus)
-// const [a, b] = mergeWav("AT1G14980", wav_lookup, period_phase_fap_lookup)
-// console.log(a, b)
 
 
-bus.subscribe_to("playNote", "me", (wav) => {console.log(wav)})
+// -------------- audioworklet -----------------
+// ---- Connect Audio Processor ----
+const activeVoices = new Set()
+let stepSeqAudioContext = null
+async function initStepSeqAudio() {
+    if (stepSeqAudioContext) return
+    stepSeqAudioContext = new AudioContext()
+    await stepSeqAudioContext.audioWorklet.addModule('/src/audio_processor.js')
+    await stepSeqAudioContext.resume()
+}
+
+function createVoice(metaValues, shared){
+    const node = new AudioWorkletNode(stepSeqAudioContext, 'stepseq-audio-processor', {
+        processorOptions: {
+            metaValues: metaValues,
+            shared: shared,
+        }
+    })
+    activeVoices.add(node)
+
+    // gain
+    const gain = stepSeqAudioContext.createGain()
+    const n = activeVoices.size
+    gain.gain.value = n > 0 ? 1 / Math.sqrt(n) : 0.8
+
+    node.connect(gain)
+    gain.connect(stepSeqAudioContext.destination)
+    // node.connect(stepSeqAudioContext.destination)
+
+    // terminate node
+    node.port.onmessage = e=>{
+        if (e.data.type === 'ended'){
+            node.disconnect()
+            gain.disconnect()
+            activeVoices.delete(node)
+        }
+    }
+    return node
+}
+
+
+bus.subscribe_to("playNote", "stepseq", ([metaValues, shared, GeneID, Index, freq, sweep]) =>{
+    const node = createVoice(metaValues, shared)
+    node.port.postMessage({
+        type: "geneSpecifics",
+        GeneID: GeneID,
+        Index: Index,
+        freq: freq,
+        sweep: sweep,
+        duration: 1, //s  maybe let user adjust this
+    })
+})
+

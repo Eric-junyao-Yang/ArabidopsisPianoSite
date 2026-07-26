@@ -68,5 +68,7 @@ plotViolin(130, 500, min_max_arr, "filter_slider", bus)
 
 // ---- main.js bus subscription ----
 bus.subscribe_to("synth_waveform_changed", "main", points => {
-    node.port.postMessage({type: "updatePoints", points})
+    if (node) {
+        node.port.postMessage({type: "updatePoints", points})
+    }
 })
