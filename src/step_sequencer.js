@@ -605,3 +605,33 @@ bus.subscribe_to("playNote", "stepseq", ([metaValues, shared, GeneID, Index, fre
     })
 })
 
+// --------- gene selection display ---------
+function renderSelectionPanel(selected_genes){
+    const panel = document.getElementById("SeqRightSelectedGeneDisplay")
+    panel.innerHTML = ''
+
+    for (const GeneID of selected_genes){
+        const tag = document.createElement('div')
+        tag.className = 'gene-tag'
+
+        const label = document.createElement('span')
+        label.className = 'gene-tab-label'
+        label.textContext = GeneID
+        label.addEventListener('click', (event) => {})
+
+        const remove = document.createElement('button')
+        remove.className = 'gene-tag-remove'
+        remove.textContent = "×"
+        remove.addEventListener('click', (event) => {
+            event.stopPropagation()
+        })
+
+        tag.appendChild(label)
+        tag.appendChild(remove)
+        panel.appendChild(tag)
+    }
+}
+
+bus.subscribe_to("selection_modified", "main", (selection) => {
+    renderSelectionPanel(selection)
+})
