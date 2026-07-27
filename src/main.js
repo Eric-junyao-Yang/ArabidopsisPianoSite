@@ -139,6 +139,7 @@ function createVoice(metaValues, shared){
 }
 
 // --------------------------- StepSquencer ----------------------------
+// TODO: investigate sampled wave vs mean/std mismatch
 const [metaValues, meta, shared, mu, std] = await load_waveforms("/dat/waveforms.bin", "/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
 
