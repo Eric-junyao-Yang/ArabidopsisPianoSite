@@ -194,7 +194,7 @@ const fft_svg = plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveform
 plotViolin(130, 500, min_max_arr, "filter_slider", bus)
 
 // StepSeq
-plotMain(600, 400, "#StepSequencer", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
+plotMain(1200, 800, "#StepSequencer", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
 // ---- main.js bus subscription ----
