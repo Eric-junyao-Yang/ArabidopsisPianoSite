@@ -67,6 +67,12 @@ class StepSeqAudioProcessor extends AudioWorkletProcessor {
         this.sampleCount = 0
         this.totalSamples = 0
 
+
+        //for fade in and out
+        this.fadeInSamples = 0
+        this.fadeOutSamples = 0
+        this.active = false
+
         this.port.onmessage = (event) => {
             if (event.data.type === "geneSpecifics") {
                 this.geneIndex = event.data.Index
@@ -82,13 +88,18 @@ class StepSeqAudioProcessor extends AudioWorkletProcessor {
                     )
                 }
                 this.totalSamples = Math.floor(event.data.duration * sampleRate)
+                this.fadeInSamples = Math.floor(event.data.duration * 0.10 * sampleRate) //10% fade in out for testing
+                this.fadeOutSamples = Math.floor(event.data.duration * 0.10 * sampleRate)
+                this.fadeOutStart = this.totalSamples - this.fadeOutSamples // start fading out before end
                 this.sampleCount = 0
+                this.active = true
             }
     }
 }
 
     process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
-        if (this.geneIndex === null) return true
+        if (!this.active) return true
+
         const output = outputs[0]
         const left = output[0]
         const increment = this.freq * (this.N_GRID / sampleRate) 
@@ -105,7 +116,15 @@ class StepSeqAudioProcessor extends AudioWorkletProcessor {
             
             const sampleV0 = gatherCatmullrom(this.audio_waves[f0], this.phase, this.N_GRID)
             const sampleV1 = gatherCatmullrom(this.audio_waves[f1], this.phase, this.N_GRID)
-            const sample = sampleV0 * (1-wfrac) + sampleV1 * wfrac
+            let sample = sampleV0 * (1-wfrac) + sampleV1 * wfrac
+
+            //fade mixing (currently sample is the sound to output)
+            if (this.sampleCount < this.fadeInSamples) {
+                sample *= this.sampleCount / this.fadeInSamples
+            }
+            else if (this.sampleCount >= this.fadeOutStart) {
+                sample *= (this.totalSamples - this.sampleCount) / this.fadeOutSamples
+            }
 
             for (let ch=0; ch < output.length; ch++){
                 output[ch][i] = sample
@@ -115,8 +134,12 @@ class StepSeqAudioProcessor extends AudioWorkletProcessor {
 
             //self termiantes
             if (this.sampleCount >= this.totalSamples) {
+                for (let ch=0; ch < output.length; ch++){
+                    output[ch][i] = 0
+                }
+                this.active = false
                 this.port.postMessage({type: 'ended'})
-                return false
+                break // instead of return false
             }
         }
         return true

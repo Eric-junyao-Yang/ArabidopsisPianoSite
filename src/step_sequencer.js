@@ -43,26 +43,20 @@ export async function load_waveforms(path_to_bin, path_to_meta){
         const base = metaValues.BLOCK * i
 
         const allWaves = new Float32Array(shared, base * 4, metaValues.N_GRID * metaValues.N_SAMPLES)
-        
-        // mean shift
-        // let sum = 0
-        // for (let j=0; j < allWaves.length; j++){sum += allWaves[j]} 
-        // const mean = sum / allWaves.length
-        // for (let j=0;j<allWaves.length;j++){
-        //     allWaves[j] -= mean
-        // }
 
         let vmin = Infinity, vmax = -Infinity
+        let sum = 0
         for (let j=0; j < allWaves.length; j++){
             if (allWaves[j] < vmin) vmin = allWaves[j]
             if (allWaves[j] > vmax) vmax = allWaves[j]
+            sum += allWaves[j]
         } 
 
-        const center = (vmax + vmin) / 2
+        // const center = (vmax + vmin) / 2
+        const center = sum / allWaves.length
         const scale = (vmax - vmin) / 2 || 1.0
         meta_json.meta[i].wave_min = vmin
         meta_json.meta[i].wave_max = vmax
-        // meta_json.meta[i].wave_mean = mean
 
         for (let j=0;j<allWaves.length;j++){
             allWaves[j] = (allWaves[j] - center) / scale
@@ -378,8 +372,6 @@ export function plotMain(
         .attr("font-size", "12px")
         .text("Hours")
 
-
-
     yAxisLabel.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", - innerHeight/2)
@@ -421,11 +413,9 @@ export function plotMain(
     function updatePoints(item){
         if (item){
             if (current_selection.has(item)) {
-                current_selection.delete(item)
-                bus.execute_event("selection_modified", current_selection)
+                bus.execute_event("selection_del", item)
             } else {
-                current_selection.add(item)
-                bus.execute_event("selection_modified", current_selection)
+                bus.execute_event("selection_add", item)
             }
         }
     }
@@ -502,7 +492,15 @@ export function plotMain(
     bus.subscribe_to("point_hover", "mainplot", (current_hover) => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     })
-    bus.subscribe_to("selection_modified", "mainplot", (current_selection) => {
+    bus.subscribe_to("selection_add", "mainplot", (item) => {
+        current_selection.add(item)
+        bus.execute_event("selection_modified", current_selection)
+    })
+    bus.subscribe_to("selection_del", "mainplot", (item) => {
+        current_selection.delete(item)
+        bus.execute_event("selection_modified", current_selection)        
+    })
+    bus.subscribe_to("selection_modified", "mainplot", () => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     })
     bus.subscribe_to("seqPlayPause", "mainplot", (playState) => {
@@ -511,31 +509,185 @@ export function plotMain(
     bus.subscribe_to("seqStop", "mainplot", ()=> {
         playStop()
     })
+    bus.subscribe_to("resetSelection", "mainplot", () => {
+        current_selection = new Set()
+        bus.execute_event("selection_modified", current_selection)
+    })
 }
 
-// --------- gene selection display ---------
-export function renderSelectionPanel(selected_genes){
-    const panel = document.getElementById("SeqRightSelectedGeneDisplay")
-    panel.innerHTML = ''
+export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
+    const margin = {top: 50, right: 30, bot: 50, left: 60}
+    const innerWidth = width - margin.left - margin.right
+    const innerHeight = height - margin.top - margin.bot
 
-    for (const GeneID of selected_genes){
-        const tag = document.createElement('div')
-        tag.className = 'gene-tag'
+    const div = d3.select(div_name)
+        .style("width", width + "px")
+        .style("height", height + "px")
+        .style("position", "relative")
 
-        const label = document.createElement('span')
-        label.className = 'gene-tab-label'
-        label.textContext = GeneID
-        label.addEventListener('click', (event) => {})
+    div.selectAll('svg').remove()
 
-        const remove = document.createElement('button')
-        remove.className = 'gene-tag-remove'
-        remove.textContent = "×"
-        remove.addEventListener('click', (event) => {
-            event.stopPropagation()
+    const svg = div.append('svg')
+        .attr("width", width)
+        .attr("height", height)
+        .style("position", "relative")
+    
+    // const test = svg.append("rect")
+    //     .attr("x", 0)
+    //     .attr("y", 0)
+    //     .attr("width", 30)
+    //     .attr("height", 30)
+    //     .attr("fill", "black")
+
+    const plotArea = svg.append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`)
+
+    const xScale = d3.scaleLinear().range([0, innerWidth])
+    const yScale = d3.scaleLinear().range([innerHeight, 0])
+
+    // ---------- Set up Axis and labels -----------
+    const xAxisG = plotArea.append('g')
+        .attr("class", "x-axis")
+        .attr("transform", `translate(0, ${innerHeight})`)
+    
+    const yAxisG = plotArea.append('g')
+        .attr("class", "y-axis")
+    
+    plotArea.append("text")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 40)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .text("Hours")
+    
+    plotArea.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight/2)
+        .attr("y", -30)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .text("read counts")
+    
+    const titleText = plotArea.append("text")
+        .attr("transform", `translate(${innerWidth/2},-10)`)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "23px")
+
+    // Future groups allowed to be plotted
+    const confIntGroup   = plotArea.append("g").attr("class", "conf-int-group")
+    const samplesGroup   = plotArea.append("g").attr("class", "samples-group")
+    const muGroup        = plotArea.append("g").attr("class", "mu-group")
+    const countDotsGroup = plotArea.append("g").attr("class", "count-dots-group")
+
+    // default display
+    function renderEmpty(){
+        xScale.domain([0, 48])
+        yScale.domain([0, 100])
+        xAxisG.call(d3.axisBottom(xScale))
+        yAxisG.call(d3.axisLeft(yScale))
+        titleText.text("gene ID")
+
+        confIntGroup.selectAll("*").remove()
+        samplesGroup.selectAll("*").remove()
+        muGroup.selectAll("*").remove()
+        countDotsGroup.selectAll("*").remove()
+    }
+
+    function updatePlot({metaValues, period_phase_fap, shared, cur_mu:mu, cur_std:std, meta_item, count_dat}){
+        const base = meta_item.index * metaValues.BLOCK
+        const period = meta_item.period
+        const center = (meta_item.wave_max + meta_item.wave_min) / 2
+        const scale = (meta_item.wave_max - meta_item.wave_min) / 2 || 1.0
+
+        const sample_wavs = Array.from({length: metaValues.N_SAMPLES}, (_, i) => {
+            return new Float32Array(
+                shared,
+                (base + metaValues.N_GRID*i) * 4,
+                metaValues.N_GRID
+            )
         })
 
-        tag.appendChild(label)
-        tag.appendChild(remove)
-        panel.appendChild(tag)
+        // find true min max
+        const allVals = [...mu, ...std, meta_item.wave_max, meta_item.wave_min]
+        const plot_min = d3.min(allVals)
+        const plot_max = d3.max(allVals)
+
+        // update axis
+        xScale.domain([0, period]).nice()
+        yScale.domain([plot_min, plot_max]).nice()
+        xAxisG.transition().duration(300).call(d3.axisBottom(xScale))
+        yAxisG.transition().duration(300).call(d3.axisLeft(yScale))
+        titleText.text(meta_item.GeneID)
+
+        // set up confidence internval
+        const mu_std_dat = Array.from({length:metaValues.N_GRID}, (val, idx) => ({
+            x: idx * period / metaValues.N_GRID,
+            mu: mu[idx],
+            std: std[idx],
+        }))
+
+        const area = d3.area()
+            .x(d => xScale(d.x))
+            .y0(d => yScale(d.mu + 2*d.std))
+            .y1(d => yScale(d.mu - 2*d.std))
+        
+        confIntGroup.selectAll('path')
+            .data([mu_std_dat])
+            .join("path")
+            .attr('fill', 'steelblue')
+            .attr('opacity', 0.1)
+            .attr('stroke', 'none')
+            .attr('d', d => area(d))
+
+        // sample and mu lines
+        const line_sample_wavs = d3.line() //require scaling
+            .x((_, i)=> xScale(i * period / metaValues.N_GRID))
+            .y((d, _)=> yScale(d * scale + center))
+
+        const colors = d3.schemeTableau10       
+        samplesGroup.selectAll('path')
+            .data(sample_wavs)
+            .join("path")
+            .attr("fill", "none")
+            .attr("stroke", (d, i) => colors [i % 10])
+            .attr("stroke-width", 3)
+            .attr('opacity', 0.4)
+            .attr("d", dat => line_sample_wavs(dat))
+
+        const line_mu_wav = d3.line() // no scaling
+            .x((d, i)=> xScale(i * period / metaValues.N_GRID))
+            .y(d => yScale(d))
+        
+        muGroup.selectAll('path')
+            .data([mu])
+            .join("path")
+            .attr("fill", "none")
+            .attr("stroke", "red")
+            .attr("stroke-width", 3)
+            .attr('opacity', 0.6)
+            .attr("d", d=>line_mu_wav(d))
+
+        // plot count data on top of waves
+        const count_y = Object.keys(count_dat)
+            .filter(k => k.startsWith("LD_"))
+            .map(k => count_dat[k])
+            
+        const count_arr = Array.from({length:16}, (_,i) => ({
+                x: ((i+1) * 3 -1) % period,
+                y: count_y[i]
+        }))
+
+        countDotsGroup.selectAll("circle")
+            .data(count_arr)
+            .join("circle")
+            .attr("r", 5)
+            .attr("fill", "black")
+            .attr("opacity", 0.6)
+            .attr("cx", d=> xScale(d.x))
+            .attr("cy", d=> yScale(d.y))
     }
+
+    renderEmpty()
+
+    return {renderEmpty, updatePlot}
 }

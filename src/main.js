@@ -1,6 +1,6 @@
 import { Synth_Waveform } from "/src/synth_waveform.js"
 import { meta_to_json, bin_to_array, append_id_logCount_to_array, plotUMAP, plotViolin} from "/src/plots.js"
-import { load_waveforms, plotMain, renderSelectionPanel } from "/src/step_sequencer.js"
+import { load_waveforms, plotMain, plotStepSeqWave } from "/src/step_sequencer.js"
 
 // ---- add a bus for communication between plots ----
 const bus = {
@@ -18,6 +18,7 @@ const bus = {
 let count_umap_arr = await bin_to_array("/dat/count_umap.bin", "/dat/bin_meta.json")
 let fft_umap_arr = await bin_to_array("/dat/fft_umap.bin", "/dat/bin_meta.json")
 let min_max_arr = await bin_to_array("/dat/min_max_norm.bin", "/dat/bin_meta.json")
+let normalized_filtered_arr = await bin_to_array("/dat/normalized_filtered.bin", "/dat/bin_meta.json")
 const min_max_meta = await meta_to_json("/dat/bin_meta.json","min_max_norm.bin")
 
 const ids = min_max_meta.rownames
@@ -27,10 +28,11 @@ const logCount = min_max_arr.map((val, idx) => val.log_mean_count)
 count_umap_arr = append_id_logCount_to_array(count_umap_arr, ids, logCount)
 fft_umap_arr = append_id_logCount_to_array(fft_umap_arr, ids, logCount)
 min_max_arr = append_id_logCount_to_array(min_max_arr, ids, logCount)
-
+normalized_filtered_arr = append_id_logCount_to_array(normalized_filtered_arr, ids, logCount)
+const normalized_filtered_lookup = new Map(normalized_filtered_arr.map((val, idx) => [ids[idx], val]))
 
 // ---- Synth Waveform ----
-// TODO: Fix and check if circle match data (I think currently wrong poitns are highlighted) ; make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes)
+// TODO: Fix and check if circle match data (I think currently wrong poitns are highlighted) ; make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling
 let node = null
 
 const synth_waveform_canvas =
@@ -66,28 +68,47 @@ document.getElementById("SeqStop").addEventListener('click', () => {
     playPauseButton.textContent = "Play"
     bus.execute_event("seqStop", null)}
 )
-
+document.getElementById("SeqReset").addEventListener('click', () => {
+    bus.execute_event("resetSelection", null)
+})
 
 // ---- Connect Audio Processor ----
 // Synth
-const context = new AudioContext()
+let SynthContext = null
 
 async function start() {
-  await context.audioWorklet.addModule('/src/audio_processor.js')
-  node = new AudioWorkletNode(context, 'synth-audio-processor')
-  node.connect(context.destination)
-  await context.resume()
-  node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
+    if (SynthContext) return
+    SynthContext = new AudioContext()
+    await SynthContext.audioWorklet.addModule('/src/audio_processor.js')
+    node = new AudioWorkletNode(SynthContext, 'synth-audio-processor')
+    node.connect(SynthContext.destination)
+    await SynthContext.resume()
+    node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
 }
 
 // Step Seq
-const activeVoices = new Set()
+const activeVoices = new Map()
 let stepSeqAudioContext = null
+let masterCompressor = null
 async function initStepSeqAudio() {
     if (stepSeqAudioContext) return
     stepSeqAudioContext = new AudioContext()
     await stepSeqAudioContext.audioWorklet.addModule('/src/audio_processor.js')
     await stepSeqAudioContext.resume()
+    masterCompressor = stepSeqAudioContext.createDynamicsCompressor()
+    masterCompressor.threshold.value = -6   // start compressing at this dB
+    masterCompressor.knee.value      = 3    // 3~10 is natural ?
+    masterCompressor.ratio.value     = 4    // 4:1 compression ratio
+    masterCompressor.attack.value    = 0.003 // 3ms
+    masterCompressor.release.value   = 0.15  // 150ms
+    masterCompressor.connect(stepSeqAudioContext.destination)
+}
+
+// --------- existing sounds needs to be scaled as new sounds join --------
+function rescaleGains() {
+    const n = activeVoices.size
+    const g = n > 1 ? 1 / Math.sqrt(n) : 0.8
+    activeVoices.forEach((gain, node) => gain.gain.value = g)
 }
 
 // --------- Spawn voices -----------
@@ -98,16 +119,12 @@ function createVoice(metaValues, shared){
             shared: shared,
         }
     })
-    activeVoices.add(node)
-
-    // gain
     const gain = stepSeqAudioContext.createGain()
-    const n = activeVoices.size
-    gain.gain.value = n > 0 ? 1 / Math.sqrt(n) : 0.8
-
+    gain.gain.value = 0
     node.connect(gain)
-    gain.connect(stepSeqAudioContext.destination)
-    // node.connect(stepSeqAudioContext.destination)
+    gain.connect(masterCompressor)
+    activeVoices.set(node, gain)
+    rescaleGains()
 
     // terminate node
     node.port.onmessage = e=>{
@@ -115,12 +132,13 @@ function createVoice(metaValues, shared){
             node.disconnect()
             gain.disconnect()
             activeVoices.delete(node)
+            rescaleGains()
         }
     }
     return node
 }
 
-// ---- StepSquencer ----
+// --------------------------- StepSquencer ----------------------------
 const [metaValues, meta, shared, mu, std] = await load_waveforms("/dat/waveforms.bin", "/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
 
@@ -138,8 +156,36 @@ for (let i=0; i<fap.length; i++){
 //lookup tables
 const period_phase_fap_lookup = new Map(period_phase_fap.map(r => [r.GeneID, r]))
 
+// --------- gene selection display ---------
+export function renderSelectionPanel(selected_genes){
+    const panel = document.getElementById("SeqRightSelectedGeneDisplay")
+    panel.innerHTML = ''
 
+    for (const item of selected_genes){
+        const GeneID = item.GeneID
+        const tag = document.createElement('div')
+        tag.className = 'gene-tag'
 
+        const label = document.createElement('span')
+        label.className = 'gene-tag-label'
+        label.textContent = GeneID
+        label.addEventListener('click', (event) => {
+            bus.execute_event("gene_label_select", GeneID)
+        })
+
+        const remove = document.createElement('button')
+        remove.className = 'gene-tag-remove'
+        remove.textContent = "×"
+        remove.addEventListener('click', (event) => {
+            bus.execute_event("selection_del", item)
+            event.stopPropagation()
+        })
+
+        tag.appendChild(label)
+        tag.appendChild(remove)
+        panel.appendChild(tag)
+    }
+}
 
 // ---- Plotting Functions ---- 
 // Synth
@@ -149,6 +195,7 @@ plotViolin(130, 500, min_max_arr, "filter_slider", bus)
 
 // StepSeq
 plotMain(600, 400, "#StepSequencer", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
+const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
 // ---- main.js bus subscription ----
 bus.subscribe_to("synth_waveform_changed", "main", points => {
@@ -171,4 +218,16 @@ bus.subscribe_to("playNote", "main", ([metaValues, GeneID, Index, freq, sweep]) 
 
 bus.subscribe_to("selection_modified", "main", (selection) => {
     renderSelectionPanel(selection)
+})
+
+bus.subscribe_to("gene_label_select", "main", (GeneID) => {
+    const meta_item = period_phase_fap_lookup.get(GeneID)
+    const count_dat = normalized_filtered_lookup.get(GeneID)
+    const cur_mu = mu[meta_item.index]
+    const cur_std = std[meta_item.index]
+    plotStepSeq.updatePlot({ metaValues, period_phase_fap, shared, cur_mu, cur_std, meta_item, count_dat })
+})
+
+bus.subscribe_to("resetSelection", "main", ()=>{
+    plotStepSeq.renderEmpty()
 })
