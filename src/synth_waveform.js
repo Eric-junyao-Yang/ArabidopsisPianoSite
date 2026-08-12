@@ -229,7 +229,7 @@ export class Synth_Waveform {
 
 export function assign_keyboard_keys(synth_node){
 
-    const keys = ["a","w","s","e","d","f","t","g","y","h","u","j","k"]
+    const keys = ["a","w","s","e","d","f","t","g","y","h","u","j","k","o","l","p",";"] //' is skipped as it is reserved
     const middle_c = 261.6256
     const key_freq_map = new Map()
     keys.forEach((v, i) => {

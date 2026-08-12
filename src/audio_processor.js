@@ -45,24 +45,30 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         const outputLength = channels[0].length
         // let phase = this.phases.get(freq) ?? 0
         const increment = internal_freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
-        if (data.state === "attack"){
-            data.lvl += 0.1
-            if (data.lvl >= 1){
-                data.lvl = 1
-                data.state = "sustain"
-            }
-        }
-
-        if (data.state === "release"){
-            data.lvl -= 0.1
-
-            if (data.lvl <= 0){
-                data.lvl = 0
-                this.voices.delete(freq)
-            }
-        }
+        
+        const attackIncrement = 1 / (sampleRate * 0.005)
+        const releaseIncrement = 1/ (sampleRate * 0.03)
 
         for (let i=0; i < outputLength; i ++){
+            // envelope
+            if (data.state === "attack"){
+                data.lvl += attackIncrement
+                if (data.lvl >= 1){
+                    data.lvl = 1
+                    data.state = "sustain"
+                }
+            }
+
+            if (data.state === "release"){
+                data.lvl -= releaseIncrement
+
+                if (data.lvl <= 0){
+                    data.lvl = 0
+                    data.state = "finished"
+                }
+            }
+
+            //wavetable
             const base = Math.floor(data.phase)
             const i0 = base % TABLE_SIZE //lookup index in wavetable
             const i1 = (i0 + 1) % TABLE_SIZE
@@ -93,10 +99,13 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
             return true
         }
 
-        const gain = 1 / totalKeys
+        const gain = 0.2 //1 / totalKeys
 
         for (const [freq, data] of this.voices){
             this.generateSound(freq, channels, gain, data)
+            if (data.state === "finished"){
+                this.voices.delete(freq)
+            }
         }
         return true
     }

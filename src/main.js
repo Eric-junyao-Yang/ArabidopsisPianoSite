@@ -81,7 +81,14 @@ async function start() {
     SynthContext = new AudioContext()
     await SynthContext.audioWorklet.addModule('/src/audio_processor.js')
     node = new AudioWorkletNode(SynthContext, 'synth-audio-processor') //, {outputChannelCount: [2]} //checking stereo
-    node.connect(SynthContext.destination)
+    
+    const compressor = SynthContext.createDynamicsCompressor()
+    compressor.threshold.value = -3
+    compressor.knee.value = 0
+    compressor.ratio.value = 20
+    compressor.attack.value = 0.003
+    compressor.release.value = 0.05
+    node.connect(compressor).connect(SynthContext.destination)
     await SynthContext.resume()
     node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
     assign_keyboard_keys(node)
