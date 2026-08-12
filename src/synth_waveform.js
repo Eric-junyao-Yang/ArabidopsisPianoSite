@@ -227,3 +227,31 @@ export class Synth_Waveform {
     }
 }
 
+export function assign_keyboard_keys(synth_node){
+
+    const keys = ["a","w","s","e","d","f","t","g","y","h","u","j","k"]
+    const middle_c = 261.6256
+    const key_freq_map = new Map()
+    keys.forEach((v, i) => {
+        key_freq_map.set(v, middle_c*Math.pow(Math.pow(2, 1/12), i))
+    })
+    const pressed_freq = new Set()
+    window.addEventListener('keydown', (e) => {
+        if (e.repeat) return
+        if (key_freq_map.has(e.key)){
+            pressed_freq.add(key_freq_map.get(e.key))
+            synth_node.port.postMessage({type: "keyDownUpdate", keys: pressed_freq})
+        } else if (e.key === "["){
+            synth_node.port.postMessage({type: "synthFreqShift", dir: "down"})
+        } else if (e.key === "]"){
+            synth_node.port.postMessage({type: "synthFreqShift", dir: "up"})
+        } 
+    })
+
+    window.addEventListener('keyup', (e) => {
+        if (key_freq_map.has(e.key)){
+            pressed_freq.delete(key_freq_map.get(e.key))
+            synth_node.port.postMessage({type: "keyDownUpdate", keys: pressed_freq})
+        }
+    })
+}

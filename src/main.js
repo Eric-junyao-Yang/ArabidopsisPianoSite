@@ -1,4 +1,4 @@
-import { Synth_Waveform } from "/src/synth_waveform.js"
+import { Synth_Waveform, assign_keyboard_keys } from "/src/synth_waveform.js"
 import { meta_to_json, bin_to_array, append_id_logCount_to_array, plotUMAP, plotViolin} from "/src/plots.js"
 import { load_waveforms, plotMain, plotStepSeqWave } from "/src/step_sequencer.js"
 
@@ -80,10 +80,11 @@ async function start() {
     if (SynthContext) return
     SynthContext = new AudioContext()
     await SynthContext.audioWorklet.addModule('/src/audio_processor.js')
-    node = new AudioWorkletNode(SynthContext, 'synth-audio-processor')
+    node = new AudioWorkletNode(SynthContext, 'synth-audio-processor') //, {outputChannelCount: [2]} //checking stereo
     node.connect(SynthContext.destination)
     await SynthContext.resume()
     node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
+    assign_keyboard_keys(node)
 }
 
 // Step Seq

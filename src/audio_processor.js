@@ -6,31 +6,71 @@ const TABLE_SIZE = 2048
 class SynthAudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super()
-        this.phase = 0
-        this.freq = 440
-        this.table = new Array(TABLE_SIZE).fill(0)
+        this.phases = new Map()
+        this.table = new Float32Array(TABLE_SIZE)
+        this.playing_freqs = new Set()
+        this.octave = 0
 
         this.port.onmessage = (event) => {
             if (event.data.type === "updatePoints") {
                 this.table = interpolate_waveform(event.data.points, TABLE_SIZE)
             }
+            if (event.data.type === "keyDownUpdate") {
+                this.playing_freqs = event.data.keys
+            }
+            if (event.data.type === "synthFreqShift") {
+                if (event.data.dir === "down"){
+                    this.octave = Math.max(-3, this.octave - 1)
+                }
+                if (event.data.dir === "up"){
+                    this.octave = Math.min(3, this.octave + 1)
+                }
+            }
         }
     }
 
-    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
-        const output = outputs[0]
-        const increment = this.freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
+    generateSound(freq, channels, gain){
+        const internal_freq = freq * Math.pow(2, this.octave)
+        const outputLength = channels[0].length
+        let phase = this.phases.get(freq) ?? 0
 
-        for (let i=0; i < output[0].length; i ++){
-            const i0 = Math.floor(this.phase) % TABLE_SIZE //lookup index in wavetable
+        const increment = internal_freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
+
+        for (let i=0; i < outputLength; i ++){
+            const base = Math.floor(phase)
+            const i0 = base % TABLE_SIZE //lookup index in wavetable
             const i1 = (i0 + 1) % TABLE_SIZE
-            const frac = this.phase - Math.floor(this.phase)
+            const frac = phase - base
             const sample = (this.table[i0] * (1-frac) + this.table[i1] * frac) * 2 - 1
-            
-            for (let ch=0; ch<output.length; ch++){
-                output[ch][i] = sample
+            for (const channel of channels){
+                channel[i] += sample * gain
             }
-            this.phase += increment
+            phase += increment
+
+            if (phase >= TABLE_SIZE){
+                phase %= TABLE_SIZE
+            }
+        }
+        this.phases.set(freq, phase)
+    }
+
+    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
+        const channels = outputs[0]
+        const bufferSize = channels[0].length
+        const totalKeys = this.playing_freqs.size
+
+        for (const channel of channels){
+            channel.fill(0)
+        }
+
+        if (totalKeys === 0) {
+            return true
+        }
+
+        const gain = 1 / totalKeys
+
+        for (const freq of this.playing_freqs){
+            this.generateSound(freq, channels, gain)
         }
         return true
     }
