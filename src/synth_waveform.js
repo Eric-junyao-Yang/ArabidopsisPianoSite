@@ -235,12 +235,12 @@ export function assign_keyboard_keys(synth_node){
     keys.forEach((v, i) => {
         key_freq_map.set(v, middle_c*Math.pow(Math.pow(2, 1/12), i))
     })
-    const pressed_freq = new Set()
+    // const pressed_freq = new Set()
     window.addEventListener('keydown', (e) => {
         if (e.repeat) return
         if (key_freq_map.has(e.key)){
-            pressed_freq.add(key_freq_map.get(e.key))
-            synth_node.port.postMessage({type: "keyDownUpdate", keys: pressed_freq})
+            // pressed_freq.add(key_freq_map.get(e.key))
+            synth_node.port.postMessage({type: "keyDownUpdate", freq: key_freq_map.get(e.key)})
         } else if (e.key === "["){
             synth_node.port.postMessage({type: "synthFreqShift", dir: "down"})
         } else if (e.key === "]"){
@@ -250,8 +250,8 @@ export function assign_keyboard_keys(synth_node){
 
     window.addEventListener('keyup', (e) => {
         if (key_freq_map.has(e.key)){
-            pressed_freq.delete(key_freq_map.get(e.key))
-            synth_node.port.postMessage({type: "keyDownUpdate", keys: pressed_freq})
+            // pressed_freq.delete(key_freq_map.get(e.key))
+            synth_node.port.postMessage({type: "keyUpUpdate", freq: key_freq_map.get(e.key)})
         }
     })
 }

@@ -8,7 +8,7 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         super()
         this.phases = new Map()
         this.table = new Float32Array(TABLE_SIZE)
-        this.playing_freqs = new Set()
+        this.voices = new Map()
         this.octave = 0
 
         this.port.onmessage = (event) => {
@@ -16,7 +16,18 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                 this.table = interpolate_waveform(event.data.points, TABLE_SIZE)
             }
             if (event.data.type === "keyDownUpdate") {
-                this.playing_freqs = event.data.keys
+                if (this.voices.has(event.data.freq)){
+                    this.voices.get(event.data.freq).state = "attack"
+                } else {
+                    this.voices.set(event.data.freq, {
+                        phase: 0,
+                        lvl: 0,
+                        state: "attack"
+                    })
+                }
+            }
+            if (event.data.type === "keyUpUpdate") {
+                this.voices.get(event.data.freq).state = "release"
             }
             if (event.data.type === "synthFreqShift") {
                 if (event.data.dir === "down"){
@@ -29,35 +40,50 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         }
     }
 
-    generateSound(freq, channels, gain){
+    generateSound(freq, channels, gain, data){
         const internal_freq = freq * Math.pow(2, this.octave)
         const outputLength = channels[0].length
-        let phase = this.phases.get(freq) ?? 0
-
+        // let phase = this.phases.get(freq) ?? 0
         const increment = internal_freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
+        if (data.state === "attack"){
+            data.lvl += 0.1
+            if (data.lvl >= 1){
+                data.lvl = 1
+                data.state = "sustain"
+            }
+        }
+
+        if (data.state === "release"){
+            data.lvl -= 0.1
+
+            if (data.lvl <= 0){
+                data.lvl = 0
+                this.voices.delete(freq)
+            }
+        }
 
         for (let i=0; i < outputLength; i ++){
-            const base = Math.floor(phase)
+            const base = Math.floor(data.phase)
             const i0 = base % TABLE_SIZE //lookup index in wavetable
             const i1 = (i0 + 1) % TABLE_SIZE
-            const frac = phase - base
+            const frac = data.phase - base
             const sample = (this.table[i0] * (1-frac) + this.table[i1] * frac) * 2 - 1
             for (const channel of channels){
                 channel[i] += sample * gain
             }
-            phase += increment
+            data.phase += increment
 
-            if (phase >= TABLE_SIZE){
-                phase %= TABLE_SIZE
+            if (data.phase >= TABLE_SIZE){
+                data.phase %= TABLE_SIZE
             }
         }
-        this.phases.set(freq, phase)
+        // this.phases.set(freq, phase)
     }
 
     process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
         const channels = outputs[0]
         const bufferSize = channels[0].length
-        const totalKeys = this.playing_freqs.size
+        const totalKeys = this.voices.size
 
         for (const channel of channels){
             channel.fill(0)
@@ -69,8 +95,8 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
 
         const gain = 1 / totalKeys
 
-        for (const freq of this.playing_freqs){
-            this.generateSound(freq, channels, gain)
+        for (const [freq, data] of this.voices){
+            this.generateSound(freq, channels, gain, data)
         }
         return true
     }
