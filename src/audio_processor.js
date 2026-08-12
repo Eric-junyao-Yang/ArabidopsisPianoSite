@@ -69,7 +69,7 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
             const frac = data.phase - base
             const sample = (this.table[i0] * (1-frac) + this.table[i1] * frac) * 2 - 1
             for (const channel of channels){
-                channel[i] += sample * gain
+                channel[i] += sample * gain * data.lvl
             }
             data.phase += increment
 
