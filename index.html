@@ -12,49 +12,59 @@
 <body>
     <header>
         <h1>
-            Arabidopsis Synthesizer
+            Arabidopsis Piano
         </h1>
 
-        <p> This project turns arabidopsis transcription patterns into sound! </p>
-            
-        <p> Here's a quick run-down of what that insane sentence means:</p>
+        <p> Sonifying Transcription </p>
 
         <p> 
-            Arabidopsis thaliana is a model organism that plant scientists love to study. It has a 
-            relatively small genome and a relatively fast reproduction cycle, but is still a complex flowering plant, which makes it an 
-            ideal candidate to research.
+            Transcription measurements reflects gene activity, and gene activity can be affected by external or internal stimulus. 
+            Yuchen Yang and colleagues (https://doi.org/10.1074/jbc.RA120.013513) measured the effect of day/night cycle on each of the roughly 
+            27,000 genes in Arabidopsis thaliana. This web app explores this experimental dataset uses *sound*.
         </p>
 
         <p> 
-            Transcription measurements reflect gene activity. Not all your genes are on all the time. Some 
-            are only on when needed (like wound repairing genes), or only in certain times 
-            during development (like puberty related genes). Others are synced to the day/night cycle (circadian genes). 
-            Scientists have measured the transcription levels of an entire Arabidopsis seedling over the course of 2 days. 
-            If you plot the transcription levels over time it would look something like this:
+            You will learn a bit about the biology, as well as the science of sound and music theory.
         </p>
-        <p> Since it is data over time, we can turn this into sound and *LISTEN* to the transcription!</p>
-        
+
         <h3> But why? Why would you do such a thing?</h3>
         <ol>
             <li>
-                Shushhhhhhhhh... don't ruin this for me.
+                Shushhhh... don't ruin this for me.
+            </li>
+            <!-- <li>
+                Human ears are well trained in identifying freqency relationships, and allows for an unexpected way to explore biological data.
+            </li> -->
+        </ol>
+
+        <p> The web app is split into to main sections:</p>
+        <ol>
+            <li>
+                Arabidopsis synthesizer: custom "instruments" derived directly from biological data.
             </li>
             <li>
-                As someone who's interested in samplers and synthesizers, the idea of converting biological data into sound 
-                is intriguing.
-            </li>
-            <li>
-                We know that whole number ratios of frequencies tend to sound pleasent in western music. For example, when you play a sound, 
-                then play another sound at twice the frequency, you would interpret that as an octave (same note but higher pitch). Not the most 
-                interesting sounding, but certainly harmonious. A 3:2 frequency ratio gives you a perfect Fifth (Do, and So), so on and so forth 
-                (see below for more on the music theory side of things). As such, if two genes sound "pleasent" together, it might suggest whole 
-                number ratios between their frequencies and might indicate biological relationships.
+                Arabidopsis step sequencer: explore gene oscillations using harmony.
             </li>
         </ol>
 
     </header>
     <main>
         <div id="SynthDiv">
+            <h2>Arabidopsis Synthesizer</h2>
+            <div>
+                <div id="Synth_Sides_div" class="SlidesContainer">
+                    <div class="nav-btn" id="SynthSlides-left-btn"></div>
+                    <div class="slide-and-text" id="SynthSlideText">
+                        <div class="slides" id="SynthSlides"></div>
+                        <div class="textbox" id="SynthText">
+                            <span id="textContent"></span>
+                            <span id="continue-hint">click to continue...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="nav-btn" id="SynthSlides-right-btn"></div>
+                </div>
+            </div>
             <div id="Synth_Waveform_div">
                 <div class = "toolbar">
                     <button id="reset"> reset </button>

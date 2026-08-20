@@ -144,3 +144,50 @@ body {
 #SeqRightPlot{
     outline: 2px solid maroon;
 }
+
+
+/* Slides */
+.SlidesContainer{
+    outline: 2px solid yellow;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+.nav-btn{
+    display: flex;
+    width: 30px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid purple;
+    border-radius: 50%;
+    transition: border-color .1s, transform .1s;
+}
+.nav-btn:hover{
+    border-color: red;
+    transform: scale(1.05);
+}
+
+.slide-and-text{
+    display: flex;
+    flex-direction: column;
+}
+
+.textbox{
+    flex: 1 1 auto;
+    padding: 5px;
+    width: 650px;
+    height: 80px;
+    border: 1px solid brown;
+
+}
+
+.slides{
+    flex: 1 1 auto;
+    padding: 5px;
+    width: 650px;
+    height: 300px;
+    border: 1px solid orange;
+}

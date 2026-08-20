@@ -1,7 +1,7 @@
 import { Synth_Waveform, assign_keyboard_keys } from "/src/synth_waveform.js"
 import { meta_to_json, bin_to_array, append_id_logCount_to_array, plotUMAP, plotViolin} from "/src/plots.js"
 import { load_waveforms, plotMain, plotStepSeqWave } from "/src/step_sequencer.js"
-
+import { SlidesTemplate, slides } from "/src/slides.js"
 // ---- add a bus for communication between plots ----
 const bus = {
     _listeners: {},
@@ -30,6 +30,7 @@ fft_umap_arr = append_id_logCount_to_array(fft_umap_arr, ids, logCount)
 min_max_arr = append_id_logCount_to_array(min_max_arr, ids, logCount)
 normalized_filtered_arr = append_id_logCount_to_array(normalized_filtered_arr, ids, logCount)
 const normalized_filtered_lookup = new Map(normalized_filtered_arr.map((val, idx) => [ids[idx], val]))
+
 
 // ---- Synth Waveform ----
 // TODO: Fix and check if circle match data (I think currently wrong poitns are highlighted) ; make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling
@@ -146,7 +147,7 @@ function createVoice(metaValues, shared){
     return node
 }
 
-// --------------------------- StepSquencer ----------------------------
+// --------------------------------------- StepSquencer ---------------------------------------
 // TODO: investigate sampled wave vs mean/std mismatch
 const [metaValues, meta, shared, mu, std] = await load_waveforms("/dat/waveforms.bin", "/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
@@ -196,7 +197,7 @@ export function renderSelectionPanel(selected_genes){
     }
 }
 
-// ---- Plotting Functions ---- 
+// --------------------------------------- Plotting Functions --------------------------------------- 
 // Synth
 const count_svg = plotUMAP(600, 500, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
 const fft_svg = plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
@@ -205,6 +206,27 @@ plotViolin(130, 500, min_max_arr, "filter_slider", bus)
 // StepSeq
 plotMain(1200, 800, "#StepSequencer", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
+
+
+// --------------------------------------- Slides ---------------------------------------
+const synthSlides = document.getElementById("SynthSlides")
+const synthSlides_leftBtn = document.getElementById("SynthSlides-left-btn")
+const synthSlides_rightBtn = document.getElementById("SynthSlides-right-btn")
+const synthSlides_text = document.getElementById("SynthText")
+const buildSynthSlides = new SlidesTemplate(synthSlides, synthSlides_text, synthSlides_leftBtn, synthSlides_rightBtn, slides)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ---- main.js bus subscription ----
 bus.subscribe_to("synth_waveform_changed", "main", points => {
