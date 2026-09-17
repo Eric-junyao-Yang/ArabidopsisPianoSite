@@ -77,7 +77,7 @@ export class Synth_Waveform {
         ctx.strokeStyle = 'rgba(204,102,119,1.0)'
         ctx.beginPath()
         for (let i=0;i<max_val;i++){
-            const x_val = (i/max_val) * this.canvas.width
+            const x_val = (i/max_val) * this.canvas.width + this.barsWidth / 2
             if (i == 0) {
                 ctx.moveTo(x_val, (1 - interpolation_array[i]) * this.canvas.height)
             } else {
@@ -108,7 +108,10 @@ export class Synth_Waveform {
             norm_values[idx] = (val + 1) / 2
         })
         const interpolated_values = interpolate_waveform(norm_values, 48)
-        this.points = interpolated_values
+
+        // For visual appeal, rotate everything right by 1 with wrap around
+        const n = interpolated_values.length
+        this.points = interpolated_values.map((_, i) => interpolated_values[(i - 1 + n) % n])
     }
 
     setupEvents() {

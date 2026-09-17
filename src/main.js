@@ -2,6 +2,8 @@ import { Synth_Waveform, assign_keyboard_keys } from "/src/synth_waveform.js"
 import { meta_to_json, bin_to_array, append_id_logCount_to_array, plotUMAP, plotViolin} from "/src/plots.js"
 import { load_waveforms, plotMain, plotStepSeqWave } from "/src/step_sequencer.js"
 import { SlidesTemplate, slides } from "/src/slides.js"
+import { setupHelpPopUps } from "/src/helpPopup.js"
+
 // ---- add a bus for communication between plots ----
 const bus = {
     _listeners: {},
@@ -33,8 +35,8 @@ const normalized_filtered_lookup = new Map(normalized_filtered_arr.map((val, idx
 
 
 // ---- Synth Waveform ----
-// TODO: Fix and check if circle match data (I think currently wrong poitns are highlighted) ; make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling
-let node = null
+// TODO: make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling; Add a piano to allow click and play instead of keyboard interaction, keyboard highlights virtual keybord.
+let synth_node = null
 
 const synth_waveform_canvas =
     document.getElementById(
@@ -44,8 +46,10 @@ const synth_waveform_canvas =
 const synth_waveform =
     new Synth_Waveform(synth_waveform_canvas, bus, min_max_arr)
 
+// Virtual Piano
 
-// ----------- handle button presses -----------
+
+// --------------------------------- handle button presses ---------------------------------
 // setup synth_waveform_buttons
 document.getElementById("reset").addEventListener("click", () => synth_waveform.reset())
 document.getElementById("sine").addEventListener("click", () => synth_waveform.sine())
@@ -73,7 +77,7 @@ document.getElementById("SeqReset").addEventListener('click', () => {
     bus.execute_event("resetSelection", null)
 })
 
-// ---- Connect Audio Processor ----
+// --------------------------------- Connect Audio Processor ---------------------------------
 // Synth
 let SynthContext = null
 
@@ -81,7 +85,7 @@ async function start() {
     if (SynthContext) return
     SynthContext = new AudioContext()
     await SynthContext.audioWorklet.addModule('/src/audio_processor.js')
-    node = new AudioWorkletNode(SynthContext, 'synth-audio-processor') //, {outputChannelCount: [2]} //checking stereo
+    synth_node = new AudioWorkletNode(SynthContext, 'synth-audio-processor') //, {outputChannelCount: [2]} //checking stereo
     
     const compressor = SynthContext.createDynamicsCompressor()
     compressor.threshold.value = -3
@@ -89,10 +93,10 @@ async function start() {
     compressor.ratio.value = 20
     compressor.attack.value = 0.003
     compressor.release.value = 0.05
-    node.connect(compressor).connect(SynthContext.destination)
+    synth_node.connect(compressor).connect(SynthContext.destination)
     await SynthContext.resume()
-    node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
-    assign_keyboard_keys(node)
+    synth_node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
+    assign_keyboard_keys(synth_node)
 }
 
 // Step Seq
@@ -111,6 +115,20 @@ async function initStepSeqAudio() {
     masterCompressor.attack.value    = 0.003 // 3ms
     masterCompressor.release.value   = 0.15  // 150ms
     masterCompressor.connect(stepSeqAudioContext.destination)
+}
+
+// SynthSlides
+let synthSlidesAudioContext = null
+let synthSlides_node = null
+let synthSlideDestinationConnection = false
+async function initSynthSlidesAudio() {
+    if (synthSlidesAudioContext) return
+    synthSlidesAudioContext = new AudioContext()
+    await synthSlidesAudioContext.audioWorklet.addModule('/src/audio_processor.js')
+    await synthSlidesAudioContext.resume()
+    synthSlides_node = new AudioWorkletNode(synthSlidesAudioContext, 'synthslides-audio-processor')
+    synthSlides_node.connect(synthSlidesAudioContext.destination)
+    synthSlideDestinationConnection = true
 }
 
 // --------- existing sounds needs to be scaled as new sounds join --------
@@ -208,11 +226,20 @@ plotMain(1200, 800, "#StepSequencer", period_phase_fap, period_phase_fap_lookup,
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
 
+// --------------------------------------- Help PopUps ---------------------------------------
+setupHelpPopUps(document, window)
+
+
+
+
 // --------------------------------------- Slides ---------------------------------------
 const synthSlides = document.getElementById("SynthSlides")
 const synthSlides_leftBtn = document.getElementById("SynthSlides-left-btn")
 const synthSlides_rightBtn = document.getElementById("SynthSlides-right-btn")
 const synthSlides_text = document.getElementById("SynthText")
+slides.updateData(normalized_filtered_lookup.get("AT5G61380"))
+slides.connectBus(bus)
+slides.setInternalInitAudio(initSynthSlidesAudio)
 const buildSynthSlides = new SlidesTemplate(synthSlides, synthSlides_text, synthSlides_leftBtn, synthSlides_rightBtn, slides)
 
 
@@ -228,10 +255,10 @@ const buildSynthSlides = new SlidesTemplate(synthSlides, synthSlides_text, synth
 
 
 
-// ---- main.js bus subscription ----
+// --------------------------------- main.js bus subscriptions ---------------------------------
 bus.subscribe_to("synth_waveform_changed", "main", points => {
-    if (node) {
-        node.port.postMessage({type: "updatePoints", points})
+    if (synth_node) {
+        synth_node.port.postMessage({type: "updatePoints", points})
     }
 })
 
@@ -261,4 +288,26 @@ bus.subscribe_to("gene_label_select", "main", (GeneID) => {
 
 bus.subscribe_to("resetSelection", "main", ()=>{
     plotStepSeq.renderEmpty()
+})
+
+bus.subscribe_to("updateParams", "main", (params) => {
+    if (!synthSlideDestinationConnection){
+        synthSlides_node.connect(synthSlidesAudioContext.destination)
+        synthSlideDestinationConnection = true
+    }
+    if (synthSlides_node) {
+        synthSlides_node.port.postMessage({
+        type: "updateWave",
+        amplitude: params.amplitude,
+        shape: params.shape,
+        cycles: params.cycles
+        })
+    }
+})
+
+bus.subscribe_to("stopSlideSound", "main", () => {
+    if (synthSlides_node && synthSlideDestinationConnection) {
+        synthSlides_node.disconnect(synthSlidesAudioContext.destination)
+        synthSlideDestinationConnection = false
+    }
 })

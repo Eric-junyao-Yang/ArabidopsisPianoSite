@@ -66,7 +66,14 @@
                 </div>
             </div>
             <div id="Synth_Waveform_div">
-                <div class = "toolbar">
+                <div id="Waveform_Button_div"
+                    class = "help-panel"
+                    data-help-text = "Select some standard waveforms here for 
+                    draw your own below by clicking and draging through the waveform! 
+                    The waveform you see will be the waveform played when you click on 
+                    the virtual keyboard or play with your actual keyboard. 
+                    It supports polyphony!">
+
                     <button id="reset"> reset </button>
                     <button id="sine"> sine </button>
                     <button id="square"> square </button>
@@ -75,6 +82,8 @@
                     <button id="play_sample"> play sample </button>
                 </div>
                 <canvas id="Synth_Waveform" width="1000" height="200"></canvas>
+
+                
             </div>
             
             <div id="Synth_Keyboard_div">
@@ -82,9 +91,27 @@
             </div>
 
             <div id="Synth_Plots_div">
-                <div id="read_counts"></div>
-                <div id="filter_slider"></div>
-                <div id="fft"></div>
+                <div id = "read_counts" 
+                     class = "help-panel"
+                     data-help-text = "UMAP representation of experimental data.
+                     Each point is a gene. Points closer together are similar biologically. 
+                     You can zoom, pan, and select genes to update the waveform 
+                     above. Hover displays the name of the gene as well as highlights 
+                     corresponding point of the same gene in the other UMAP. Double click to reset."></div>
+                <div id="filter_slider"
+                     class = "help-panel"
+                     data-help-text = "This slider controls cutoffs for average gene expression.
+                     You can adjust the top and bottom slider to set thresholds, and drag the 
+                     threshold regions around. Blue lines represents the quantiles. Double click
+                     to reset."></div>
+                <div id="fft"
+                     class = "help-panel"
+                     data-help-text = "UMAP representation of Fast Fourier Transformed 
+                     'waveform' data. Each point is a gene. Points closer together are similar sonically. 
+                     You can zoom, pan, and select genes to update the waveform 
+                     above. Hover displays the name of the gene as well as highlights 
+                     corresponding point of the same gene in the other UMAP. 
+                     Double click to reset."></div>
             </div>
         </div>
 
@@ -102,6 +129,11 @@
             </div>
 
         </div>
+
+
+
+    <!-- special div for help pop up -->
+     <div id="help-popup" role="dialog"></div>
 
     </main>
     <script type="module" src="./src/main.js"></script>

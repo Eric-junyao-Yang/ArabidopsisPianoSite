@@ -221,5 +221,74 @@ class StepSeqAudioProcessor extends AudioWorkletProcessor {
     }
 }
 
+class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super()
+        this.table = new Float32Array(TABLE_SIZE)
+        this.amplitude = 1
+        this.freq = 440
+        this.shape = 0
+        this.phase = 0
+
+        this.updateTable()
+
+        this.port.onmessage = (event) => {
+            if (event.data.type === "updateWave") {
+                this.amplitude = event.data.amplitude
+                this.shape = event.data.shape
+                this.freq = 440 * (event.data.cycles / 3)
+                this.updateTable()
+            }
+        }
+    }
+
+    updateTable(){
+        for (let i=0;i<TABLE_SIZE;i++){
+            const phase = 2 * Math.PI * (i/TABLE_SIZE)
+            const sin = Math.sin(phase)
+            const square = Math.sign(sin)
+            const wave = (1 - this.shape) * sin + this.shape * square
+            this.table[i] = this.amplitude * wave
+        }
+    }
+
+    generateSound(channels, gain){
+        const outputLength = channels[0].length
+        const increment = this.freq * TABLE_SIZE / sampleRate
+
+        for (let i=0; i < outputLength; i ++){
+            //wavetable
+            const base = Math.floor(this.phase)
+            const i0 = base % TABLE_SIZE //lookup index in wavetable
+            const i1 = (i0 + 1) % TABLE_SIZE
+            const frac = this.phase - base
+            const sample = this.table[i0] * (1-frac) + this.table[i1] * frac
+            for (const channel of channels){
+                channel[i] += sample * gain
+            }
+            this.phase += increment
+
+            if (this.phase >= TABLE_SIZE){
+                this.phase %= TABLE_SIZE
+            }
+        }
+    }
+
+    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
+        const channels = outputs[0]
+        for (const channel of channels){
+            channel.fill(0)
+        }
+
+        const gain = 0.2
+        this.generateSound(channels, gain)
+
+        return true
+    }
+}
+
+
+
 registerProcessor("synth-audio-processor", SynthAudioProcessor)
 registerProcessor("stepseq-audio-processor", StepSeqAudioProcessor)
+registerProcessor("synthslides-audio-processor", SynthSlidesAudioProcessor)
