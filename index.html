@@ -57,8 +57,9 @@
                     <div class="slide-and-text" id="SynthSlideText">
                         <div class="slides" id="SynthSlides"></div>
                         <div class="textbox" id="SynthText">
-                            <span id="textContent"></span>
-                            <span id="continue-hint">click to continue...</span>
+                            <span class="textBody"></span>
+                            <span class="typingCursor"></span>
+                            <div class="slideCounter"></div>
                         </div>
                     </div>
                     
@@ -79,7 +80,7 @@
                     <button id="square"> square </button>
                     <button id="saw"> saw </button>
                     <button id="triangle"> triangle </button>
-                    <button id="play_sample"> play sample </button>
+                    <button id="activate"> activate </button>
                 </div>
                 <canvas id="Synth_Waveform" width="1000" height="200"></canvas>
 
@@ -87,7 +88,7 @@
             </div>
             
             <div id="Synth_Keyboard_div">
-            <canvas id="Synth_Keyboard" width="300" height="100"></canvas>
+            <!-- <canvas id="Synth_Keyboard" width="300" height="100"></canvas> -->
             </div>
 
             <div id="Synth_Plots_div">
@@ -116,17 +117,52 @@
         </div>
 
         <div id="SequencerDiv">
-            <div id="StepSequencer"></div>
-            <div id="SeqRight">
-                <div id="SeqRightButtons">
-                    <button id="SeqPlayPause">Play</button>
-                    <button id="SeqStop">Stop</button>
-                    <button id="SeqReset">Reset</button>
+            <h2>Arabidopsis Step Sequencer</h2>
+                <div>
+                    <div id="StepSeq_Intro">
+                        <p>
+                            By changing the frequency of the waveform to match the keyboard, the Synthesizer above actually throws away important experimental data.
+                            A subset of genes are naturally oscillating, and each have its own innate frequency.
+                            Here are two genes AT3G62250 (UBQ10) and AT5G61380(TOC1): 
+                        </p>
+                        <div id="Gene_Plots"></div>
+                        <p>
+                            TOC1 is a known circadian gene and we can see the red line shows clear oscillating behavior that builds up during light and falls in the dark.
+                            UBQ10 on the other hand is a housekeeping gene that supports general cellular function. Compared to TOC1, UBQ10 does not show a prominant inherit rhythm.
+                            It would be more informative to explore the relative frequencies of genes that are naturally oscillating.
+                        </p>    
+                        <p>    
+                            We can first identify which genes are naturall oscillating and then extract their oscillating frequency. 
+                            The freqencies will be on the scale of a few cycles per day, but we can map them to a keyboard by scaling everything up into the audible range.
+                            This way, relative pitches between genes are mapped to their natural oscillation rates!
+                            Using musical harmony to explore relationship between oscillating genes is actually surprisingly appropriate.
+                            Human ears are really good at picking out certain mathmatical relationships between frequencies:
+                            The Pathagoreans supposedly discovered that whole number ratio relationships between freqencies sounds pleasant to our ears.
+                            In fact, the Pythagorean tuning maps each note in a major scale to have the following ratio relationships with the root (first) note:
+                        </p>
+                        <p>1/1     9/8     5/4     4/3     3/2     5/3     15/8     2/1.</p>
+                        <p>
+                            You can learn more about mathmatics of musical harmony here: https://www.asa3.org/ASA/education/teach/harmony-cr.htm https://aatishb.com/dissonance/
+                            Two genes a perfect fifth apart (example here) suggest whenever one gene completes three cycles, the other one completes two cycles.
+                            While relationships discovered this way may not be biological (the methods sections discusses the limitations), they might be worth looking further into. At the very least, it is a fun way to explore this dataset and you can also use it to make some music!
+                        </p>
+
+                    </div>
                 </div>
-                <div id="SeqRightSearchBar"></div>
-                <div id="SeqRightSelectedGeneDisplay"></div>
-                <div id="SeqRightPlot"></div>
+                <div id="StepSequencerContainer">
+                <div id="SeqLeft"></div>
+                <div id="SeqRight">
+                    <div id="SeqRightButtons">
+                        <button id="SeqPlayPause">Play</button>
+                        <button id="SeqStop">Stop</button>
+                        <button id="SeqReset">Reset</button>
+                    </div>
+                    <div id="SeqRightSearchBar"></div>
+                    <div id="SeqRightSelectedGeneDisplay"></div>
+                    <div id="SeqRightPlot"></div>
+                </div>
             </div>
+
 
         </div>
 

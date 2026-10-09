@@ -66,7 +66,7 @@ export async function load_waveforms(path_to_bin, path_to_meta){
 }
 
 // --------- Plot period vs phase ---------
-export function plotMain(
+export function plotStepSeqMain(
     canvasWidth = 600, 
     canvasHeight = 400, 
     div_name = "#StepSequencer", 

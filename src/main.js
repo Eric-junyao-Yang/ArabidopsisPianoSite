@@ -1,8 +1,12 @@
-import { Synth_Waveform, assign_keyboard_keys } from "/src/synth_waveform.js"
+import { Synth_Waveform } from "/src/synth_waveform.js"
 import { meta_to_json, bin_to_array, append_id_logCount_to_array, plotUMAP, plotViolin} from "/src/plots.js"
-import { load_waveforms, plotMain, plotStepSeqWave } from "/src/step_sequencer.js"
-import { SlidesTemplate, slides } from "/src/slides.js"
+import { load_waveforms, plotStepSeqMain, plotStepSeqWave } from "/src/step_sequencer.js"
+import { SlidesTemplate } from "/src/slideTemplate.js"
+import { synthSlides } from "/src/synthSlides.js"
+// import { stepSeqSlides } from "/src/stepSeqSlides.js"
+import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
+import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
 
 // ---- add a bus for communication between plots ----
 const bus = {
@@ -46,9 +50,6 @@ const synth_waveform_canvas =
 const synth_waveform =
     new Synth_Waveform(synth_waveform_canvas, bus, min_max_arr)
 
-// Virtual Piano
-
-
 // --------------------------------- handle button presses ---------------------------------
 // setup synth_waveform_buttons
 document.getElementById("reset").addEventListener("click", () => synth_waveform.reset())
@@ -56,7 +57,7 @@ document.getElementById("sine").addEventListener("click", () => synth_waveform.s
 document.getElementById("square").addEventListener("click", () => synth_waveform.square())
 document.getElementById("saw").addEventListener("click", () => synth_waveform.saw())
 document.getElementById("triangle").addEventListener("click", () => synth_waveform.triangle())
-document.getElementById('play_sample').addEventListener('click', start)
+document.getElementById('activate').addEventListener('click', start)
 
 // Step sequencer buttons
 const playPauseButton = document.getElementById("SeqPlayPause")
@@ -97,6 +98,9 @@ async function start() {
     await SynthContext.resume()
     synth_node.port.postMessage({type: "updatePoints", points: synth_waveform.points})
     assign_keyboard_keys(synth_node)
+    // Virtual Piano
+    const vPianoDiv = document.getElementById("Synth_Keyboard_div")
+    setupVirtualPiano(synth_node, vPianoDiv)
 }
 
 // Step Seq
@@ -166,7 +170,7 @@ function createVoice(metaValues, shared){
 }
 
 // --------------------------------------- StepSquencer ---------------------------------------
-// TODO: investigate sampled wave vs mean/std mismatch
+// TODO: Check why Z-score norm doesn't really tell apart TOC and UBQ10
 const [metaValues, meta, shared, mu, std] = await load_waveforms("/dat/waveforms.bin", "/dat/waveforms_meta.json")
 const period_phase_fap = meta.meta
 
@@ -222,7 +226,7 @@ const fft_svg = plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveform
 plotViolin(130, 500, min_max_arr, "filter_slider", bus)
 
 // StepSeq
-plotMain(1200, 800, "#StepSequencer", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
+plotStepSeqMain(1200, 800, "#SeqLeft", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
 
@@ -233,15 +237,33 @@ setupHelpPopUps(document, window)
 
 
 // --------------------------------------- Slides ---------------------------------------
-const synthSlides = document.getElementById("SynthSlides")
+//Synth
+const synthSlides_div = document.getElementById("SynthSlides")
 const synthSlides_leftBtn = document.getElementById("SynthSlides-left-btn")
 const synthSlides_rightBtn = document.getElementById("SynthSlides-right-btn")
 const synthSlides_text = document.getElementById("SynthText")
-slides.updateData(normalized_filtered_lookup.get("AT5G61380"))
-slides.connectBus(bus)
-slides.setInternalInitAudio(initSynthSlidesAudio)
-const buildSynthSlides = new SlidesTemplate(synthSlides, synthSlides_text, synthSlides_leftBtn, synthSlides_rightBtn, slides)
+synthSlides.updateData(normalized_filtered_lookup.get("AT5G61380"))
+synthSlides.connectBus(bus)
+synthSlides.setInternalInitAudio(initSynthSlidesAudio)
+const buildSynthSlides = new SlidesTemplate(synthSlides_div, synthSlides_text, synthSlides_leftBtn, synthSlides_rightBtn, synthSlides)
 
+// Stepseq Uses <p> and plot for now (?) instead of slides
+const step_seq_plot_div = document.getElementById("Gene_Plots")
+const svg = d3.select(step_seq_plot_div)
+            .append("svg")
+            .attr("width", 800)
+            .attr("height", 300)
+const TOC1 = normalized_filtered_lookup.get("AT5G61380")
+const UBQ10 = normalized_filtered_lookup.get("AT3G62250")
+console.log([UBQ10, TOC1])
+plotGene(svg, [UBQ10, TOC1], ["UBQ10", "TOC1"])
+
+// //StepSeq
+// const stepSeqSlides_div = document.getElementById("StepSeqSlides")
+// const stepSeqSlides_leftBtn = document.getElementById("StepSeqSlides-left-btn")
+// const stepSeqSlides_rightBtn = document.getElementById("StepSeqSlides-right-btn")
+// const stepSeqSlides_text = document.getElementById("StepSeqText")
+// const buildStepSeqSlides = new SlidesTemplate(stepSeqSlides_div, stepSeqSlides_text, stepSeqSlides_leftBtn, stepSeqSlides_rightBtn, stepSeqSlides)
 
 
 

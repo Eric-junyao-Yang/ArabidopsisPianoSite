@@ -1,99 +1,5 @@
 import { interpolate_waveform } from "/src/catmullrom.js"
 
-export class SlidesTemplate{
-    constructor(slideElement, text, leftBtn, rightBtn, slideDeck){
-        this.slideElement = slideElement
-        this.textElement = text
-        this.leftBtn = leftBtn
-        this.rightBtn = rightBtn
-        this.slideDeck = slideDeck
-
-        this.slideIndex = 6
-        this.isTyping = false
-
-        this._init()
-        this._renderSlide()
-    }
-    
-    _init(){
-        // styling buttons
-        const arrow = (element, points) => {
-            const svg = d3.select(element).append("svg")
-                .attr("viewBox", "0 0 24 24")
-                .attr("fill", "none")
-                .attr("stroke", "purple")
-                .attr("stroke-width", 2.5)
-                .attr("stroke-linecap", "round")
-                .attr("stroke-linejoin", "round")
-            svg.append("polyline").attr("points", points)
-        }
-        arrow(this.leftBtn, "15 18  8 12  15 6")
-        arrow(this.rightBtn, "9 18  16 12  9 6")
-
-        // Create Slides
-        const parent = this.slideElement
-        this.svg = d3.select(this.slideElement).append("svg")
-            .attr("width", parent.clientWidth)
-            .attr("height", parent.clientHeight)
-
-        // Bind events
-        this.leftBtn.addEventListener("click", () => this.prevSlide())
-        this.rightBtn.addEventListener("click", () => this.nextSlide())
-        this.slideElement.addEventListener("click", () => this.nextSlide())
-        this.textElement.addEventListener("click", () => this.nextSlide())
-    }
-
-    _updateArrowState() {
-        this.leftBtn.classList.toggle("disabled", this.slideIndex === 0)
-        this.rightBtn.classList.toggle("disabled", this.slideIndex === this.slideDeck.slides.length - 1)
-    }
-
-    // Slide functions
-    nextSlide() {
-        const slide = this.slideDeck.slides[this.slideIndex]
-        if (this.isTyping) { this._finishTyping(slide.text); return;}
-        if (this.slideIndex < this.slideDeck.slides.length - 1) {
-            this.slideIndex ++
-            this._renderSlide()
-            this._updateArrowState()
-        }
-    }
-
-    prevSlide() {
-        if (this.slideIndex > 0) {
-            this.slideIndex --
-            this._renderSlide()
-            this._updateArrowState()
-        }
-    }
-
-    _renderSlide() {
-        const slide = this.slideDeck.slides[this.slideIndex]
-        this.slideDeck.render(this.svg, slide)
-        this._typeText(slide.text)
-    }
-
-
-    // Stylized Type Writer
-    _typeText(str) {
-        clearInterval(this.typingTimer)
-        this.textElement.textContent = ""
-        this.isTyping = true
-        let i = 0
-        this.typingTimer = setInterval(() => {
-            this.textElement.textContent += str[i++]
-            if (i >= str.length) this._finishTyping(str)
-        }, 18)
-    }
-
-    _finishTyping(str){
-        clearInterval(this.typingTimer)
-        if (str !== undefined) this.textElement.textContent = str
-        this.isTyping = false
-    }
-}
-
-
 const arabidopsisSlide = {
     elements: {
         arabidopsis(g) {
@@ -214,9 +120,9 @@ const arabidopsisSlide = {
             }
         },
         wave(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: null, slotIndex: 0, slotWidth: 630, myName: "wave"})},
-        waveAmp(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: "amplitude", slotIndex: 0, playSoundBtn: true, myName: "waveAmp"})},
-        waveFreq(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: "cycles", slotIndex: 1, playSoundBtn: true, myName: "waveFreq"})},
-        waveMorph(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: "shape", slotIndex: 2, playSoundBtn: true, myName: "waveMorph"})}
+        waveAmp(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: "amplitude", slotIndex: 0, playSoundBtn: true, myName: "Amplitude"})},
+        waveFreq(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: "cycles", slotIndex: 1, playSoundBtn: true, myName: "Frequency"})},
+        waveMorph(g, deck) {deck.makeWavePlot(g, deck, {varyingParam: "shape", slotIndex: 2, playSoundBtn: true, myName: "Shape"})}
     },
 
     slides: [
@@ -230,6 +136,7 @@ const arabidopsisSlide = {
         { text: "Amplitude controls volume.", show: ['waveAmp']},
         { text: "How fast the waveform repeats (frequency) controls pitch", show: ['waveAmp', 'waveFreq']},
         { text: "The shape of the waveform itself, controls the quality of the sound. Think of each unique waveform as its own instrument!", show: ['waveAmp', 'waveFreq', 'waveMorph']},
+        { text: "For the synthesizer below, the amplitude is locked, and the frequency is mapped to the keyboard, this allows us to focus on the shape of the waveform.", show: ['waveAmp', 'waveFreq', 'waveMorph']},
         { text: "This way, we have about 27,000 'instruments' derived from the Arabidposis genome. Use the Synthesizer below to explore the Arabidopsis soundscape.", show: ['waveAmp', 'waveFreq', 'waveMorph']},
     ],
 
@@ -295,7 +202,7 @@ const arabidopsisSlide = {
     makeWavePlot(g, deck, {varyingParam, slotIndex, slotWidth = 210, playSoundBtn = false, myName = null}) {
         const width = slotWidth - 10
         const height = 220
-        const margin = { top: 10, right: 10, bottom: 24, left: 30 }
+        const margin = { top: 50, right: 10, bottom: 24, left: 30 }
         const innerWidth = width - margin.left - margin.right
         const innerHeight = height - margin.top - margin.bottom
             
@@ -307,6 +214,13 @@ const arabidopsisSlide = {
         chart.append("g").attr("transform", `translate(0, 0)`).call(d3.axisLeft(yScale).ticks(4))
 
         if (playSoundBtn) {
+            chart.append("text")
+                .attr("x", innerWidth/2)
+                .attr("y", -20)
+                .attr("text-anchor", "middle")
+                .attr("font-size", "20px")
+                .text(myName)
+
             const button = chart.append('g')
                 .attr("class", "button")
                 .attr("transform", `translate(${innerWidth/2}, ${innerHeight + 50})`)
@@ -409,7 +323,6 @@ const arabidopsisSlide = {
                 self.elements[item](d3.select(this), self)
             })
             .transition().duration(400).style("opacity", 1)
-
     },
 
     bus: null,
@@ -418,4 +331,4 @@ const arabidopsisSlide = {
     }
 }
 
-export const slides = arabidopsisSlide
+export const synthSlides = arabidopsisSlide

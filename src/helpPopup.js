@@ -24,8 +24,10 @@ export function setupHelpPopUps(document, window){
         const btn = event.target.closest(".help-button")
         if (btn) {
             const panel = btn.closest(".help-panel")
-            closeHelp()
-            if (activeBtn !== btn) {
+            if (activeBtn === btn) {
+                closeHelp() //Since closeHelp deactivates activeBtn, we can't put closeHelp before the activeBtn === check.
+            } else {
+                closeHelp() //This resets the (x) to (?) on the previous btn
                 openHelp(panel, btn)
             }
             return
