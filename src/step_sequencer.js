@@ -146,7 +146,7 @@ export function plotStepSeqMain(
     }
     drawPoints(CanvasCtx, xScale, yScale, RADIUS_NORMAL)
 
-    function drawHighlight(HightlightCanvasCtx, xSc, ySc, hover_radius = RADIUS_HOVER, selected_radius = RADIUS_SELECT) {
+    function drawHighlight(HightlightCanvasCtx, xSc, ySc, hover_radius = RADIUS_HOVER, selected_radius = RADIUS_SELECT, show_all_phase = false) {
         HightlightCanvasCtx.clearRect(0, 0, innerWidth, innerHeight) //Clear canvas
         if (current_selection.size > 0) {
             current_selection.forEach((val) => {
@@ -156,6 +156,19 @@ export function plotStepSeqMain(
                 HightlightCanvasCtx.arc(xSc(val.phase), ySc(val.period), selected_radius, 0, 2*Math.PI)
                 HightlightCanvasCtx.fill()
             })
+        }
+        // mouse down + drag show possible phases
+        if (show_all_phase && drag_point) {
+            const min_phase = drag_point.phase % drag_point.period
+            let cur_phase = min_phase
+            while (cur_phase < 24) {
+                cur_phase == closest_point_to_drag? HightlightCanvasCtx.fillStyle = "blue" : HightlightCanvasCtx.fillStyle = "red"
+                HightlightCanvasCtx.beginPath()
+                HightlightCanvasCtx.moveTo(xSc(cur_phase) + selected_radius, ySc(current_hover.period))
+                HightlightCanvasCtx.arc(xSc(cur_phase), ySc(current_hover.period), selected_radius, 0, 2*Math.PI)
+                HightlightCanvasCtx.fill()
+                cur_phase += current_hover.period
+            }
         }
         //hover highlight
         if (current_hover){
@@ -429,18 +442,6 @@ export function plotStepSeqMain(
     }
 
     rebuildQuadtree(xScale, yScale)
-    canvas.on('mousemove', (event) =>{
-        const [mx, my] = d3.pointer(event)
-        const item = findClosest(mx, my)
-        if (item !== current_hover){
-            current_hover = item
-            if (current_hover == null){
-                bus.execute_event("point_hover", null)
-            } else {
-                bus.execute_event("point_hover", current_hover.GeneID)
-            }
-        } else {return}
-    })
 
     let currentXScale = xScale
     let currentYScale = yScale
@@ -476,16 +477,85 @@ export function plotStepSeqMain(
             currentYScale = zy
             rebuildQuadtree(zx, zy)
         })
+    
+    zoom.filter((event) => {
+        const startsPaning = event.type === "mousedown"
+        if (startsPaning && current_hover) return false;
 
+        return (!event.ctrlKey || event.type === "wheel") && !event.button //default
+    })
     canvas.call(zoom)
     canvas.on('dblclick.zoom', null)
     canvas.on('dblclick', () => {
         canvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
     })
-    canvas.on('click', (event) =>{
+
+    // Phase controls and displays + point select behavior
+    let drag_point = null
+    let mousedown = false
+    let dragging = false
+    let closest_point_to_drag = null
+    let clicked_point = null
+
+    function snapPhase(pointerX){
+        const min_phase = drag_point.phase % drag_point.period
+        let closest_phase = Infinity
+        let closest_point = null
+        for (let i=min_phase; i <= 24; i += drag_point.period) {
+            const pointer_pos = currentXScale.invert(pointerX)
+            const dist = Math.abs(pointer_pos - i)
+            if (dist < closest_phase){
+                closest_phase = dist
+                closest_point = i
+            }
+        }
+        return closest_point
+    }
+
+    canvas.on('pointerdown', (event) => {
         const [mx, my] = d3.pointer(event)
-        const item = findClosest(mx, my)
-        updatePoints(item)
+        clicked_point = findClosest(mx, my)
+        mousedown = true
+    })
+
+    canvas.on('pointermove', (event) =>{
+        if (mousedown) {
+            dragging = true
+            drag_point = clicked_point
+        }
+
+        if (!drag_point){ // hover behavior
+            const [mx, my] = d3.pointer(event)
+            const item = findClosest(mx, my)
+            if (item !== current_hover){
+                current_hover = item
+                if (current_hover == null){
+                    bus.execute_event("point_hover", null)
+                } else {
+                    bus.execute_event("point_hover", current_hover.GeneID)
+                }
+            } else {return}
+        } else { // if dragging
+            const pointerX = d3.pointer(event, canvas.node())[0]
+            closest_point_to_drag = snapPhase(pointerX)
+            drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale, RADIUS_HOVER, RADIUS_SELECT, true)
+        }
+    })
+
+    canvas.on('pointerup', (event) => {
+        if (drag_point && drag_point.phase != closest_point_to_drag){
+            drag_point.phase = closest_point_to_drag
+            rebuildQuadtree(xScale, yScale)
+            drawPoints(CanvasCtx, currentXScale, currentYScale, RADIUS_NORMAL) //update all points
+        }
+        if (clicked_point && !dragging){
+            updatePoints(clicked_point)
+        }
+        drag_point = null
+        dragging = false
+        mousedown = false
+        clicked_point = null
+        closest_point_to_drag = null
     })
 
     //bus subscription

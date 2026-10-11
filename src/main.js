@@ -226,6 +226,7 @@ const fft_svg = plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveform
 plotViolin(130, 500, min_max_arr, "filter_slider", bus)
 
 // StepSeq
+console.log(period_phase_fap)
 plotStepSeqMain(1200, 800, "#SeqLeft", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
@@ -255,7 +256,6 @@ const svg = d3.select(step_seq_plot_div)
             .attr("height", 300)
 const TOC1 = normalized_filtered_lookup.get("AT5G61380")
 const UBQ10 = normalized_filtered_lookup.get("AT3G62250")
-console.log([UBQ10, TOC1])
 plotGene(svg, [UBQ10, TOC1], ["UBQ10", "TOC1"])
 
 // //StepSeq

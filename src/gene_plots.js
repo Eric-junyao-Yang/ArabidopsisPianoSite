@@ -106,7 +106,6 @@ export function plotGene(g, gene_dats, gene_names, opts = {
         lin_color: line_colors[i],
         gene_name: gene_names? gene_names[i] : null,
     }))
-    console.log(legendDat)
     const legend = chart.selectAll("g.legend-item")
         .data(legendDat, d => d.id) // the mapping here sets the name of each item using the id as unique name
     
