@@ -1,9 +1,11 @@
 import { Synth_Waveform } from "/src/synth_waveform.js"
-import { meta_to_json, bin_to_array, append_id_logCount_to_array, plotUMAP, plotViolin} from "/src/plots.js"
-import { load_waveforms, plotStepSeqMain, plotStepSeqWave } from "/src/step_sequencer.js"
+import { plotUMAP } from "/src/plots.js"
+import { meta_to_json, bin_to_array, append_id_logCount_to_array } from "/src/binHelper.js"
+import { plotViolin } from "/src/plotViolin.js"
+import { plotStepSeqMain, plotStepSeqWave } from "/src/step_sequencer.js"
+import { load_waveforms } from "/src/loadWaveforms.js"
 import { SlidesTemplate } from "/src/slideTemplate.js"
 import { synthSlides } from "/src/synthSlides.js"
-// import { stepSeqSlides } from "/src/stepSeqSlides.js"
 import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
@@ -23,24 +25,23 @@ const bus = {
 // ---- set up data ----
 let count_umap_arr = await bin_to_array("/dat/count_umap.bin", "/dat/bin_meta.json")
 let fft_umap_arr = await bin_to_array("/dat/fft_umap.bin", "/dat/bin_meta.json")
-let min_max_arr = await bin_to_array("/dat/min_max_norm.bin", "/dat/bin_meta.json")
-let normalized_filtered_arr = await bin_to_array("/dat/normalized_filtered.bin", "/dat/bin_meta.json")
-const min_max_meta = await meta_to_json("/dat/bin_meta.json","min_max_norm.bin")
+// let min_max_arr = await bin_to_array("/dat/min_max_norm.bin", "/dat/bin_meta.json")
+let count_arr = await bin_to_array("/dat/DESeq2_dat.bin", "/dat/bin_meta.json")
+const count_meta = await meta_to_json("/dat/bin_meta.json","DESeq2_dat.bin")
 
-const ids = min_max_meta.rownames
-const logCount = min_max_arr.map((val, idx) => val.log_mean_count)
+const ids = count_meta.rownames
+const logCount = count_arr.map((val, idx) => val.log_mean_count)
 
 // Add the GeneID (id) + logCount field
 count_umap_arr = append_id_logCount_to_array(count_umap_arr, ids, logCount)
 fft_umap_arr = append_id_logCount_to_array(fft_umap_arr, ids, logCount)
-min_max_arr = append_id_logCount_to_array(min_max_arr, ids, logCount)
-normalized_filtered_arr = append_id_logCount_to_array(normalized_filtered_arr, ids, logCount)
-const normalized_filtered_lookup = new Map(normalized_filtered_arr.map((val, idx) => [ids[idx], val]))
+// min_max_arr = append_id_logCount_to_array(min_max_arr, ids, logCount)
+count_arr = append_id_logCount_to_array(count_arr, ids, logCount)
+const normalized_filtered_lookup = new Map(count_arr.map((val, idx) => [ids[idx], val]))
 
 
 // ---- Synth Waveform ----
-// TODO: make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling; Add a piano to allow click and play instead of keyboard interaction, keyboard highlights virtual keybord.
-let synth_node = null
+// TODO: make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling; May allow mapping of volume to log expression
 
 const synth_waveform_canvas =
     document.getElementById(
@@ -48,7 +49,7 @@ const synth_waveform_canvas =
     )
 
 const synth_waveform =
-    new Synth_Waveform(synth_waveform_canvas, bus, min_max_arr)
+    new Synth_Waveform(synth_waveform_canvas, bus, count_arr)
 
 // --------------------------------- handle button presses ---------------------------------
 // setup synth_waveform_buttons
@@ -81,7 +82,7 @@ document.getElementById("SeqReset").addEventListener('click', () => {
 // --------------------------------- Connect Audio Processor ---------------------------------
 // Synth
 let SynthContext = null
-
+let synth_node = null
 async function start() {
     if (SynthContext) return
     SynthContext = new AudioContext()
@@ -223,11 +224,15 @@ export function renderSelectionPanel(selected_genes){
 // Synth
 const count_svg = plotUMAP(600, 500, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
 const fft_svg = plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
-plotViolin(130, 500, min_max_arr, "filter_slider", bus)
+const synth_violin = d3.select("#filter_slider")
+const synth_log_mean_count = count_arr.map((v,i) => {
+    return v.log_mean_count
+})
+plotViolin(130, 500, {top: 20, right: 20, bottom: 20, left: 50}, synth_log_mean_count, synth_violin, bus, "gene_filtering")
 
 // StepSeq
-console.log(period_phase_fap)
 plotStepSeqMain(1200, 800, "#SeqLeft", period_phase_fap, period_phase_fap_lookup, metaValues, bus)
+console.log(period_phase_fap)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
 

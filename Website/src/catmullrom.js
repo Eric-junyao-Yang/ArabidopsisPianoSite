@@ -7,6 +7,16 @@ export function catmullrom(p0, p1, p2, p3, t){
     (-p0 + 3*p1- 3*p2 + p3) * t3)
 }
 
+export function maxAbsScaling(input_array){
+    // Mean center
+    const mu = d3.mean(input_array)
+    let output_array = input_array.map((v,i) => v - mu)
+    // AbsMax
+    const max = Math.max(...output_array.map((v,i) => Math.abs(v)))
+    return output_array.map((v, i) => v / max)
+}
+
+
 export function interpolate_waveform(input_array, output_n_points){
 
     const n = input_array.length

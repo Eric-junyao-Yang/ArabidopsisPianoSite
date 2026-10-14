@@ -1,5 +1,4 @@
-import { interpolate_waveform } from "/src/catmullrom.js"
-import { catmullrom } from "/src/catmullrom.js"
+import { interpolate_waveform, catmullrom } from "/src/catmullrom.js"
 
 const TABLE_SIZE = 2048
 

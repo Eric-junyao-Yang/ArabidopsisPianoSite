@@ -1,0 +1,150 @@
+---
+title: "DESeq2 Norm"
+author: "Eric J.Y. Yang"
+date: "2026-06-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r results='hide'}
+library(txdbmaker)
+library(AnnotationDbi)
+library(tximport)
+library(DESeq2)
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+#Build tx2gene df
+txdb <- makeTxDbFromGFF("../RawReads/Arabidopsis_thaliana.TAIR10.62.gff3.gz")
+
+# seqlevels(txdb)
+# columns(txdb)
+# keytypes(txdb)
+
+all_keys = keys(txdb, keytype = "TXNAME")
+
+tx2gene <- AnnotationDbi::select(
+  txdb,
+  keys = all_keys,
+  columns = "GENEID",
+  keytype = "TXNAME")
+
+tx2gene <- tx2gene %>% unique()
+```
+
+```{r}
+base_path = "../RawReads/BulkRNAseq/fastp_out/salmon_out/"
+file_extension = "/quant.sf"
+
+quant_sf <- c(
+  LD_ZT02=paste0(base_path, "SRR10148637", file_extension),
+  LD_ZT05=paste0(base_path, "SRR10148638", file_extension),
+  LD_ZT08=paste0(base_path, "SRR10148639", file_extension),
+  LD_ZT11=paste0(base_path, "SRR10148640", file_extension),
+  LD_ZT14=paste0(base_path, "SRR10148641", file_extension),
+  LD_ZT17=paste0(base_path, "SRR10148642", file_extension),
+  LD_ZT20=paste0(base_path, "SRR10148643", file_extension),
+  LD_ZT23=paste0(base_path, "SRR10148644", file_extension),
+  LD_ZT26=paste0(base_path, "SRR10148645", file_extension),
+  LD_ZT29=paste0(base_path, "SRR10148646", file_extension),
+  LD_ZT32=paste0(base_path, "SRR10148647", file_extension),
+  LD_ZT35=paste0(base_path, "SRR10148648", file_extension),
+  LD_ZT38=paste0(base_path, "SRR10148649", file_extension),
+  LD_ZT41=paste0(base_path, "SRR10148650", file_extension),
+  LD_ZT44=paste0(base_path, "SRR10148651", file_extension),
+  LD_ZT47=paste0(base_path, "SRR10148652", file_extension)
+)
+
+txi <- tximport(
+  quant_sf,
+  type = "salmon",
+  tx2gene = tx2gene
+)
+
+txi$abundance
+```
+
+```{r}
+colData <- data.frame(
+  row.names = colnames(txi$counts),
+  timepoint = factor(colnames(txi$counts))
+)
+
+dds <- DESeqDataSetFromTximport(txi, colData, design = ~1)
+dds <- estimateSizeFactors(dds)
+normalized_counts <- counts(dds, normalized = TRUE)
+```
+
+Drop all genes where all counts are zeroes
+```{r}
+#For sure drop all 0s
+nrow(normalized_counts) #27588
+normalized_counts_df <- data.frame(normalized_counts) %>% rownames_to_column("GeneID")
+normalized_counts_df <- normalized_counts_df %>% filter(rowSums(normalized_counts_df %>% select(!GeneID)) != 0)
+nrow(normalized_counts_df) #23518
+```
+
+
+
+```{r}
+#Add mean and log_mean
+normalized_counts_df <- normalized_counts_df %>% 
+  mutate(mean_count = rowMeans(normalized_counts_df %>% select(!GeneID))) %>%
+  mutate(log_mean_count = log10(mean_count))
+
+ggplot(data = normalized_counts_df, aes(y = log_mean_count)) +
+  geom_boxplot()
+hist(normalized_counts_df$log_mean_count)
+quantile(normalized_counts_df$mean_count, probs = c(0.05, 0.10, 0.25, 0.75, 0.90, 0.95))
+
+#Drop genes with average gene count less than 5
+normalized_counts_df <- normalized_counts_df %>% filter(mean_count >= 5)
+nrow(normalized_counts_df) #19215
+
+hist(normalized_counts_df$log_mean_count)
+```
+
+```{r}
+#Save out normalized_counts with low read counts removed
+write_csv(normalized_counts_df, "../Processed_Data/DESeq2_filtered.csv")
+```
+
+```{r}
+circadian <- c("AT1G01060", "AT2G46830", "AT5G61380")
+set.seed(123)
+random_int <- sample(1:nrow(normalized_counts_df), 3)
+random <- normalized_counts_df$GeneID[random_int]
+
+# Pull one gene as a named numeric vector
+gene_counts_df <- normalized_counts_df %>%
+  select(!c(mean_count, log_mean_count)) %>%
+  filter(GeneID %in% c(random, circadian)) %>%
+  pivot_longer(
+    grep("^LD_", colnames(normalized_counts_df)), 
+    values_to = "counts", 
+    names_to = "timepoint") %>% 
+  mutate(
+    category = ifelse(GeneID %in% circadian, "Circadian", "Random"),
+    timepoint = factor(timepoint, levels = colnames(normalized_counts_df %>% select(starts_with("LD_")))),
+    GeneID = factor(GeneID, levels = c(circadian, random)))
+
+
+ggplot(gene_counts_df, aes(x = timepoint, y = counts)) +
+  geom_point(aes(color = category), size = 2) +
+  geom_line(aes(color = category, group = GeneID), linewidth = 0.5, alpha = 0.5) +
+  facet_wrap(~GeneID, nrow = 2, scales = "free_y") +
+  scale_color_manual(values = c("Circadian" = "#E76F51", "Random" = "#457B9D")) +
+  theme_bw() +
+  theme(
+    axis.text.x  = element_text(angle = 45, hjust = 1, size = 7),
+    strip.text   = element_text(face = "italic"),
+    legend.title = element_blank()
+  ) +
+  labs(x = "Timepoint", y = "Normalized counts",
+       title = "Circadian vs random genes")
+```

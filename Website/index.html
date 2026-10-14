@@ -171,6 +171,53 @@
     <!-- special div for help pop up -->
      <div id="help-popup" role="dialog"></div>
 
+
+    <!-- Methods -->
+    <div>
+        <h2>Methods</h2>
+        <div>
+            <h3>Processing Raw Reads</h3>
+            <p>
+                The Diurnal Dataset from 
+                <a href="https://www.jbc.org/article/S0021-9258(17)49454-3/fulltext"> Yuchen Yang and colleagues </a>
+                is downloaded from 
+                <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE137732"> GSE137732 </a> .
+                These are bulk RNAseq dataset from Arabidopsis grown under long-day conditions [16hr light / 8hr dark]
+            </p>
+            <p>
+                The paired end reads were processed with <a href = "https://github.com/OpenGene/fastp">fastp</a> with "--detect_adapter_for_pe". 
+                Results before and after trimming were checked using <a href = "https://github.com/MultiQC/MultiQC">Multiqc</a>. 
+                Reads were aligned to TAIR10 genome and transcripts were counted using <a href = "https://salmon.readthedocs.io/en/latest/index.html">salmon</a> using the genome as decoy. 
+                DESeq2 was used to normalize the samples after using tximport to summarize transcript level data.
+                Genes with less than 5 average reads across all samples were dropped.
+            </p>
+            <h3>UMAPs</h3>
+            <h4>Counts</h4>
+            <p>
+                Normalized counts were converted to log scale and z-score normalized before running UMAP with n_neighbors = 2, min_dist = 0.25, and metric = "cosine"
+            </p>
+            <h4>FFT</h4>
+            <p>
+                Each gene's normalized counts were interpolated using catmullrom, mean centered, and max-absolute scaled to between -1 and 1.
+                FFT is performed on each waveform and trimmed to the first 15 freqencies, which is roughly where the magnitude drops to 0.
+                Magnitude of all remaining frequencies are scaled relative to the strongest frequency thereby only preserving relative strength of each harmonics.
+                Frequencies with magnitude 1000 fold weaker than the strongest frequnecies are scaled to zero.
+                The resulting array of relative harmonic strength is used to generate the UMAP with n_neighbors = 2, min_dist = 0.25, and metric = "euclidean"
+            </p>
+            <h3>Oscillating Gene Detection</h3>
+            <p>
+                Lomb Scargle algorithm from astropy was used to detect inherit rythums of all genes with samples_per_peak = 30. Genes with False Alarm Probabilities (FAP) of larger than 0.35 was removed.
+            </p>
+            <h3>Gaussian Process Modeling</h3>
+            <p>
+                To capture a sense of confidence, the Gaussian Process was used to model the oscillating genes.
+                gpflow was used to fit the GP model with a fixed period from Lomb Scargle and a Periodic SquaredExponential base kernel. Variance is set to the square of std, and mean is set to the mean of all measurements for the gene.
+                Length scale of 6 was used as the default but additional fitting was done on length scales of 3 and 12 to see how much the fitted length scale changes. This shift is recorded as "sensitivity_ratio" which captures the robustness of the length scale from initial.
+                
+            </p>
+        </div>
+    </div>
+
     </main>
     <script type="module" src="./src/main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>

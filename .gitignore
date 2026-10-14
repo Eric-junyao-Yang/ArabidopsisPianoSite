@@ -1,0 +1,7 @@
+#Ignore large intermediate data files
+Processed_Data/
+RawReads/
+
+
+# temporarily ignore all ipynb because some are too large for git
+*.ipynb

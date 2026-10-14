@@ -1,13 +1,13 @@
-import {interpolate_waveform} from "/src/catmullrom.js"
+import { interpolate_waveform, maxAbsScaling } from "/src/catmullrom.js"
 
 export class Synth_Waveform {
-    constructor(canvas, bus, min_max_arr) { 
+    constructor(canvas, bus, count_arr) { 
         this.canvas = canvas
         this.ctx = canvas.getContext("2d")
         this.n_bars = 48
         this.points = Array(this.n_bars).fill(0.5)
         this.dragging = false
-        this.min_max_arr = min_max_arr
+        this.count_arr = count_arr
 
         this.bus = bus
         // suscribe to bus
@@ -20,7 +20,7 @@ export class Synth_Waveform {
             this.bus_execute(this.points)
             this.draw()
         })
-        this.GeneID_Lookup = new Map(min_max_arr.map(r => [r.id, r]))
+        this.GeneID_Lookup = new Map(count_arr.map(r => [r.id, r]))
 
         this.resizeCanvas()
         this.setupEvents()
@@ -99,15 +99,21 @@ export class Synth_Waveform {
         this.draw_interpolation(ctx)
     }
 
+    scaleToPlot(input_array){
+        // interpolate_waveform returns values scaled to -1 to 1
+        // plot accepts values between 0 to 1
+        return input_array.map((v,i) => (v + 1) / 2)
+    }
+
     updatePointsWithGeneID(GeneID){
         // load 16 data points
         const cur_row = this.GeneID_Lookup.get(GeneID)
         const cur_values = Object.values(cur_row).slice(0, 16)
-        const norm_values = new Array(cur_values.length)
-        cur_values.map((val, idx) => {
-            norm_values[idx] = (val + 1) / 2
-        })
-        const interpolated_values = interpolate_waveform(norm_values, 48)
+        // const norm_values = new Array(cur_values.length)
+        // cur_values.map((val, idx) => {
+        //     norm_values[idx] = (val + 1) / 2
+        // })
+        const interpolated_values = this.scaleToPlot(maxAbsScaling(interpolate_waveform(cur_values, 48)))
 
         // For visual appeal, rotate everything right by 1 with wrap around
         const n = interpolated_values.length
