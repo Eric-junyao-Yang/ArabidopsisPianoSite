@@ -95,7 +95,7 @@
                 <div id = "read_counts" 
                      class = "help-panel"
                      data-help-text = "UMAP representation of experimental data.
-                     Each point is a gene. Points closer together are similar biologically. 
+                     Each point is a gene. Points closer together have similar expression pattern over the 48hr period. 
                      You can zoom, pan, and select genes to update the waveform 
                      above. Hover displays the name of the gene as well as highlights 
                      corresponding point of the same gene in the other UMAP. Double click to reset."></div>
@@ -133,18 +133,52 @@
                         </p>    
                         <p>    
                             We can first identify which genes are naturall oscillating and then extract their oscillating frequency. 
-                            The freqencies will be on the scale of a few cycles per day, but we can map them to a keyboard by scaling everything up into the audible range.
-                            This way, relative pitches between genes are mapped to their natural oscillation rates!
-                            Using musical harmony to explore relationship between oscillating genes is actually surprisingly appropriate.
-                            Human ears are really good at picking out certain mathmatical relationships between frequencies:
-                            The Pathagoreans supposedly discovered that whole number ratio relationships between freqencies sounds pleasant to our ears.
-                            In fact, the Pythagorean tuning maps each note in a major scale to have the following ratio relationships with the root (first) note:
+                            The freqencies will be on the scale of a few cycles per day, but we can map them to a keyboard by 
+                            scaling everything up into the audible range.
+                            This way, relative pitches between genes are mapped to their natural oscillation frequencies!
+                            Musical harmony turns out to be a surprisingly interesting way to explore relationships between oscillating genes.
+                            Human ears are really good at picking out certain mathmatical relationships between frequencies.
+                            The Pythagoreans supposedly discovered that small whole number ratio relationships between freqencies sounds 
+                            pleasant to our ears. For example, arguably the most harmonic note-pairing (other than the note and itself, which is a 1:1 ratio)
+                            is a note and its octave 
+                            (something that vibrates twice as fast). This gives a 1:2 ratio and that's as small as it gets!
+                            The idea of whole number ratios is based in physics. For vibrating air columns (vocal cord included) or strings, vibration of a 
+                            particular frequency (f) creates a stack of overtones at multiples of the frequency: 2f, 3f, 4f, ... ,  etc.
+                            When two notes are played together, if their overtones overlap, we hear a consonent smooth blend. But if the overtones are slightly 
+                            off, we hear "beating", which is called dissonance. To learn more: <a href="https://aatishb.com/dissonance/">Theory of Dissonance</a>
+                            Simpler ratios allow for more overlap of these overtones. 
+                            
+                            Just intonnation  attempts to construct musical scales by only using a set of small whole number ratios.
+                            Pythagorean tuning, for example, attempts to traverse the scale with only the two smallest whole number ratios: 
+                            perfect fifth (3:2) and the octave (2:1). In tuning classification it is considered a 3-limit scale (largest prime number is 3).
+                            Unfortunately the math doesn't quite work out and results in some ratios that are 
+                            far from "small". E.g. the Pythagorean major third (which in modern days is an important harmony) has a 
+                            ratio of 81:64 instead of the much more pleasant sounding 5:4.
+                            There are other attempts in just intonnation, for example, if we also allow the use of Perfect Fourth (4:3) and (5:4) Major third in the scale construction, it is considered a 5-limit scale.
                         </p>
-                        <p>1/1     9/8     5/4     4/3     3/2     5/3     15/8     2/1.</p>
                         <p>
-                            You can learn more about mathmatics of musical harmony here: https://www.asa3.org/ASA/education/teach/harmony-cr.htm https://aatishb.com/dissonance/
-                            Two genes a perfect fifth apart (example here) suggest whenever one gene completes three cycles, the other one completes two cycles.
-                            While relationships discovered this way may not be biological (the methods sections discusses the limitations), they might be worth looking further into. At the very least, it is a fun way to explore this dataset and you can also use it to make some music!
+                            However, all just intonnation attempts suffers from the same challenges: No fixed sets of notes can make every pair perfectly simple, fundementally 
+                            because ratios built from prime factors (2,3,5) never lines up exactly. So by lining up certain notes just right, the other notes pairings will sound
+                            out of tune. Modern piano uses "12-tone equal temperment" tuning that distributes these compromises equally across all notes, which makes everything note pairing very slightly out of tune,
+                            but allows all pairings to some relatively pleasant, rather than a few pairings sounding perfect at the cost of all others. 
+                            You can learn more about <a href = "https://www.asa3.org/ASA/education/teach/harmony-cr.htm">Mathmatics of Musical Harmony</a>.
+                        </p>
+                        <p>
+                            For our purpose, whole number frequency relationships between genes have potentially biological implications. 
+                            Two genes a perfect fifth (3:2) apart (example here) suggest whenever one gene completes three cycles, the other one completes exactly two cycles.
+                            While relationships discovered this way may not necessarily be biological (the methods sections discusses the limitations), 
+                            they might be worth looking further into.
+                        </p>
+
+                        <p>
+                            The visualization below highlights the following simple ratio relationships for each gene:
+                            
+                            (to do: build table of ratio relationships from 2:1, 3:2 ... and their name Octave, perfect fifth ...)
+
+                            Genes discovered this way reveal mathamtical relationships while also should sound pleasant to our ears when played together.
+
+                            At the very least, it is a fun way to explore this dataset and you can also use it to make some music!
+                            
                         </p>
 
                     </div>
@@ -187,34 +221,47 @@
             <p>
                 The paired end reads were processed with <a href = "https://github.com/OpenGene/fastp">fastp</a> with "--detect_adapter_for_pe". 
                 Results before and after trimming were checked using <a href = "https://github.com/MultiQC/MultiQC">Multiqc</a>. 
-                Reads were aligned to TAIR10 genome and transcripts were counted using <a href = "https://salmon.readthedocs.io/en/latest/index.html">salmon</a> using the genome as decoy. 
+                Fragments were mapped to TAIR10 transcriptome and transcripts were counted using <a href = "https://salmon.readthedocs.io/en/latest/index.html">salmon</a> using the genome as decoy. 
                 DESeq2 was used to normalize the samples after using tximport to summarize transcript level data.
-                Genes with less than 5 average reads across all samples were dropped.
+                Genes with less than 5 average DESeq2 normalized counts across all samples were dropped.
+                log10 of mean TPM were kept for downstream between gene comparisons.
             </p>
             <h3>UMAPs</h3>
             <h4>Counts</h4>
             <p>
-                Normalized counts were converted to log scale and z-score normalized before running UMAP with n_neighbors = 2, min_dist = 0.25, and metric = "cosine"
+                Normalized counts were converted to log scale with log1p and each gene is z-score normalized across the 16 timepoints 
+                before running UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "cosine". Distance between points is effectively 1 - Pearson correlation.
             </p>
             <h4>FFT</h4>
             <p>
                 Each gene's normalized counts were interpolated using catmullrom, mean centered, and max-absolute scaled to between -1 and 1.
-                FFT is performed on each waveform and trimmed to the first 15 freqencies, which is roughly where the magnitude drops to 0.
-                Magnitude of all remaining frequencies are scaled relative to the strongest frequency thereby only preserving relative strength of each harmonics.
-                Frequencies with magnitude 1000 fold weaker than the strongest frequnecies are scaled to zero.
-                The resulting array of relative harmonic strength is used to generate the UMAP with n_neighbors = 2, min_dist = 0.25, and metric = "euclidean"
+                FFT is performed on each waveform and the resulting magnitude of each detected frequencies within a gene are converted to dB relative to the
+                strongest frequency and floored at -40dB by setting any frequency 100x weaker than the strongest frequency to 0. 
+                All dB values were shifted up by 40dB so the data ranges from 0~40dB.
+                The resulting array is used to generate the UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "euclidean"
+
+                Note: the FFT is run on interpolated data and the UMAP groups waveforms that sounds similar together, but some of the sound is completely due to the interpolation and not necessarily biologial.
             </p>
             <h3>Oscillating Gene Detection</h3>
             <p>
-                Lomb Scargle algorithm from astropy was used to detect inherit rythums of all genes with samples_per_peak = 30. Genes with False Alarm Probabilities (FAP) of larger than 0.35 was removed.
+                Lomb Scargle algorithm from astropy was used to detect inherit rythums of all genes with minimum_frequency = 1/32; maximum_frequency = 1/6;
+                 samples_per_peak = 30. 
+                Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, the resulting q-value is threshold to 0.2 for data export.
+                Uncertanties in the detected period is determined using boot strapping. Assuming the uncertanties in detection is due to noise in the data, 
+                the residual for each data point is randomly shuffled with replacement among all data points for a gene. The process is repeated 500 times,
+                and the resulting spread of detected periods is used to determine the 95% confidence interval.
             </p>
             <h3>Gaussian Process Modeling</h3>
             <p>
                 To capture a sense of confidence, the Gaussian Process was used to model the oscillating genes.
                 gpflow was used to fit the GP model with a fixed period from Lomb Scargle and a Periodic SquaredExponential base kernel. Variance is set to the square of std, and mean is set to the mean of all measurements for the gene.
                 Length scale of 6 was used as the default but additional fitting was done on length scales of 3 and 12 to see how much the fitted length scale changes. This shift is recorded as "sensitivity_ratio" which captures the robustness of the length scale from initial.
-                
             </p>
+        </div>
+        <div>
+            <h3>Limitations</h3>
+            <p>Limits associated with only 16 points (to do)</p>
+            <p>Assumes gene expression loops around after 48 hours (indefinitely)</p>
         </div>
     </div>
 

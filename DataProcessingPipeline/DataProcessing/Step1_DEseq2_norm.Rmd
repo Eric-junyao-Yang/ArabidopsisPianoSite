@@ -66,7 +66,7 @@ txi <- tximport(
   tx2gene = tx2gene
 )
 
-txi$abundance
+head(txi$abundance)
 ```
 
 ```{r}
@@ -78,40 +78,50 @@ colData <- data.frame(
 dds <- DESeqDataSetFromTximport(txi, colData, design = ~1)
 dds <- estimateSizeFactors(dds)
 normalized_counts <- counts(dds, normalized = TRUE)
+VST_counts <- vst(dds)
+VST_matrix <- assay(VST_counts)
 ```
 
-Drop all genes where all counts are zeroes
+Conver to dataframe
 ```{r}
-#For sure drop all 0s
-nrow(normalized_counts) #27588
 normalized_counts_df <- data.frame(normalized_counts) %>% rownames_to_column("GeneID")
-normalized_counts_df <- normalized_counts_df %>% filter(rowSums(normalized_counts_df %>% select(!GeneID)) != 0)
-nrow(normalized_counts_df) #23518
+VST_df <- data.frame(VST_matrix) %>% rownames_to_column("GeneID")
 ```
 
 
 
 ```{r}
-#Add mean and log_mean
-normalized_counts_df <- normalized_counts_df %>% 
+#Add mean and log_mean from TPM
+#First match TPM to normalized_counts_df
+TPM <- data.frame(txi$abundance)
+TPM <- TPM[normalized_counts_df$GeneID, ]
+normalized_counts_df <- normalized_counts_df %>%
   mutate(mean_count = rowMeans(normalized_counts_df %>% select(!GeneID))) %>%
-  mutate(log_mean_count = log10(mean_count))
+  mutate(mean_TPM = rowMeans(TPM)) %>%
+  mutate(log_TPM = log10(mean_TPM))
 
-ggplot(data = normalized_counts_df, aes(y = log_mean_count)) +
+ggplot(data = normalized_counts_df, aes(y = log_TPM)) +
   geom_boxplot()
-hist(normalized_counts_df$log_mean_count)
+hist(normalized_counts_df$log_TPM)
 quantile(normalized_counts_df$mean_count, probs = c(0.05, 0.10, 0.25, 0.75, 0.90, 0.95))
 
 #Drop genes with average gene count less than 5
 normalized_counts_df <- normalized_counts_df %>% filter(mean_count >= 5)
+idx <- match(normalized_counts_df$GeneID, VST_df$GeneID)
+VST_df <- VST_df[idx,]
 nrow(normalized_counts_df) #19215
 
-hist(normalized_counts_df$log_mean_count)
+hist(normalized_counts_df$log_TPM)
 ```
 
 ```{r}
 #Save out normalized_counts with low read counts removed
+# Drop columns no longer needed for downstream
+normalized_counts_df <- normalized_counts_df %>% select(-mean_count, -mean_TPM)
 write_csv(normalized_counts_df, "../Processed_Data/DESeq2_filtered.csv")
+
+#Also save out VST normalized counts
+write_csv(VST_df, "../Processed_Data/VST.csv")
 ```
 
 ```{r}
@@ -120,12 +130,12 @@ set.seed(123)
 random_int <- sample(1:nrow(normalized_counts_df), 3)
 random <- normalized_counts_df$GeneID[random_int]
 
-# Pull one gene as a named numeric vector
+# Pull a set of genes as a named numeric vector
 gene_counts_df <- normalized_counts_df %>%
-  select(!c(mean_count, log_mean_count)) %>%
+  select(!c(log_TPM)) %>%
   filter(GeneID %in% c(random, circadian)) %>%
   pivot_longer(
-    grep("^LD_", colnames(normalized_counts_df)), 
+    starts_with("LD_"), 
     values_to = "counts", 
     names_to = "timepoint") %>% 
   mutate(
