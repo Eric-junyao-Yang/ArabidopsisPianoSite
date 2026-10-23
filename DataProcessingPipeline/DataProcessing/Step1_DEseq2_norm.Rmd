@@ -82,7 +82,7 @@ VST_counts <- vst(dds)
 VST_matrix <- assay(VST_counts)
 ```
 
-Conver to dataframe
+Convert to dataframe
 ```{r}
 normalized_counts_df <- data.frame(normalized_counts) %>% rownames_to_column("GeneID")
 VST_df <- data.frame(VST_matrix) %>% rownames_to_column("GeneID")
@@ -105,10 +105,12 @@ ggplot(data = normalized_counts_df, aes(y = log_TPM)) +
 hist(normalized_counts_df$log_TPM)
 quantile(normalized_counts_df$mean_count, probs = c(0.05, 0.10, 0.25, 0.75, 0.90, 0.95))
 
-#Drop genes with average gene count less than 5
+# Drop genes with average gene count less than 5
 normalized_counts_df <- normalized_counts_df %>% filter(mean_count >= 5)
 idx <- match(normalized_counts_df$GeneID, VST_df$GeneID)
-VST_df <- VST_df[idx,]
+stopifnot(!anyNA(idx))
+VST_df <- VST_df[idx, , drop = FALSE]
+rownames(VST_df) <- NULL
 nrow(normalized_counts_df) #19215
 
 hist(normalized_counts_df$log_TPM)
@@ -118,7 +120,7 @@ hist(normalized_counts_df$log_TPM)
 #Save out normalized_counts with low read counts removed
 # Drop columns no longer needed for downstream
 normalized_counts_df <- normalized_counts_df %>% select(-mean_count, -mean_TPM)
-write_csv(normalized_counts_df, "../Processed_Data/DESeq2_filtered.csv")
+write_csv(normalized_counts_df, "../Processed_Data/Normalized_counts.csv")
 
 #Also save out VST normalized counts
 write_csv(VST_df, "../Processed_Data/VST.csv")

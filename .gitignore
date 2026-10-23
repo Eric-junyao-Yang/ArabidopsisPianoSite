@@ -2,6 +2,6 @@
 Processed_Data/
 RawReads/
 
+to_do.md
 
-# temporarily ignore all ipynb because some are too large for git
-*.ipynb
+*.pyc

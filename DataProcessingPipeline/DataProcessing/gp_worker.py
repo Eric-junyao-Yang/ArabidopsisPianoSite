@@ -1,48 +1,64 @@
 """
-Stand alone .py file needed for parallelization
+Standalone worker for multiprocessing.Pool (spawn).
 """
 
 def fit_single_gene(args):
-    import gpflow
-    import tensorflow as tf
-    import tensorflow_probability as tfp
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""  # CPU parallelization
+
     import numpy as np
     from gp_functions import fit_gp_with_qc, sample_waveforms_gpflow
-    import os
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "" #Skip GPU and use CPU parallization
+    (
+        GeneID,
+        dat,
+        lc_period,
+        lc_phase,
+        best_power,
+        qval,
+        log_period_sd,
+        period_sd,
+        period_low95,
+        period_high95,
+        log_TPM,
+        ls_init,
+    ) = args
 
-    GeneID, dat, lc_period, lc_phase, fap, ls_init = args
-    row = {}
+    row = {"GeneID": GeneID}
 
     try:
-        model, qc = fit_gp_with_qc(np.arange(2, 50, 3), dat, lc_period, ls_init)
-        samples, grid = sample_waveforms_gpflow(model, lc_period, n_samples=10, n_grid=256, seed=123)
-        mu, var = model.predict_f(np.array(grid).reshape(-1,1))
+        model, qc = fit_gp_with_qc(
+            np.arange(2, 50, 3), dat, lc_period, best_power, ls_init
+        )
+        samples, _grid = sample_waveforms_gpflow(
+            model, lc_period, n_samples=10, n_grid=256, seed=123
+        )
 
-        mu = mu.numpy().ravel().astype(np.float32)
-        std = np.sqrt(var.numpy().ravel()).astype(np.float32)
-
-        row['GeneID'] = GeneID
         for i in range(samples.shape[0]):
-            row[f'sample_{i+1}'] = samples[i].astype(np.float32)
-        row['mu'] = mu
-        row['std'] = std
-        row['period'] = float(lc_period)
-        row['phase'] = float(lc_phase)
-        row['fap'] = float(fap)
-        row['ls_fit'] = qc['ls_fit']
-        row['amplitude'] = qc['amplitude']
-        row['noise'] = qc['noise']
-        row['noise_frac'] = qc['noise_frac']
-        row['sensitivity_ratio_up'] = qc['sensitivity_ratio_up']
-        row['sensitivity_ratio_down'] = qc['sensitivity_ratio_down']
-        row['success'] = True
+            row[f"sample_{i + 1}"] = samples[i].astype(np.float32)
 
+        row["mu"] = qc["mu"]
+        row["std"] = qc["std"]
+        row["period"] = float(lc_period)
+        row["phase"] = float(lc_phase)
+        row["qval"] = float(qval)
+        row["best_power"] = float(best_power)
+        row["log_period_sd"] = float(log_period_sd)
+        row["period_sd"] = float(period_sd)
+        row["period_low95"] = float(period_low95)
+        row["period_high95"] = float(period_high95)
+        row["log_TPM"] = float(log_TPM)
+        row["ls_fit"] = float(qc["ls_fit"])
+        row["amplitude"] = float(qc["amplitude"])
+        row["noise"] = float(qc["noise"])
+        row["noise_frac_data"] = float(qc["noise_frac_data"])
+        row["relative_std"] = float(qc["relative_std"])
+        row["shape_sensitivity"] = float(qc["shape_sensitivity"])
+        row["ls_sensitivity_ratio"] = float(qc["ls_sensitivity_ratio"])
+        row["success"] = True
         return row
 
     except Exception as e:
-        row['GeneID'] = GeneID
-        row['success'] = False
-        row['error'] = str(e)
+        row["success"] = False
+        row["error"] = str(e)
         return row

@@ -1,5 +1,6 @@
 """
-Imported to gp_worker.py for parallelization
+Shared GP fit / QC helpers. Imported by gp_worker.py for parallelization
+Step4_GP_testing.ipynb also imports functions from here to ensure notebook and workers stay in sync.
 """
 
 import gpflow
@@ -9,115 +10,131 @@ import numpy as np
 
 tfd = tfp.distributions
 
-def fit_gp_gpflow(x, y, period, ls_init = 0.6): #try folded and non-folded
-    """
-    Regarding length scale: using the correlation tracking method above, length scale of around 0.6 gave reasonable
-    correlation for timepoints with period 48. Length scale works on phase, so 0.6 should be suitable for all periods.
-    This also means the peak and trough should have near 0 correlation, which also makes sense np.sqrt(-2/np.log(0.02))=0.7.
-    """
+# Prior centre for length scale (dimensionless; acts on phase).
+# Empirically determined as ~0.4–0.5 from free fits on q≤0.05 genes. See Step4_GP_testing.ipynb for details.
+DEFAULT_LENGTH_SCALE = 0.4
+
+
+def fit_gp_gpflow(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_SCALE):
     x = x.reshape(-1, 1).astype(np.float64)
     y = y.reshape(-1, 1).astype(np.float64)
-    y_mean = np.mean(y).astype(float)
+    y_mean = float(np.mean(y))
     mean_fn = gpflow.mean_functions.Constant(c=y_mean)
-    y_std = np.std(y).astype(float) + 1e-9
+    y_std = float(np.std(y)) + 1e-9
+    var_y = float(np.var(y))
+
     kernel = gpflow.kernels.Periodic(
         gpflow.kernels.SquaredExponential(
-            variance = y_std**2,
-            lengthscales=ls_init
+            variance=y_std ** 2,
+            lengthscales=length_scale_initial,
         ),
         period=period,
     )
-    gpflow.utilities.set_trainable(kernel.period, False) #Trust Lomb_Scargle
+    gpflow.utilities.set_trainable(kernel.period, False)  # Trust Lomb–Scargle period
 
     kernel.base_kernel.lengthscales.prior = tfd.LogNormal(
-        loc = tf.cast(tf.math.log(ls_init), tf.float64),
-        scale=tf.cast(0.5, tf.float64)
+        loc=tf.cast(tf.math.log(length_scale_initial), tf.float64),
+        scale=tf.cast(0.35, tf.float64),
     )
     kernel.base_kernel.variance.prior = tfd.LogNormal(
-        loc=tf.cast(tf.math.log(y_std**2), tf.float64),
-        scale=tf.cast(1.0, tf.float64)
+        loc=tf.cast(tf.math.log(y_std ** 2), tf.float64),
+        scale=tf.cast(1.0, tf.float64),
     )
 
     model = gpflow.models.GPR(
-        data=(x,y),
+        data=(x, y),
         kernel=kernel,
         mean_function=mean_fn,
     )
 
-    model.likelihood.variance.assign(0.2 * y_std**2)
+    # Noise prior centred on LS residual variance
+    resid_var = max((1.0 - float(best_power)) * var_y, 1e-3 * var_y)
+
+    model.likelihood.variance.assign(resid_var)
     model.likelihood.variance.prior = tfd.LogNormal(
-        loc=tf.cast(tf.math.log(0.1 * y_std**2), tf.float64),
-        scale=tf.cast(1.0, tf.float64)
+        loc=tf.cast(tf.math.log(resid_var), tf.float64),
+        scale=tf.cast(1.0, tf.float64),
     )
 
-    opt = gpflow.optimizers.Scipy()
-    opt.minimize(
+    gpflow.optimizers.Scipy().minimize(
         model.training_loss,
         model.trainable_variables,
-        options={"maxiter": 500}
+        options={"maxiter": 500},
     )
-
     return model
 
-def fit_gp_with_qc(x_folded, y_folded, period, ls_init=0.6):
+
+def fit_gp_with_qc(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_SCALE):
     """
-    The length scale is important in grounding points that doesn't contain enough information to fit a curve nicely, and varying
-    the initial length scale will perturbe the fit by quite a bit, this is tracked by fitting the model twice.
+    Fit GP with detected period from Lomb-Scargle. Also fits with length-scale prior centre
+    doubled & halved to measure prior sensitivity of length scale and of the curve shape.
+
+    Note: x/y are NOT phase-folded; the Periodic kernel handles periodicity.
     """
-    # Primary fit
-    model = fit_gp_gpflow(x_folded, y_folded, period, ls_init=ls_init)
+    grid = np.linspace(0, period, 256, endpoint=False).reshape(-1, 1)
 
-    # Perturbed fit
-    model_perturbed_up = fit_gp_gpflow(x_folded, y_folded, period, ls_init=ls_init * 2)
-    model_perturbed_down = fit_gp_gpflow(x_folded, y_folded, period, ls_init=ls_init / 2)
+    model = fit_gp_gpflow(x, y, period, best_power, length_scale_initial=length_scale_initial)
+    model_up = fit_gp_gpflow(x, y, period, best_power, length_scale_initial=length_scale_initial * 2)
+    model_down = fit_gp_gpflow(x, y, period, best_power, length_scale_initial=length_scale_initial / 2)
 
-    # Params
-    ls_fit       = float(model.kernel.base_kernel.lengthscales.numpy()) 
-    ls_perturbed_up = float(model_perturbed_up.kernel.base_kernel.lengthscales.numpy())
-    ls_perturbed_down = float(model_perturbed_down.kernel.base_kernel.lengthscales.numpy())
-    amp          = float(model.kernel.base_kernel.variance.numpy())
-    noise        = float(model.likelihood.variance.numpy())
-    y_std        = float(np.std(y_folded))
+    ls_fit = float(model.kernel.base_kernel.lengthscales.numpy())
+    ls_up = float(model_up.kernel.base_kernel.lengthscales.numpy())
+    ls_down = float(model_down.kernel.base_kernel.lengthscales.numpy())
+    amp = float(model.kernel.base_kernel.variance.numpy())
+    noise = float(model.likelihood.variance.numpy())
 
-    # Sensitivity ratio: how much did ls move when prior center is doubled or halved
-    sensitivity_ratio_up = ls_perturbed_up / ls_fit
-    sensitivity_ratio_down = ls_perturbed_down / ls_fit
+    # Relative mean delta length scale when prior centre is doubled / halved
+    ls_sensitivity_ratio = float(
+        ((abs(ls_up - ls_fit) + abs(ls_down - ls_fit)) * 0.5) / (ls_fit + 1e-12)
+    )
 
-    # Noise fraction
-    total_var = amp + noise
-    noise_frac = noise / (total_var + 1e-9)
+    # DC-corrected oscillation amplitude of the periodic kernel
+    d = np.linspace(0, period, 1000, endpoint=False).reshape(-1, 1)
+    k = model.kernel.K(d, np.zeros((1, 1))).numpy().ravel()
+    amp_osc = amp - np.mean(k) #Remove the constant DC component
+
+    total_var_model = amp_osc + noise
+    noise_frac_model = float(noise / (total_var_model + 1e-9))
+    noise_frac_data = float(noise / (float(np.var(y)) + 1e-9))
+
+    mu_default, var = model.predict_f(grid)
+    mu_up, _ = model_up.predict_f(grid)
+    mu_down, _ = model_down.predict_f(grid)
+
+    mu = mu_default.numpy().ravel()
+    mu_u = mu_up.numpy().ravel()
+    mu_d = mu_down.numpy().ravel()
+    mu_sd = float(np.std(mu)) + 1e-12
+
+    shape_sensitivity = float(np.sqrt(np.mean((mu_u - mu_d) ** 2)) / mu_sd)
+
+    std = np.sqrt(var.numpy().ravel())
+    relative_std = float(np.mean(std) / mu_sd)
 
     qc = {
-        # Fitted parameters
-        "ls_fit":             ls_fit,
-        "amplitude":          amp,
-        "noise":              noise,
-
-        # QC checks
-        "noise_frac":         noise_frac,
-        "sensitivity_ratio_up":  sensitivity_ratio_up,
-        "sensitivity_ratio_down": sensitivity_ratio_down,
-        "prior_sensitive":    
-            sensitivity_ratio_up > 1.4 or 
-            sensitivity_ratio_up < 0.71 or 
-            sensitivity_ratio_down > 1.4 or 
-            sensitivity_ratio_down < 0.71,
+        "ls_fit": ls_fit,
+        "amplitude": float(amp_osc),  # DC-corrected oscillation variance
+        "noise": noise,
+        "noise_frac_model": noise_frac_model,
+        "noise_frac_data": noise_frac_data,
+        "ls_sensitivity_ratio": ls_sensitivity_ratio,
+        "shape_sensitivity": shape_sensitivity,
+        "relative_std": relative_std,
+        "mu": mu.astype(np.float32),
+        "std": std.astype(np.float32),
     }
-
     return model, qc
 
 
 def sample_waveforms_gpflow(model, period, n_samples=20, n_grid=256, seed=123):
-
     grid = np.linspace(0, period, n_grid, endpoint=False).reshape(-1, 1)
 
     mu, cov = model.predict_f(grid, full_cov=True)
-    mu  = mu.numpy().ravel()
+    mu = mu.numpy().ravel()
     cov = cov.numpy().squeeze()
 
-    # predict_f doesn't include noise (predict_y does)
-    
-    cov += np.eye(n_grid) * 1e-9 # A diagnal of small values to avoid accidental negatives due to floating point error; diagnal is covariance of point with itself (i.e. vairance)
+    # predict_f excludes observation noise (predict_y includes it)
+    cov = cov + np.eye(n_grid) * 1e-9
     rng = np.random.default_rng(seed)
     samples = rng.multivariate_normal(mu, cov, size=n_samples)
 

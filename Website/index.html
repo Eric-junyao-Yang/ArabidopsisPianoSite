@@ -223,13 +223,18 @@
                 Results before and after trimming were checked using <a href = "https://github.com/MultiQC/MultiQC">Multiqc</a>. 
                 Fragments were mapped to TAIR10 transcriptome and transcripts were counted using <a href = "https://salmon.readthedocs.io/en/latest/index.html">salmon</a> using the genome as decoy. 
                 DESeq2 was used to normalize the samples after using tximport to summarize transcript level data.
+                DESeq2 accounts for: difference in sequencing depth and RNA composition
                 Genes with less than 5 average DESeq2 normalized counts across all samples were dropped.
-                log10 of mean TPM were kept for downstream between gene comparisons.
+                log10 of mean TPM on DESeq2 normalized counts were kept for downstream between gene comparisons.
+                TPM accounts for: difference in gene lengths
+                VST transformation was performed and the output was used for analysis of the biological signal: UMAP, LombScargle and Gaussian Process modeling.
+                VST accounts for: heteroskedasticity
+                Normalized counts (without VST) is used for sound wave generation: FFT analysis and as input waveform for the synth.
             </p>
             <h3>UMAPs</h3>
             <h4>Counts</h4>
             <p>
-                Normalized counts were converted to log scale with log1p and each gene is z-score normalized across the 16 timepoints 
+                VST data for each gene is z-score normalized across the 16 timepoints 
                 before running UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "cosine". Distance between points is effectively 1 - Pearson correlation.
             </p>
             <h4>FFT</h4>
@@ -244,8 +249,8 @@
             </p>
             <h3>Oscillating Gene Detection</h3>
             <p>
-                Lomb Scargle algorithm from astropy was used to detect inherit rythums of all genes with minimum_frequency = 1/32; maximum_frequency = 1/6;
-                 samples_per_peak = 30. 
+                Lomb Scargle algorithm from astropy was used to detect inherit rythums using VST from all genes with a search grid of
+                 minimum_frequency = 1/32; maximum_frequency = 1/6; samples_per_peak = 30. 
                 Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, the resulting q-value is threshold to 0.2 for data export.
                 Uncertanties in the detected period is determined using boot strapping. Assuming the uncertanties in detection is due to noise in the data, 
                 the residual for each data point is randomly shuffled with replacement among all data points for a gene. The process is repeated 500 times,
@@ -253,15 +258,22 @@
             </p>
             <h3>Gaussian Process Modeling</h3>
             <p>
-                To capture a sense of confidence, the Gaussian Process was used to model the oscillating genes.
-                gpflow was used to fit the GP model with a fixed period from Lomb Scargle and a Periodic SquaredExponential base kernel. Variance is set to the square of std, and mean is set to the mean of all measurements for the gene.
-                Length scale of 6 was used as the default but additional fitting was done on length scales of 3 and 12 to see how much the fitted length scale changes. This shift is recorded as "sensitivity_ratio" which captures the robustness of the length scale from initial.
+                To capture a sense of confidence of the predicted waveform, the Gaussian Process was used to model the oscillating genes from VST data.
+                Gpflow was used to fit the GP model with a fixed period from Lomb Scargle and a Periodic SquaredExponential base kernel. 
+                After fitting multiple low qval genes with different starting length scales without a prior, length scale was found to be around 0.4 ~ 0.5.
+                0.4 was chosen to be the inital length scale and prior.
+                Variance is set to the square of std, and mean is set to the mean of all measurements for the gene.
+                
+                Multiple QC metrics are derived but as they mostly correlate well with a spearman correlction of 0.7~0.8, only the relative std is kept as a 
+                metric for fit quality.
             </p>
         </div>
         <div>
             <h3>Limitations</h3>
             <p>Limits associated with only 16 points (to do)</p>
             <p>Assumes gene expression loops around after 48 hours (indefinitely)</p>
+            <p>Bootstrapping method for confidence interval of period detection assumes the underlying model is sinusoidal and the residuals are independent of each other.</p>
+            <p>Uncertanties in period estimation isn't reflected in the Gaussian Process modeling.</p>
         </div>
     </div>
 
