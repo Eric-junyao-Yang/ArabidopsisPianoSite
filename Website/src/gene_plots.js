@@ -1,11 +1,10 @@
-import {interpolate_waveform} from "/src/catmullrom.js"
+import { interpolate_waveform, ldTimepoints } from "/src/catmullrom.js"
 
 export function plotGene(g, gene_dats, gene_names, opts = {
-    width: 800, //650
+    width: 800,
     height: 300,
     margin: { top: 20, right: 200, bottom: 40, left: 50 },
-}){
-    
+}) {
     const gene_dat_norms = gene_dats.map(extractDatAndNorm)
     const width = opts.width
     const height = opts.height
@@ -136,17 +135,12 @@ export function plotGene(g, gene_dats, gene_names, opts = {
 }
 
 
-function extractDatAndNorm(dat){
-    const raw_dat = dat
-    const yVals = Object.keys(raw_dat)
-        .filter(k => k.startsWith('LD_ZT'))
-        .map(k => raw_dat[k])
-    const mu = d3.mean(yVals)
-    const sd = d3.deviation(yVals)
-    const mean_center = yVals.map(x => (x / mu))
+function extractDatAndNorm(dat) {
+    const yVals = ldTimepoints(dat)
+    const mu = d3.mean(yVals) || 1
     return {
         raw_dat: yVals,
-        mean_cent: mean_center,
-        id: dat.id
+        mean_cent: yVals.map((x) => x / mu),
+        id: dat.GeneID,
     }
 }

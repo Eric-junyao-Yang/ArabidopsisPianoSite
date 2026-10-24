@@ -26,7 +26,8 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                 }
             }
             if (event.data.type === "keyUpUpdate") {
-                this.voices.get(event.data.freq).state = "release"
+                const voice = this.voices.get(event.data.freq)
+                if (voice) voice.state = "release"
             }
             if (event.data.type === "synthFreqShift") {
                 if (event.data.dir === "down"){
@@ -154,66 +155,62 @@ class StepSeqAudioProcessor extends AudioWorkletProcessor {
                 this.sweep = event.data.sweep
 
                 const base = this.BLOCK * this.geneIndex
-                for (let i=0; i<this.N_SAMPLES; i++){
+                for (let i = 0; i < this.N_SAMPLES; i++) {
                     this.audio_waves[i] = new Float32Array(
                         this.shared,
-                        (base + this.N_GRID*i) * 4, //bytesperfloat
+                        (base + this.N_GRID * i) * 4,
                         this.N_GRID
                     )
                 }
                 this.totalSamples = Math.floor(event.data.duration * sampleRate)
-                this.fadeInSamples = Math.floor(event.data.duration * 0.10 * sampleRate) //10% fade in out for testing
+                this.fadeInSamples = Math.floor(event.data.duration * 0.10 * sampleRate)
                 this.fadeOutSamples = Math.floor(event.data.duration * 0.10 * sampleRate)
-                this.fadeOutStart = this.totalSamples - this.fadeOutSamples // start fading out before end
+                this.fadeOutStart = this.totalSamples - this.fadeOutSamples
                 this.sampleCount = 0
+                this.phase = 0
                 this.active = true
             }
+        }
     }
-}
 
-    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
+    process(inputs, outputs) {
         if (!this.active) return true
 
         const output = outputs[0]
         const left = output[0]
-        const increment = this.freq * (this.N_GRID / sampleRate) 
+        const increment = this.freq * (this.N_GRID / sampleRate)
 
-        for (let i=0; i < left.length; i ++){
-            const table_index = Math.floor(this.phase) % this.N_GRID
-
-            //sweep
-            const frac_sample = this.sampleCount / this.totalSamples
-            const frame_pos = (this.N_SAMPLES - 1) * 0.5 * ( 1 - Math.cos(2*Math.PI*this.sweep*frac_sample))
+        for (let i = 0; i < left.length; i++) {
+            // Morph across posterior samples over the note duration
+            const frac_sample = this.sampleCount / Math.max(this.totalSamples, 1)
+            const frame_pos = (this.N_SAMPLES - 1) * 0.5 * (1 - Math.cos(2 * Math.PI * this.sweep * frac_sample))
             const f0 = Math.min(Math.floor(frame_pos), this.N_SAMPLES - 1)
-            const f1 = Math.min(f0+1, this.N_SAMPLES -1)
+            const f1 = Math.min(f0 + 1, this.N_SAMPLES - 1)
             const wfrac = frame_pos - f0
-            
+
             const sampleV0 = gatherCatmullrom(this.audio_waves[f0], this.phase, this.N_GRID)
             const sampleV1 = gatherCatmullrom(this.audio_waves[f1], this.phase, this.N_GRID)
-            let sample = sampleV0 * (1-wfrac) + sampleV1 * wfrac
+            let sample = sampleV0 * (1 - wfrac) + sampleV1 * wfrac
 
-            //fade mixing (currently sample is the sound to output)
-            if (this.sampleCount < this.fadeInSamples) {
+            if (this.fadeInSamples > 0 && this.sampleCount < this.fadeInSamples) {
                 sample *= this.sampleCount / this.fadeInSamples
-            }
-            else if (this.sampleCount >= this.fadeOutStart) {
+            } else if (this.fadeOutSamples > 0 && this.sampleCount >= this.fadeOutStart) {
                 sample *= (this.totalSamples - this.sampleCount) / this.fadeOutSamples
             }
 
-            for (let ch=0; ch < output.length; ch++){
+            for (let ch = 0; ch < output.length; ch++) {
                 output[ch][i] = sample
             }
             this.phase += increment
-            this.sampleCount ++
+            this.sampleCount++
 
-            //self termiantes
             if (this.sampleCount >= this.totalSamples) {
-                for (let ch=0; ch < output.length; ch++){
+                for (let ch = 0; ch < output.length; ch++) {
                     output[ch][i] = 0
                 }
                 this.active = false
-                this.port.postMessage({type: 'ended'})
-                break // instead of return false
+                this.port.postMessage({ type: "ended" })
+                break
             }
         }
         return true

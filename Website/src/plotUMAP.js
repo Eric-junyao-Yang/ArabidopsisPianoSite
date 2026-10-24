@@ -259,8 +259,8 @@ class ScatterGL {
         const data = this.data
         for (let i=0; i < data.length; i++){
             this.selectedArr[i] = (
-                data[i].log_mean_count >= low_val &&
-                data[i].log_mean_count <= high_val
+                data[i].log_TPM >= low_val &&
+                data[i].log_TPM <= high_val
             ) ? 1.0 : 0.0
         }
         const gl = this.gl
@@ -301,7 +301,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
 
     //Set up svg (axis + titles etc) & mainCanvas (points)
 
-    const svg = d3.select('#' + div_name)
+    const svg = d3.select(`#${div_name}`)
         .append("svg")
         .attr('width', width)
         .attr('height', height)
@@ -314,7 +314,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
     const plotArea = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`)
 
-    const mainCanvas = d3.select("#" + div_name)
+    const mainCanvas = d3.select(`#${div_name}`)
         .append('canvas')
         .attr('width', physicalWidth)
         .attr('height', physicalHeight)
@@ -347,7 +347,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
         mainCtx.beginPath()
         for (let i=0; i< umap_arr.length; i++){
             const d = umap_arr[i]
-            if (d.log_mean_count < low_val || d.log_mean_count > high_val){
+            if (d.log_TPM < low_val || d.log_TPM > high_val){
                 mainCtx.moveTo(xSc(d.x) + 3, ySc(d.y))
                 mainCtx.arc(xSc(d.x), ySc(d.y), 3, 0, 2 * Math.PI)
             }
@@ -358,7 +358,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
         mainCtx.beginPath()
         for (let i=0; i< umap_arr.length; i++){
             const d = umap_arr[i]
-            if (d.log_mean_count >= low_val && d.log_mean_count <= high_val){
+            if (d.log_TPM >= low_val && d.log_TPM <= high_val){
                 mainCtx.moveTo(xSc(d.x) + 3, ySc(d.y))
                 mainCtx.arc(xSc(d.x), ySc(d.y), 3, 0, 2 * Math.PI)
             }
@@ -374,7 +374,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
         mainCtx.scale(dpr, dpr)
     }
 
-    const highlightCanvas = d3.select("#" + div_name)
+    const highlightCanvas = d3.select(`#${div_name}`)
         .append('canvas')
         .attr('width', innerWidth)
         .attr('height', innerHeight)
@@ -400,7 +400,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
     const HighlightPointSize = 6
 
     // Build a quick look up from GeneID -> Index
-    const GeneID_Lookup = new Map(umap_arr.map(r => [r.id, r]))
+    const GeneID_Lookup = new Map(umap_arr.map(r => [r.GeneID, r]))
     var GeneID_select_current = null
 
     function drawHighlight(xSc, ySc, GeneID_hover, GeneID_select) {

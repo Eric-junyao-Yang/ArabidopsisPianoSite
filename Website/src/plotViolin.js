@@ -28,7 +28,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr("y", + 35)
         .attr("text-anchor", "middle")
         .attr("font-size", "12px")
-        .text("log(average count over 48hrs)")
+        .text("log10(mean TPM)")
 
     const histogram = d3.histogram()
         .domain(yScale.domain())
@@ -86,7 +86,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
 
     // ----- Add Scrubber -----
     const [ymin, ymax] = yScale.domain()
-    let [low_val, high_val] = [ymin, ymax] // The all these vals are in log(mean_count)
+    let [low_val, high_val] = [ymin, ymax] // log10(mean TPM)
 
     // rectangle
     const scrubber_rect = plotArea.append('rect')

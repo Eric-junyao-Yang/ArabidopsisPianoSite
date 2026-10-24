@@ -1,10 +1,12 @@
+import { ldTimepoints } from "/src/catmullrom.js"
+
 // --------- Plot period vs phase ---------
 export function plotStepSeqMain(
     canvasWidth = 600, 
     canvasHeight = 400, 
     div_name = "#StepSequencer", 
-    period_phase_fap, 
-    period_phase_fap_lookup, 
+    osc_perGene_meta, 
+    osc_perGene_meta_lookup, 
     metaValues, 
     bus){
     const margin = {"top": 30, "right": 30, "bottom": 40,"left": 100, }
@@ -22,7 +24,7 @@ export function plotStepSeqMain(
         .nice()
 
     const yScale = d3.scaleLinear()
-        .domain(d3.extent(period_phase_fap, d => d.period))
+        .domain(d3.extent(osc_perGene_meta, d => d.period))
         .range([0, innerHeight])
         .nice()
 
@@ -34,7 +36,7 @@ export function plotStepSeqMain(
     const svg = container_div.append('svg')
         .attr('width', canvasWidth)
         .attr('height', canvasHeight)
-        .style('positon', 'absolute')
+        .style('position', 'absolute')
         .style('pointer-events', 'none')
 
     const plotArea = svg.append('g')
@@ -70,8 +72,8 @@ export function plotStepSeqMain(
 
         CanvasCtx.fillStyle = "steelblue"
         CanvasCtx.beginPath()
-        for (let i=0; i<period_phase_fap.length; i++){
-            const d = period_phase_fap[i]
+        for (let i=0; i<osc_perGene_meta.length; i++){
+            const d = osc_perGene_meta[i]
             CanvasCtx.moveTo(xSc(d.phase) + radius, ySc(d.period))
             CanvasCtx.arc(xSc(d.phase), ySc(d.period), radius, 0, 2*Math.PI)
         }
@@ -95,7 +97,7 @@ export function plotStepSeqMain(
             const min_phase = drag_point.phase % drag_point.period
             let cur_phase = min_phase
             while (cur_phase < 24) {
-                cur_phase == closest_point_to_drag? HightlightCanvasCtx.fillStyle = "blue" : HightlightCanvasCtx.fillStyle = "red"
+                HightlightCanvasCtx.fillStyle = cur_phase === closest_point_to_drag ? "blue" : "red"
                 HightlightCanvasCtx.beginPath()
                 HightlightCanvasCtx.moveTo(xSc(cur_phase) + selected_radius, ySc(current_hover.period))
                 HightlightCanvasCtx.arc(xSc(cur_phase), ySc(current_hover.period), selected_radius, 0, 2*Math.PI)
@@ -286,16 +288,25 @@ export function plotStepSeqMain(
     const period_to_freq_scaled = 440 / (1/24) // mapping 24 hours to 440Hz
 
     // ---------- Check if selected gene should be triggered ---------
-    function checkSelectedGenes(tm1, t0){
-        current_selection.forEach(item => {
+    function checkSelectedGenes(tm1, t0) {
+        // Scrubber wraps at 24 h: when tm1 > t0 the window crossed midnight
+        current_selection.forEach((item) => {
             const xpos = item.phase
-            if (xpos > tm1 && xpos < t0){
-                const cur_GeneID = item.GeneID
-                const cur_Index = period_phase_fap_lookup.get(cur_GeneID).index
-                const cur_freq = 1/period_phase_fap_lookup.get(cur_GeneID).period * period_to_freq_scaled
-                const cur_sweep = period_phase_fap_lookup.get(cur_GeneID).sweep_frequency
-                bus.execute_event("playNote", [metaValues, cur_GeneID, cur_Index, cur_freq, cur_sweep])
-            }
+            const crossed = tm1 <= t0
+                ? (xpos > tm1 && xpos <= t0)
+                : (xpos > tm1 || xpos <= t0)
+            if (!crossed) return
+
+            const meta = osc_perGene_meta_lookup.get(item.GeneID)
+            if (!meta) return
+            const cur_freq = (1 / meta.period) * period_to_freq_scaled
+            bus.execute_event("playNote", [
+                metaValues,
+                item.GeneID,
+                meta.index,
+                cur_freq,
+                meta.sweep_frequency,
+            ])
         })
     }
 
@@ -371,7 +382,7 @@ export function plotStepSeqMain(
         quadtree = d3.quadtree()
             .x(d => xSc(d.phase))
             .y(d => ySc(d.period))
-            .addAll(period_phase_fap)
+            .addAll(osc_perGene_meta)
     }
 
     rebuildQuadtree(xScale, yScale)
@@ -476,10 +487,10 @@ export function plotStepSeqMain(
     })
 
     canvas.on('pointerup', (event) => {
-        if (drag_point && drag_point.phase != closest_point_to_drag){
+        if (drag_point && closest_point_to_drag != null && drag_point.phase !== closest_point_to_drag) {
             drag_point.phase = closest_point_to_drag
-            rebuildQuadtree(xScale, yScale)
-            drawPoints(CanvasCtx, currentXScale, currentYScale, RADIUS_NORMAL) //update all points
+            rebuildQuadtree(currentXScale, currentYScale)
+            drawPoints(CanvasCtx, currentXScale, currentYScale, RADIUS_NORMAL)
         }
         if (clicked_point && !dragging){
             updatePoints(clicked_point)
@@ -569,18 +580,17 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
         .attr("y", -30)
         .attr("text-anchor", "middle")
         .attr("font-size", "12px")
-        .text("read counts")
+        .text("VST expression")
     
     const titleText = plotArea.append("text")
         .attr("transform", `translate(${innerWidth/2},-10)`)
         .attr("text-anchor", "middle")
         .attr("font-size", "23px")
 
-    // Future groups allowed to be plotted
-    const confIntGroup   = plotArea.append("g").attr("class", "conf-int-group")
-    const samplesGroup   = plotArea.append("g").attr("class", "samples-group")
-    const muGroup        = plotArea.append("g").attr("class", "mu-group")
-    const countDotsGroup = plotArea.append("g").attr("class", "count-dots-group")
+    const confIntGroup = plotArea.append("g").attr("class", "conf-int-group")
+    const samplesGroup = plotArea.append("g").attr("class", "samples-group")
+    const muGroup = plotArea.append("g").attr("class", "mu-group")
+    const vstDotsGroup = plotArea.append("g").attr("class", "vst-dots-group")
 
     // default display
     function renderEmpty(){
@@ -593,101 +603,95 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
         confIntGroup.selectAll("*").remove()
         samplesGroup.selectAll("*").remove()
         muGroup.selectAll("*").remove()
-        countDotsGroup.selectAll("*").remove()
+        vstDotsGroup.selectAll("*").remove()
     }
 
-    function updatePlot({metaValues, period_phase_fap, shared, cur_mu:mu, cur_std:std, meta_item, count_dat}){
+    function updatePlot({ metaValues, shared, cur_mu: mu, cur_std: std, meta_item, VST_dat }) {
+        if (!meta_item || !mu || !std || !VST_dat) return
+
         const base = meta_item.index * metaValues.BLOCK
         const period = meta_item.period
+        // Inverse of peak-norm in load_waveforms (midrange center + half-range scale)
         const center = (meta_item.wave_max + meta_item.wave_min) / 2
         const scale = (meta_item.wave_max - meta_item.wave_min) / 2 || 1.0
 
-        const sample_wavs = Array.from({length: metaValues.N_SAMPLES}, (_, i) => {
-            return new Float32Array(
-                shared,
-                (base + metaValues.N_GRID*i) * 4,
-                metaValues.N_GRID
-            )
-        })
+        const sample_wavs = Array.from({ length: metaValues.N_SAMPLES }, (_, i) =>
+            new Float32Array(shared, (base + metaValues.N_GRID * i) * 4, metaValues.N_GRID)
+        )
 
-        // find true min max
-        const allVals = [...mu, ...std, meta_item.wave_max, meta_item.wave_min]
-        const plot_min = d3.min(allVals)
-        const plot_max = d3.max(allVals)
+        const bandLo = mu.map((m, i) => m - 2 * std[i])
+        const bandHi = mu.map((m, i) => m + 2 * std[i])
+        const plot_min = d3.min([...bandLo, meta_item.wave_min])
+        const plot_max = d3.max([...bandHi, meta_item.wave_max])
 
-        // update axis
         xScale.domain([0, period]).nice()
         yScale.domain([plot_min, plot_max]).nice()
         xAxisG.transition().duration(300).call(d3.axisBottom(xScale))
         yAxisG.transition().duration(300).call(d3.axisLeft(yScale))
         titleText.text(meta_item.GeneID)
 
-        // set up confidence internval
-        const mu_std_dat = Array.from({length:metaValues.N_GRID}, (val, idx) => ({
-            x: idx * period / metaValues.N_GRID,
+        const mu_std_dat = Array.from({ length: metaValues.N_GRID }, (_, idx) => ({
+            x: (idx * period) / metaValues.N_GRID,
             mu: mu[idx],
             std: std[idx],
         }))
 
         const area = d3.area()
-            .x(d => xScale(d.x))
-            .y0(d => yScale(d.mu + 2*d.std))
-            .y1(d => yScale(d.mu - 2*d.std))
-        
-        confIntGroup.selectAll('path')
+            .x((d) => xScale(d.x))
+            .y0((d) => yScale(d.mu + 2 * d.std))
+            .y1((d) => yScale(d.mu - 2 * d.std))
+
+        confIntGroup.selectAll("path")
             .data([mu_std_dat])
             .join("path")
-            .attr('fill', 'steelblue')
-            .attr('opacity', 0.1)
-            .attr('stroke', 'none')
-            .attr('d', d => area(d))
+            .attr("fill", "steelblue")
+            .attr("opacity", 0.1)
+            .attr("stroke", "none")
+            .attr("d", (d) => area(d))
 
-        // sample and mu lines
-        const line_sample_wavs = d3.line() //require scaling
-            .x((_, i)=> xScale(i * period / metaValues.N_GRID))
-            .y((d, _)=> yScale(d * scale + center))
+        const line_sample_wavs = d3.line()
+            .x((_, i) => xScale((i * period) / metaValues.N_GRID))
+            .y((d) => yScale(d * scale + center))
 
-        const colors = d3.schemeTableau10       
-        samplesGroup.selectAll('path')
+        const colors = d3.schemeTableau10
+        samplesGroup.selectAll("path")
             .data(sample_wavs)
             .join("path")
             .attr("fill", "none")
-            .attr("stroke", (d, i) => colors [i % 10])
+            .attr("stroke", (_, i) => colors[i % 10])
             .attr("stroke-width", 3)
-            .attr('opacity', 0.4)
-            .attr("d", dat => line_sample_wavs(dat))
+            .attr("opacity", 0.4)
+            .attr("d", (dat) => line_sample_wavs(dat))
 
-        const line_mu_wav = d3.line() // no scaling
-            .x((d, i)=> xScale(i * period / metaValues.N_GRID))
-            .y(d => yScale(d))
-        
-        muGroup.selectAll('path')
+        const line_mu_wav = d3.line()
+            .x((_, i) => xScale((i * period) / metaValues.N_GRID))
+            .y((d) => yScale(d))
+
+        muGroup.selectAll("path")
             .data([mu])
             .join("path")
             .attr("fill", "none")
             .attr("stroke", "red")
             .attr("stroke-width", 3)
-            .attr('opacity', 0.6)
-            .attr("d", d=>line_mu_wav(d))
+            .attr("opacity", 0.6)
+            .attr("d", (d) => line_mu_wav(d))
 
-        // plot count data on top of waves
-        const count_y = Object.keys(count_dat)
-            .filter(k => k.startsWith("LD_"))
-            .map(k => count_dat[k])
-            
-        const count_arr = Array.from({length:16}, (_,i) => ({
-                x: ((i+1) * 3 -1) % period,
-                y: count_y[i]
+        // 16 VST observations, phase-folded onto [0, period)
+        const vst_y = ldTimepoints(VST_dat)
+
+        const vst_points = Array.from({ length: 16 }, (_, i) => ({
+            x: ((i + 1) * 3 - 1) % period,
+            y: vst_y[i],
         }))
 
-        countDotsGroup.selectAll("circle")
-            .data(count_arr)
+        vstDotsGroup.selectAll("circle")
+            .data(vst_points)
             .join("circle")
             .attr("r", 5)
             .attr("fill", "black")
             .attr("opacity", 0.6)
-            .attr("cx", d=> xScale(d.x))
-            .attr("cy", d=> yScale(d.y))
+            .attr("cx", (d) => xScale(d.x))
+            .attr("cy", (d) => yScale(d.y))
     }
 
     renderEmpty()

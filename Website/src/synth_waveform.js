@@ -1,4 +1,4 @@
-import { interpolate_waveform, maxAbsScaling } from "/src/catmullrom.js"
+import { interpolate_waveform, maxAbsScaling, ldTimepoints } from "/src/catmullrom.js"
 
 export class Synth_Waveform {
     constructor(canvas, bus, count_arr) { 
@@ -20,7 +20,7 @@ export class Synth_Waveform {
             this.bus_execute(this.points)
             this.draw()
         })
-        this.GeneID_Lookup = new Map(count_arr.map(r => [r.id, r]))
+        this.GeneID_Lookup = new Map(count_arr.map(r => [r.GeneID, r]))
 
         this.resizeCanvas()
         this.setupEvents()
@@ -105,17 +105,14 @@ export class Synth_Waveform {
         return input_array.map((v,i) => (v + 1) / 2)
     }
 
-    updatePointsWithGeneID(GeneID){
-        // load 16 data points
+    updatePointsWithGeneID(GeneID) {
         const cur_row = this.GeneID_Lookup.get(GeneID)
-        const cur_values = Object.values(cur_row).slice(0, 16)
-        // const norm_values = new Array(cur_values.length)
-        // cur_values.map((val, idx) => {
-        //     norm_values[idx] = (val + 1) / 2
-        // })
-        const interpolated_values = this.scaleToPlot(maxAbsScaling(interpolate_waveform(cur_values, 48)))
-
-        // For visual appeal, rotate everything right by 1 with wrap around
+        if (!cur_row) return
+        const cur_values = ldTimepoints(cur_row)
+        const interpolated_values = this.scaleToPlot(
+            maxAbsScaling(interpolate_waveform(cur_values, 48))
+        )
+        // Rotate right by 1 for visual alignment with the bar grid
         const n = interpolated_values.length
         this.points = interpolated_values.map((_, i) => interpolated_values[(i - 1 + n) % n])
     }
@@ -146,8 +143,10 @@ export class Synth_Waveform {
                     index >= this.n_bars
                 ) return
 
-                this.points[index] =
-                    (this.canvas.height - e.offsetY) / this.canvas.height
+                this.points[index] = Math.min(
+                    1,
+                    Math.max(0, (this.canvas.height - e.offsetY) / this.canvas.height)
+                )
 
                 this.bus_execute(this.points)
                 this.draw()
