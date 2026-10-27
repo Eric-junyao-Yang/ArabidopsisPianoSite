@@ -1,5 +1,5 @@
 export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 20, left: 50}, 
-    Arr, d3_select_div, bus, execute_event = ""){
+    Arr, d3_select_div, y_lab, bus, execute_event = ""){
 
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
@@ -17,18 +17,14 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .range([innerHeight, 0])
         .nice()
     
-    const xScale = d3.scaleBand()
-        .range([0, innerWidth])
-        .domain([""])
-    
     plotArea.append("g").call( d3.axisLeft(yScale) )
     plotArea.append("text")
         .attr("transform", "rotate(90)")
-        .attr("x", + innerHeight/2)
-        .attr("y", + 35)
+        .attr("x", innerHeight/2)
+        .attr("y", 40)
         .attr("text-anchor", "middle")
         .attr("font-size", "12px")
-        .text("log10(mean TPM)")
+        .text(y_lab)
 
     const histogram = d3.histogram()
         .domain(yScale.domain())
@@ -37,15 +33,16 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
     const bins = histogram(Arr)   
     const binScale = d3.scaleLinear()
         .domain([0, d3.max(bins, d => d.length)])
-        .range([0, xScale.bandwidth()])
+        .range([0, innerWidth])
 
     const curveDat = bins.map(d => ({
         y: yScale((d.x0 + d.x1)/2 ),
         x: binScale(d.length) 
     }))
 
-    const curve = d3.line()
-        .x(d => d.x)
+    const curve = d3.area()
+        .x0(0)
+        .x1(d => d.x)
         .y(d => d.y)
         .curve(d3.curveCatmullRom)
 
@@ -69,8 +66,9 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         return 0;
     }
 
+    const sortedArr = Arr.slice().sort((a, b) => a - b)
     function plotQuantile(quant){
-        const qval = quantile(Arr, quant)
+        const qval = quantile(sortedArr, quant)
         plotArea.append("line")
             .attr("stroke", "blue")
             .attr("stroke-width", 2)
@@ -86,7 +84,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
 
     // ----- Add Scrubber -----
     const [ymin, ymax] = yScale.domain()
-    let [low_val, high_val] = [ymin, ymax] // log10(mean TPM)
+    let [low_val, high_val] = [ymin, ymax]
 
     // rectangle
     const scrubber_rect = plotArea.append('rect')
@@ -98,7 +96,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('fill', 'orange')
         .attr('opacity', 0.3)
         .attr('rx', 5)
-        .on("dblclick", function(event){
+        .on("dblclick", () => {
             [low_val, high_val] = [ymin, ymax]
             updateScrubber(true)
         })
@@ -141,23 +139,9 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('pointer-events', 'none')
 
     // scrubbing
-
-    let current_filtered_gene_list = new Array()
-
-    function areArraySame(a, b) {
-        if (a.length !== b.length) return false
-        const setA = new Set(a.map(x => x.id))
-        const setB = new Set(b.map(x => x.id))
-        if (setA.size !== setB.size) return false
-        for (const id of setA) if (!setB.has(id)) return false
-        return true
-    }
-
     function updateScrubber(animate = false){
-        const duration = animate ? 400 : 0
-
         const applyTransition = (selection) => 
-            animate ? selection.transition().duration(duration).ease(d3.easeCubicOut) 
+            animate ? selection.transition().duration(400).ease(d3.easeCubicOut) 
                     : selection
 
         applyTransition(scrubber_handle_top)
@@ -172,10 +156,12 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
             .attr("y", yScale(high_val))
             .attr("height", yScale(low_val) - yScale(high_val))
 
-        bus.execute_event(execute_event, [high_val, low_val])
+        if (execute_event) {
+            bus.execute_event(execute_event, [high_val, low_val])
+        }
     }
 
-    const dragTop = d3.drag().on("drag", (event) => {
+    scrubber_handle_top.call(d3.drag().on("drag", (event) => {
         high_val = Math.min(
             ymax, Math.max(
                 low_val,
@@ -183,9 +169,9 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
             )
         )
         updateScrubber()
-    })
+    }))
 
-    const dragBot = d3.drag().on("drag", (event) => {
+    scrubber_handle_bot.call(d3.drag().on("drag", (event) => {
         low_val = Math.max(
             ymin, Math.min(
                 high_val,
@@ -193,13 +179,13 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
             )
         )
         updateScrubber()
-    })
+    }))
 
-    const dragRect = d3.drag().on("drag", (event) => {
+    scrubber_rect.call(d3.drag().on("drag", (event) => {
         const window_height = high_val - low_val
         high_val = Math.min(
             ymax, Math.max(
-                ymin + (high_val - low_val),
+                ymin + window_height,
                 high_val - (ymax - yScale.invert(event.dy))
             )
         )
@@ -212,25 +198,17 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         }
         
         updateScrubber()
-    })
-    scrubber_handle_top.call(dragTop)
-    scrubber_handle_bot.call(dragBot)
-    scrubber_rect.call(dragRect)
+    }))
 }
 
+/** Assumes arr is already sorted ascending. */
 const quantile = (arr, q) => { //https://stackoverflow.com/questions/48719873/how-to-get-median-and-quartiles-percentiles-of-an-array-in-javascript-or-php
-    const asc = arr => arr.sort((a, b) => a - b);
-    // const new_arr = new Array(arr.length)
-    // arr.map((val, idx) => {
-    //     new_arr[idx] = val.log_mean_count
-    // })
-    const sorted = asc(arr);
-    const pos = (sorted.length - 1) * q;
+    const pos = (arr.length - 1) * q;
     const base = Math.floor(pos);
     const rest = pos - base;
-    if (sorted[base + 1] !== undefined) {
-        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    if (arr[base + 1] !== undefined) {
+        return arr[base] + rest * (arr[base + 1] - arr[base]);
     } else {
-        return sorted[base];
+        return arr[base];
     }
 }

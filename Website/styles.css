@@ -80,7 +80,7 @@ body {
 
 #StepSequencerContainer {
     display: grid;
-    grid-template-columns: auto auto;
+    grid-template-columns: auto auto auto;
 }
 
 #Gene_Plots {
@@ -94,6 +94,12 @@ body {
 
 #SeqLeft {
     outline: 2px solid orange;
+}
+
+#SeqMid {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    outline: 2px solid pink;
 }
 
 #SeqRight {

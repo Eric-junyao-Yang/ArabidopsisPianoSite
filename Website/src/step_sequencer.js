@@ -66,19 +66,83 @@ export function plotStepSeqMain(
     const HightlightCanvasCtx = highlightCanvas.node().getContext('2d')
     HightlightCanvasCtx.scale(dpr,dpr)
 
-    function drawPoints(CanvasCtx, xSc, ySc, radius = RADIUS_NORMAL) {
-        //Clear canvas
-        CanvasCtx.clearRect(0, 0, innerWidth, innerHeight)
-
-        CanvasCtx.fillStyle = "steelblue"
-        CanvasCtx.beginPath()
-        for (let i=0; i<osc_perGene_meta.length; i++){
-            const d = osc_perGene_meta[i]
-            CanvasCtx.moveTo(xSc(d.phase) + radius, ySc(d.period))
-            CanvasCtx.arc(xSc(d.phase), ySc(d.period), radius, 0, 2*Math.PI)
-        }
-        CanvasCtx.fill()
+    // Filter ranges from the three violin scrubbers (inclusive). null = no constraint yet.
+    const filterRanges = {
+        log_TPM: null,
+        qval: null,
+        relative_std: null,
     }
+    let genes_passed_set = new Set(osc_perGene_meta.map((v) => v.GeneID))
+    let current_hover = null
+    let current_selection = new Set()
+    // Scales used by draw/zoom; set before any bus filter events can fire
+    let currentXScale = xScale
+    let currentYScale = yScale
+
+    function inRange(value, range) {
+        if (!range) return true
+        const [low, high] = range
+        return value >= low && value <= high
+    }
+
+    function applyFilters() {
+        const next = new Set()
+        for (let i = 0; i < osc_perGene_meta.length; i++) {
+            const d = osc_perGene_meta[i]
+            if (
+                inRange(d.log_TPM, filterRanges.log_TPM) &&
+                inRange(d.qval, filterRanges.qval) &&
+                inRange(d.relative_std, filterRanges.relative_std)
+            ) {
+                next.add(d.GeneID)
+            }
+        }
+        genes_passed_set = next
+
+        let pruned = false
+        current_selection.forEach((item) => {
+            if (!genes_passed_set.has(item.GeneID)) {
+                current_selection.delete(item)
+                pruned = true
+            }
+        })
+        if (pruned) bus.execute_event("selection_modified", current_selection)
+
+        rebuildQuadtree(currentXScale, currentYScale)
+        drawPoints(CanvasCtx, currentXScale, currentYScale, RADIUS_NORMAL)
+        drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
+    }
+
+    function setFilterRange(key, high_val, low_val) {
+        filterRanges[key] = [low_val, high_val]
+        applyFilters()
+    }
+
+    function drawPoints(ctx, xSc, ySc, radius = RADIUS_NORMAL) {
+        ctx.clearRect(0, 0, innerWidth, innerHeight)
+
+        // Batch grey then blue (one fill each) — much faster than per-point fillStyle
+        ctx.fillStyle = "rgba(128,128,128,0.3)"
+        ctx.beginPath()
+        for (let i = 0; i < osc_perGene_meta.length; i++) {
+            const d = osc_perGene_meta[i]
+            if (genes_passed_set.has(d.GeneID)) continue
+            ctx.moveTo(xSc(d.phase) + radius, ySc(d.period))
+            ctx.arc(xSc(d.phase), ySc(d.period), radius, 0, 2 * Math.PI)
+        }
+        ctx.fill()
+
+        ctx.fillStyle = "steelblue"
+        ctx.beginPath()
+        for (let i = 0; i < osc_perGene_meta.length; i++) {
+            const d = osc_perGene_meta[i]
+            if (!genes_passed_set.has(d.GeneID)) continue
+            ctx.moveTo(xSc(d.phase) + radius, ySc(d.period))
+            ctx.arc(xSc(d.phase), ySc(d.period), radius, 0, 2 * Math.PI)
+        }
+        ctx.fill()
+    }
+
     drawPoints(CanvasCtx, xScale, yScale, RADIUS_NORMAL)
 
     function drawHighlight(HightlightCanvasCtx, xSc, ySc, hover_radius = RADIUS_HOVER, selected_radius = RADIUS_SELECT, show_all_phase = false) {
@@ -345,50 +409,47 @@ export function plotStepSeqMain(
 
     // Hover & selection control
     let quadtree = null
-    let current_hover = null
-    let current_selection = new Set()
 
-    // special selection logic that preferentially returns selected points
-    function findClosest(mx, my){
+    // Prefer selected points; ignore greyed-out (filtered) genes for new picks
+    function findClosest(mx, my) {
         let closest_selected = null
         let closest_selected_dist = Infinity
 
-        current_selection.forEach(d => {
+        current_selection.forEach((d) => {
             const dx = currentXScale(d.phase) - mx
             const dy = currentYScale(d.period) - my
-            const dist = Math.sqrt(dx*dx + dy*dy)
-            if (dist <= RADIUS_SELECT && dist < closest_selected_dist){
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist <= RADIUS_SELECT && dist < closest_selected_dist) {
                 closest_selected = d
                 closest_selected_dist = dist
             }
         })
 
         if (closest_selected) return closest_selected
-        return quadtree.find(mx, my , RADIUS_HOVER)
+
+        return quadtree.find(mx, my, RADIUS_HOVER)
     }
 
-    function updatePoints(item){
-        if (item){
-            if (current_selection.has(item)) {
-                bus.execute_event("selection_del", item)
-            } else {
-                bus.execute_event("selection_add", item)
-            }
+    function updatePoints(item) {
+        if (!item) return
+        if (current_selection.has(item)) {
+            bus.execute_event("selection_del", item)
+        } else if (genes_passed_set.has(item.GeneID)) {
+            bus.execute_event("selection_add", item)
         }
     }
 
 
     function rebuildQuadtree(xSc, ySc) {
+        // Only selectable (filter-passed) genes — avoids grey points blocking hit-tests
+        const passed = osc_perGene_meta.filter((d) => genes_passed_set.has(d.GeneID))
         quadtree = d3.quadtree()
-            .x(d => xSc(d.phase))
-            .y(d => ySc(d.period))
-            .addAll(osc_perGene_meta)
+            .x((d) => xSc(d.phase))
+            .y((d) => ySc(d.period))
+            .addAll(passed)
     }
 
     rebuildQuadtree(xScale, yScale)
-
-    let currentXScale = xScale
-    let currentYScale = yScale
 
     // Zoom control
     let rafId = null
@@ -526,6 +587,15 @@ export function plotStepSeqMain(
     bus.subscribe_to("resetSelection", "mainplot", () => {
         current_selection = new Set()
         bus.execute_event("selection_modified", current_selection)
+    })
+    bus.subscribe_to("StepSeqTPMUpdate", "mainplot", ([high_val, low_val]) => {
+        setFilterRange("log_TPM", high_val, low_val)
+    })
+    bus.subscribe_to("StepSeqqValUpdate", "mainplot", ([high_val, low_val]) => {
+        setFilterRange("qval", high_val, low_val)
+    })
+    bus.subscribe_to("StepSeqStdUpdate", "mainplot", ([high_val, low_val]) => {
+        setFilterRange("relative_std", high_val, low_val)
     })
 }
 

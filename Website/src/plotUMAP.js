@@ -386,11 +386,14 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
     
     let quadtree = null
     
+
+
     function rebuildQuadtree(xSc, ySc) {
+        const passed = umap_arr.filter((d) => d.log_TPM < internal_high_val && d.log_TPM > internal_low_val)
         quadtree = d3.quadtree()
             .x(d => xSc(d.x))
             .y(d => ySc(d.y))
-            .addAll(umap_arr)
+            .addAll(passed)
     }
 
     
@@ -428,7 +431,7 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
     }
 
     if (!scatter.isSupported){drawPointsCanvas(mainCtx, xScale, yScale)}
-    //TODO
+
     rebuildQuadtree(xScale, yScale)
 
     const xAxis = plotArea.append('g')
@@ -590,13 +593,19 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
         if (displayGeneID) hoverLabel.text(GeneID ?? '')
     })
 
-    bus.subscribe_to("gene_filtering", div_name, ([high_val, low_val]) => {
+    bus.subscribe_to("synth_TPM_filter", div_name, ([high_val, low_val]) => {
         if (!scatter.isSupported) {
             drawPointsCanvas(mainCtx, currentXScale, currentYScale, high_val, low_val)
             internal_high_val = high_val
             internal_low_val = low_val
+            rebuildQuadtree(currentXScale, currentYScale)
         }
-        else {scatter.updateSelected(low_val, high_val)}
+        else {
+            scatter.updateSelected(low_val, high_val)
+            internal_high_val = high_val
+            internal_low_val = low_val
+            rebuildQuadtree(currentXScale, currentYScale)
+        }
     })
 
     bus.subscribe_to("point_select", div_name, (GeneID) => {

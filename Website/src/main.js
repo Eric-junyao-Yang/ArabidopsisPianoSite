@@ -21,7 +21,7 @@ const bus = {
     },
 }
 
-// ---- load data ----
+// --------------------------------------- load data ---------------------------------------
 // UMAP bins are x/y only (same gene order as Normalized_counts / VST).
 const count_arr = await bin_to_array("/dat/Normalized_counts.bin", "/dat/bin_meta.json")
 const VST_arr = await bin_to_array("/dat/VST.bin", "/dat/bin_meta.json")
@@ -53,7 +53,7 @@ const [metaValues, osc_perGene_meta, shared, osc_perGene_mu, osc_perGene_std] =
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 
-// ---- Synth waveform ----
+// --------------------------------------- Synth waveform ---------------------------------------
 const synth_waveform_canvas = document.getElementById("Synth_Waveform")
 const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, count_arr)
 
@@ -82,7 +82,7 @@ document.getElementById("SeqReset").addEventListener("click", () => {
     bus.execute_event("resetSelection", null)
 })
 
-// ---- Audio ----
+// --------------------------------------- Audio ---------------------------------------
 let SynthContext = null
 let synth_node = null
 async function start() {
@@ -136,7 +136,7 @@ async function initSynthSlidesAudio() {
     synthSlideDestinationConnection = true
 }
 
-// --------- existing sounds needs to be scaled as new sounds join --------
+// existing sounds needs to be scaled as new sounds join
 function rescaleGains() {
     const n = activeVoices.size
     const g = n > 1 ? 1 / Math.sqrt(n) : 0.8
@@ -145,7 +145,7 @@ function rescaleGains() {
     })
 }
 
-// --------- Spawn voices -----------
+// --------------------------------------- Spawn voices ---------------------------------------
 function createVoice(metaValues, sharedBuffer) {
     const node = new AudioWorkletNode(stepSeqAudioContext, "stepseq-audio-processor", {
         processorOptions: { metaValues, shared: sharedBuffer },
@@ -184,7 +184,6 @@ for (let i = 0; i < osc_perGene_meta.length; i++) {
 
 const osc_perGene_meta_lookup = new Map(osc_perGene_meta.map((v) => [v.GeneID, v]))
 
-// --------- gene selection display ---------
 export function renderSelectionPanel(selected_genes) {
     const panel = document.getElementById("SeqRightSelectedGeneDisplay")
     panel.innerHTML = ""
@@ -215,27 +214,39 @@ export function renderSelectionPanel(selected_genes) {
     }
 }
 
-// ---- Plots ----
+// --------------------------------------- Plots ---------------------------------------
 plotUMAP(600, 500, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
 plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
 
-const synth_violin = d3.select("#filter_slider")
 plotViolin(
-    130,
-    500,
-    { top: 20, right: 20, bottom: 20, left: 50 },
+    130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
     count_arr.map((v) => v.log_TPM),
-    synth_violin,
-    bus,
-    "gene_filtering"
+    d3.select("#filter_slider"), "log10(mean TPM)", bus, "synth_TPM_filter"
 )
 
 plotStepSeqMain(1200, 800, "#SeqLeft", osc_perGene_meta, osc_perGene_meta_lookup, metaValues, bus)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
+const violinOpts = { top: 20, right: 20, bottom: 20, left: 50 }
+plotViolin(
+    130, 500, violinOpts,
+    osc_perGene_meta.map((v) => v.log_TPM),
+    d3.select("#violin-TPM"), "log10(mean TPM)", bus, "StepSeqTPMUpdate"
+)
+plotViolin(
+    130, 500, violinOpts,
+    osc_perGene_meta.map((v) => v.qval),
+    d3.select("#violin-qVal"), "q-value", bus, "StepSeqqValUpdate"
+)
+plotViolin(
+    130, 500, violinOpts,
+    osc_perGene_meta.map((v) => v.relative_std),
+    d3.select("#violin-Std"), "relative std", bus, "StepSeqStdUpdate"
+)
+
 setupHelpPopUps(document, window)
 
-// ---- Slides ----
+// --------------------------------------- Slides ---------------------------------------
 const synthSlides_div = document.getElementById("SynthSlides")
 const synthSlides_leftBtn = document.getElementById("SynthSlides-left-btn")
 const synthSlides_rightBtn = document.getElementById("SynthSlides-right-btn")
@@ -259,7 +270,7 @@ if (TOC1 && PP2AA3) {
     plotGene(introSvg, [PP2AA3, TOC1], ["PP2AA3", "TOC1"])
 }
 
-// ---- Bus subscriptions ----
+// --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("synth_waveform_changed", "main", (points) => {
     if (synth_node) {
         synth_node.port.postMessage({ type: "updatePoints", points })
@@ -324,4 +335,4 @@ bus.subscribe_to("stopSlideSound", "main", () => {
 
 
 
-// TODO: make grey dots none interactive; Play Sample becomes playing a midi ; add keyboard piano ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling; May allow mapping of volume to log expression
+// TODO: Play Sample becomes playing a midi ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling; May allow mapping of volume to log expression
