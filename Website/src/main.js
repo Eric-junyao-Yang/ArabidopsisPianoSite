@@ -8,7 +8,7 @@ import { synthSlides } from "/src/synthSlides.js"
 import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
-
+import { searchbar } from "/src/searchbar.js"
 // ---- add a bus for communication between modules ----
 const bus = {
     _listeners: {},
@@ -269,6 +269,25 @@ const PP2AA3 = normalized_counts_lookup.get("AT1G13320")
 if (TOC1 && PP2AA3) {
     plotGene(introSvg, [PP2AA3, TOC1], ["PP2AA3", "TOC1"])
 }
+
+// --------------------------------------- Search Bars ---------------------------------------
+searchbar(
+    document.querySelector("#search"),
+    document.querySelector("#results"),
+    osc_perGene_meta,
+    (item) => {
+        bus.execute_event("selection_add", item)
+        bus.execute_event("gene_label_select", item)
+    }
+)
+searchbar(
+    document.querySelector("#synth-search"),
+    document.querySelector("#synth-results"),
+    count_arr,
+    (item) => {
+        bus.execute_event("point_select", item.GeneID)
+    }
+)
 
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("synth_waveform_changed", "main", (points) => {

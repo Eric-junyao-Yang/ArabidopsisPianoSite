@@ -869,6 +869,7 @@ export function plotStepSeqMain(
         clearPointConfidence()
         rebuildQuadtree(currentXScale, currentYScale)
         drawConfInt(current_display_gene)
+        drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     }
 
     //bus subscription
@@ -881,7 +882,8 @@ export function plotStepSeqMain(
     })
     bus.subscribe_to("selection_del", "mainplot", (item) => {
         current_selection.delete(item)
-        bus.execute_event("selection_modified", current_selection)        
+        bus.execute_event("selection_modified", current_selection)       
+        updateCurrentDisplayGene(null) 
     })
     bus.subscribe_to("selection_modified", "mainplot", () => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)

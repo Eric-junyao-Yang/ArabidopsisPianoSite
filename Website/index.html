@@ -82,6 +82,19 @@
                     <button id="triangle"> triangle </button>
                     <button id="activate"> activate </button>
                 </div>
+                <div id="Synth_Searchbar" class="gene-search">
+                    <label class="gene-search-label" for="synth-search">Find gene</label>
+                    <div class="gene-search-field">
+                        <input
+                            id="synth-search"
+                            type="search"
+                            placeholder="e.g. AT5G61380"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <ul id="synth-results" class="gene-search-results" hidden></ul>
+                    </div>
+                </div>
                 <canvas id="Synth_Waveform" width="1000" height="200"></canvas>
 
                 
@@ -114,6 +127,7 @@
                      corresponding point of the same gene in the other UMAP. 
                      Double click to reset."></div>
             </div>
+            <div id="midi"></div>
         </div>
 
         <div id="SequencerDiv">
@@ -196,7 +210,19 @@
                             <button id="SeqStop">Stop</button>
                             <button id="SeqReset">Reset</button>
                         </div>
-                        <div id="SeqRightSearchBar"></div>
+                        <div id="SeqRightSearchBar" class="gene-search">
+                            <label class="gene-search-label" for="search">Type to search:</label>
+                            <div class="gene-search-field">
+                                <input
+                                    id="search"
+                                    type="search"
+                                    placeholder="e.g. AT5G61380"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+                                <ul id="results" class="gene-search-results" hidden></ul>
+                            </div>
+                        </div>
                         <div id="SeqRightSelectedGeneDisplay"></div>
                         <div id="SeqRightPlot"></div>
                     </div>
