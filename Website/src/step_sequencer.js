@@ -19,12 +19,14 @@ export function plotStepSeqMain(
     const RADIUS_SELECT = 5
 
     const xScale = d3.scaleLinear()
-        .domain([0, 24])
+        .domain([0, d3.max(osc_perGene_meta, d=> d.phase)])
         .range([0 + PADDING, innerWidth - PADDING])
         .nice()
 
+    const total_y_extent = d3.extent(osc_perGene_meta.flatMap(d => [d.period_high95, d.period_low95]))
     const yScale = d3.scaleLinear()
-        .domain(d3.extent(osc_perGene_meta, d => d.period))
+        // .domain(d3.extent(osc_perGene_meta, d => d.period))
+        .domain([Math.floor(total_y_extent[0]), Math.ceil(total_y_extent[1])])
         .range([0, innerHeight])
         .nice()
 
@@ -61,10 +63,22 @@ export function plotStepSeqMain(
         .style('left', margin.left + 'px')
         .style('pointer-events', 'none')
 
-    const CanvasCtx = canvas.node().getContext('2d', { willReadFrequently: true })
-    CanvasCtx.scale(dpr,dpr)
+    const confIntCanvas = container_div.append('canvas')
+        .attr('width', innerWidth * dpr)
+        .attr('height', innerHeight * dpr)
+        .style('width', innerWidth + 'px')
+        .style('height', innerHeight + 'px')
+        .style('position', 'absolute')
+        .style('top', margin.top + 'px')
+        .style('left', margin.left + 'px')
+        .style('pointer-events', 'none')
+
+    const CanvasCtx = canvas.node().getContext('2d')
+    CanvasCtx.scale(dpr, dpr)
     const HightlightCanvasCtx = highlightCanvas.node().getContext('2d')
-    HightlightCanvasCtx.scale(dpr,dpr)
+    HightlightCanvasCtx.scale(dpr, dpr)
+    const confIntCanvasCtx = confIntCanvas.node().getContext('2d')
+    confIntCanvasCtx.scale(dpr, dpr)
 
     // Filter ranges from the three violin scrubbers (inclusive). null = no constraint yet.
     const filterRanges = {
@@ -75,7 +89,11 @@ export function plotStepSeqMain(
     let genes_passed_set = new Set(osc_perGene_meta.map((v) => v.GeneID))
     let current_hover = null
     let current_selection = new Set()
-    // Scales used by draw/zoom; set before any bus filter events can fire
+    let current_display_gene = null
+    let hovering_just_interval = null
+    let current_just_bands = null 
+    let selected_just_interval = null
+    let confidence_focus = false 
     let currentXScale = xScale
     let currentYScale = yScale
 
@@ -121,26 +139,58 @@ export function plotStepSeqMain(
     function drawPoints(ctx, xSc, ySc, radius = RADIUS_NORMAL) {
         ctx.clearRect(0, 0, innerWidth, innerHeight)
 
-        // Batch grey then blue (one fill each) — much faster than per-point fillStyle
+        // Filter-failed genes (always faint grey)
         ctx.fillStyle = "rgba(128,128,128,0.3)"
         ctx.beginPath()
         for (let i = 0; i < osc_perGene_meta.length; i++) {
             const d = osc_perGene_meta[i]
             if (genes_passed_set.has(d.GeneID)) continue
-            ctx.moveTo(xSc(d.phase) + radius, ySc(d.period))
-            ctx.arc(xSc(d.phase), ySc(d.period), radius, 0, 2 * Math.PI)
+            const x = xSc(d.phase)
+            const y = ySc(d.period)
+            ctx.moveTo(x + radius, y)
+            ctx.arc(x, y, radius, 0, 2 * Math.PI)
         }
         ctx.fill()
 
-        ctx.fillStyle = "steelblue"
-        ctx.beginPath()
+        if (!confidence_focus) {
+            // No interval hovered — single batched steelblue for passed genes
+            ctx.fillStyle = "steelblue"
+            ctx.beginPath()
+            for (let i = 0; i < osc_perGene_meta.length; i++) {
+                const d = osc_perGene_meta[i]
+                if (!genes_passed_set.has(d.GeneID)) continue
+                const x = xSc(d.phase)
+                const y = ySc(d.period)
+                ctx.moveTo(x + radius, y)
+                ctx.arc(x, y, radius, 0, 2 * Math.PI)
+            }
+            ctx.fill()
+            return
+        }
+
         for (let i = 0; i < osc_perGene_meta.length; i++) {
             const d = osc_perGene_meta[i]
             if (!genes_passed_set.has(d.GeneID)) continue
-            ctx.moveTo(xSc(d.phase) + radius, ySc(d.period))
-            ctx.arc(xSc(d.phase), ySc(d.period), radius, 0, 2 * Math.PI)
+            const o = d.conf_overlap || 0
+            const alpha = o > 0 ? 0.2 + 0.8 * o : 0.06
+            const x = xSc(d.phase)
+            const y = ySc(d.period)
+
+            if (o > 0) {
+                ctx.strokeStyle = `rgba(70, 130, 180, ${alpha})`
+                ctx.lineWidth = 1
+                ctx.beginPath()
+                ctx.moveTo(x, ySc(d.period_low95))
+                ctx.lineTo(x, ySc(d.period_high95))
+                ctx.stroke()
+            }
+
+            ctx.fillStyle = `rgba(70, 130, 180, ${alpha})`
+            ctx.beginPath()
+            ctx.moveTo(x + radius, y)
+            ctx.arc(x, y, radius, 0, 2 * Math.PI)
+            ctx.fill()
         }
-        ctx.fill()
     }
 
     drawPoints(CanvasCtx, xScale, yScale, RADIUS_NORMAL)
@@ -155,6 +205,13 @@ export function plotStepSeqMain(
                 HightlightCanvasCtx.arc(xSc(val.phase), ySc(val.period), selected_radius, 0, 2*Math.PI)
                 HightlightCanvasCtx.fill()
             })
+        }
+        if (current_display_gene){
+            HightlightCanvasCtx.fillStyle = "purple"
+            HightlightCanvasCtx.beginPath()
+            HightlightCanvasCtx.moveTo(xSc(current_display_gene.phase) + hover_radius, ySc(current_display_gene.period))
+            HightlightCanvasCtx.arc(xSc(current_display_gene.phase), ySc(current_display_gene.period), hover_radius * 1.5, 0, 2*Math.PI)
+            HightlightCanvasCtx.fill()
         }
         // mouse down + drag show possible phases
         if (show_all_phase && drag_point) {
@@ -176,7 +233,117 @@ export function plotStepSeqMain(
             HightlightCanvasCtx.moveTo(xSc(current_hover.phase) + hover_radius, ySc(current_hover.period))
             HightlightCanvasCtx.arc(xSc(current_hover.phase), ySc(current_hover.period), hover_radius, 0, 2*Math.PI)
             HightlightCanvasCtx.fill()
-        } else {return}
+        }
+    }
+
+    const just_tuning = {
+        "Unison" : 1/1,
+        "Octave": 2/1,
+        "Perfect Fifth" : 3/2,
+        "Perfect Fourth" : 4/3,
+        "Major Third" : 5/4,
+        "Minor Third" : 6/5,
+        "Major Sixth" : 5/3,
+    }
+
+    function justIntervalBands(item) {
+        const high = item.period_high95
+        const low = item.period_low95
+        const mid = item.period
+        const bands = []
+        for (const [name, ratio] of Object.entries(just_tuning)) {
+            bands.push({
+                id: name,
+                label: name,
+                low: low * ratio,
+                high: high * ratio,
+                mid: mid * ratio,
+            })
+            if (ratio !== 1) {
+                bands.push({
+                    id: name + "_inv",
+                    label: name + "⁻¹",
+                    low: low / ratio,
+                    high: high / ratio,
+                    mid: mid / ratio,
+                })
+            }
+        }
+        return bands
+    }
+
+    function drawConfInt(item, xSc = currentXScale, ySc = currentYScale){
+        confIntCanvasCtx.clearRect(0, 0, innerWidth, innerHeight)
+        if (!item || !current_just_bands) return
+
+        const [xDomMin, xDomMax] = xSc.domain()
+        const x0 = xSc(xDomMin)
+        const bandWidth = xSc(xDomMax) - x0
+
+        for (const band of current_just_bands) {
+            const yA = ySc(band.low)
+            const yB = ySc(band.high)
+            const y = Math.max(0, Math.min(yA, yB))
+            const yEnd = Math.min(innerHeight, Math.max(yA, yB))
+            const h = yEnd - y
+            if (h <= 0) continue
+
+            const active = band.id === hovering_just_interval
+            if (band.id === selected_just_interval){
+                confIntCanvasCtx.fillStyle = "rgba(200, 45, 18, 0.88)"
+            } else if (active){
+                confIntCanvasCtx.fillStyle = "rgba(255,99,71,0.3)"
+            } else {
+                confIntCanvasCtx.fillStyle = "rgba(255,99,71,0.05)"
+            }
+            confIntCanvasCtx.fillRect(x0, y, bandWidth, h)
+
+            if (active) {
+                confIntCanvasCtx.font = "20px Arial"
+                confIntCanvasCtx.fillStyle = "black"
+                confIntCanvasCtx.textAlign = "right"
+                confIntCanvasCtx.textBaseline = "middle"
+                const labelY = Math.max(12, Math.min(innerHeight - 4, ySc(band.mid)))
+                confIntCanvasCtx.fillText(band.label, x0 + bandWidth, labelY)
+            }
+        }
+    }
+
+    function intervalOverlap(aLow, aHigh, bLow, bHigh) {
+        const inter = Math.max(0, Math.min(aHigh, bHigh) - Math.max(aLow, bLow))
+        if (inter === 0) return 0
+        const den = Math.min(aHigh - aLow, bHigh - bLow)
+        return den > 0 ? inter / den : 0
+    }
+
+    function clearPointConfidence() {
+        confidence_focus = false
+        for (let i = 0; i < osc_perGene_meta.length; i++) {
+            osc_perGene_meta[i].conf_overlap = undefined
+        }
+        drawPoints(CanvasCtx, currentXScale, currentYScale)
+    }
+
+    function updatePointConfidence(interval_id) {
+        if (!current_display_gene || !interval_id || !current_just_bands) {
+            clearPointConfidence()
+            return
+        }
+        const band = current_just_bands.find((b) => b.id === interval_id)
+        if (!band) {
+            clearPointConfidence()
+            return
+        }
+
+        confidence_focus = true
+        for (let i = 0; i < osc_perGene_meta.length; i++) {
+            const d = osc_perGene_meta[i]
+            d.conf_overlap = intervalOverlap(
+                d.period_low95, d.period_high95,
+                band.low, band.high
+            )
+        }
+        drawPoints(CanvasCtx, currentXScale, currentYScale)
     }
 
     // ------------ draw piano ------------
@@ -188,13 +355,11 @@ export function plotStepSeqMain(
     ]
     
     const pitchTable = Array.from(pitchNames, (val, idx) => {
-        const pitchCenter = 220*Math.pow(Math.pow(2, 1/12), idx)
+        const pitchCenter = 220 * Math.pow(Math.pow(2, 1 / 12), idx)
         return {
-            ['pitchName'] : val,
-            ['pitchCenter'] : pitchCenter,
-            // ['topEdge'] : pitchCenter * Math.pow(2, 1/24),
-            // ['botEdge'] : pitchCenter / Math.pow(2, 1/24),
-            ['keyColor'] : val.includes("/")? "black":"white",
+            pitchName: val,
+            pitchCenter,
+            keyColor: val.includes("/") ? "black" : "white",
         }
     })
 
@@ -227,6 +392,9 @@ export function plotStepSeqMain(
 
     const WHITE_KEY_LENGTH = 30
     const BLACK_KEY_LENGTH = 20
+    const PITCH_SCALE = 10560 // 24hrs * 440 Hz
+    const whiteKeys = pitchTable.filter((d) => d.keyColor === "white")
+    const blackKeys = pitchTable.filter((d) => d.keyColor === "black")
     // set up clip-path
     svg.append('defs')
         .append('clipPath')
@@ -240,57 +408,53 @@ export function plotStepSeqMain(
         .attr('transform', `translate(${margin.left - WHITE_KEY_LENGTH}, ${margin.top})`)
         .attr('clip-path', 'url(#left-axis-clip)')
 
-    function drawPiano(pitchTable, ySc){
-
-        const whiteKeys = pitchTable.filter(d => d.keyColor === 'white')
-        const blackKeys = pitchTable.filter(d => d.keyColor === 'black')
-
+    function drawPiano(ySc){
         leftAxisandKeys.selectAll('.white-key')
-            .data(whiteKeys, d=> d.pitchName)
+            .data(whiteKeys, (d) => d.pitchName)
             .join('rect')
             .attr('class', 'white-key')
             .attr("x", 0)
-            .attr("y", d => ySc(10560/d.topEdge)) //10560 = 24hrs * 440 Hz scaling factor
+            .attr("y", (d) => ySc(PITCH_SCALE / d.topEdge))
             .attr("width", WHITE_KEY_LENGTH)
-            .attr("height", d => ySc(10560/d.botEdge) - ySc(10560/d.topEdge))
+            .attr("height", (d) => ySc(PITCH_SCALE / d.botEdge) - ySc(PITCH_SCALE / d.topEdge))
             .attr("fill", "white")
             .attr("stroke", "black")
             .attr("stroke-width", "1")
 
         leftAxisandKeys.selectAll('.black-key')
-            .data(blackKeys, d => d.pitchName)
+            .data(blackKeys, (d) => d.pitchName)
             .join('rect')
             .attr('class', 'black-key')
             .attr("x", 0)
-            .attr("y", d => ySc(10560/d.topEdge)) //10560 = 24hrs * 440 Hz scaling factor
+            .attr("y", (d) => ySc(PITCH_SCALE / d.topEdge))
             .attr("width", BLACK_KEY_LENGTH)
-            .attr("height", d => ySc(10560/d.botEdge) - ySc(10560/d.topEdge))
+            .attr("height", (d) => ySc(PITCH_SCALE / d.botEdge) - ySc(PITCH_SCALE / d.topEdge))
             .attr("fill", "black")
             .attr("stroke", "black")
             .attr("stroke-width", "1")
 
         leftAxisandKeys.selectAll('.white-key-label')
-            .data(whiteKeys, d => d.pitchName)
+            .data(whiteKeys, (d) => d.pitchName)
             .join('text')
             .attr('class', 'white-key-label')
             .attr('x', WHITE_KEY_LENGTH * 0.9)
-            .attr('y', d => {
-                const top = ySc(10560 / d.topEdge)
-                const bot = ySc(10560 / d.botEdge)
+            .attr('y', (d) => {
+                const top = ySc(PITCH_SCALE / d.topEdge)
+                const bot = ySc(PITCH_SCALE / d.botEdge)
                 return top + (bot - top) * 0.5
             })
             .attr('text-anchor', 'end')
             .attr('dominant-baseline', 'middle')
-            .attr('font-size', d => {
-                const keyHeight = ySc(10560 / d.botEdge) - ySc(10560 / d.topEdge)
+            .attr('font-size', (d) => {
+                const keyHeight = ySc(PITCH_SCALE / d.botEdge) - ySc(PITCH_SCALE / d.topEdge)
                 return Math.min(keyHeight * 0.3, 20) + 'px'
             })
             .attr('fill', '#333')
             .attr('pointer-events', 'none')
-            .text(d => d.pitchName)
+            .text((d) => d.pitchName)
     }
 
-    drawPiano(pitchTable, yScale)
+    drawPiano(yScale)
     // ------------ Scrubber --------------
     const SCRUBBER_HANDLE_WIDTH = 5
     const SCRUBBER_HANDLE_HEIGHT = 10
@@ -413,15 +577,16 @@ export function plotStepSeqMain(
     // Prefer selected points; ignore greyed-out (filtered) genes for new picks
     function findClosest(mx, my) {
         let closest_selected = null
-        let closest_selected_dist = Infinity
+        let closest_selected_dist2 = Infinity
+        const selectR2 = RADIUS_SELECT * RADIUS_SELECT
 
         current_selection.forEach((d) => {
             const dx = currentXScale(d.phase) - mx
             const dy = currentYScale(d.period) - my
-            const dist = Math.sqrt(dx * dx + dy * dy)
-            if (dist <= RADIUS_SELECT && dist < closest_selected_dist) {
+            const dist2 = dx * dx + dy * dy
+            if (dist2 <= selectR2 && dist2 < closest_selected_dist2) {
                 closest_selected = d
-                closest_selected_dist = dist
+                closest_selected_dist2 = dist2
             }
         })
 
@@ -430,19 +595,30 @@ export function plotStepSeqMain(
         return quadtree.find(mx, my, RADIUS_HOVER)
     }
 
-    function updatePoints(item) {
+    function addPoints(item) {
         if (!item) return
         if (current_selection.has(item)) {
-            bus.execute_event("selection_del", item)
+            return
         } else if (genes_passed_set.has(item.GeneID)) {
             bus.execute_event("selection_add", item)
         }
     }
 
+    function removePoints(item) {
+        if (!item) return
+        bus.execute_event("selection_del", item)
+    }
+
 
     function rebuildQuadtree(xSc, ySc) {
-        // Only selectable (filter-passed) genes — avoids grey points blocking hit-tests
-        const passed = osc_perGene_meta.filter((d) => genes_passed_set.has(d.GeneID))
+        // Selectable genes are filtered here
+        const passed = []
+        for (let i = 0; i < osc_perGene_meta.length; i++) {
+            const d = osc_perGene_meta[i]
+            if (!genes_passed_set.has(d.GeneID)) continue
+            if (selected_just_interval && !(d.conf_overlap > 0)) continue
+            passed.push(d)
+        }
         quadtree = d3.quadtree()
             .x((d) => xSc(d.phase))
             .y((d) => ySc(d.period))
@@ -453,6 +629,17 @@ export function plotStepSeqMain(
 
     // Zoom control
     let rafId = null
+    function applyZoomView(zx, zy, { rebuild = false } = {}) {
+        currentXScale = zx
+        currentYScale = zy
+        drawPoints(CanvasCtx, zx, zy, RADIUS_NORMAL)
+        drawHighlight(HightlightCanvasCtx, zx, zy, RADIUS_HOVER, RADIUS_SELECT)
+        drawConfInt(current_display_gene, zx, zy)
+        drawPiano(zy)
+        xAxis.call(d3.axisBottom(zx))
+        yAxis.call(d3.axisLeft(zy))
+        if (rebuild) rebuildQuadtree(zx, zy)
+    }
     const zoom = d3.zoom()
         .scaleExtent([1, 20])
         .extent([[0, 0], [innerWidth, innerHeight]])
@@ -461,39 +648,24 @@ export function plotStepSeqMain(
             const zy = event.transform.rescaleY(yScale)
             if (rafId) cancelAnimationFrame(rafId)
             rafId = requestAnimationFrame(() => {
-                drawPoints(CanvasCtx, zx, zy, RADIUS_NORMAL)
-                drawHighlight(HightlightCanvasCtx, zx, zy, RADIUS_HOVER, RADIUS_SELECT)
-                drawPiano(pitchTable, zy)
-                xAxis.call(d3.axisBottom(zx))
-                yAxis.call(d3.axisLeft(zy))
-                currentXScale = zx
-                currentYScale = zy
+                rafId = null
+                applyZoomView(zx, zy)
             })
         })
         .on("end", (event) => {
             const zx = event.transform.rescaleX(xScale)
             const zy = event.transform.rescaleY(yScale)
-            drawPoints(CanvasCtx, zx, zy, RADIUS_NORMAL)
-            drawHighlight(HightlightCanvasCtx, zx, zy, RADIUS_HOVER, RADIUS_SELECT)
-            drawPiano(pitchTable, zy)
-            xAxis.call(d3.axisBottom(zx))
-            yAxis.call(d3.axisLeft(zy))
-            currentXScale = zx
-            currentYScale = zy
-            rebuildQuadtree(zx, zy)
+            applyZoomView(zx, zy, { rebuild: true })
         })
     
     zoom.filter((event) => {
-        const startsPaning = event.type === "mousedown"
-        if (startsPaning && current_hover) return false;
+        const startsPanning = event.type === "mousedown"
+        if (startsPanning && current_hover) return false
 
-        return (!event.ctrlKey || event.type === "wheel") && !event.button //default
+        return (!event.ctrlKey || event.type === "wheel") && !event.button
     })
     canvas.call(zoom)
     canvas.on('dblclick.zoom', null)
-    canvas.on('dblclick', () => {
-        canvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
-    })
 
     // Phase controls and displays + point select behavior
     let drag_point = null
@@ -501,15 +673,17 @@ export function plotStepSeqMain(
     let dragging = false
     let closest_point_to_drag = null
     let clicked_point = null
+    let pointerDownPos = null
+    const DRAG_THRESHOLD_PX = 4
 
     function snapPhase(pointerX){
         const min_phase = drag_point.phase % drag_point.period
+        const pointer_pos = currentXScale.invert(pointerX)
         let closest_phase = Infinity
         let closest_point = null
-        for (let i=min_phase; i <= 24; i += drag_point.period) {
-            const pointer_pos = currentXScale.invert(pointerX)
+        for (let i = min_phase; i <= 24; i += drag_point.period) {
             const dist = Math.abs(pointer_pos - i)
-            if (dist < closest_phase){
+            if (dist < closest_phase) {
                 closest_phase = dist
                 closest_point = i
             }
@@ -520,51 +694,185 @@ export function plotStepSeqMain(
     canvas.on('pointerdown', (event) => {
         const [mx, my] = d3.pointer(event)
         clicked_point = findClosest(mx, my)
+        pointerDownPos = [mx, my]
         mousedown = true
     })
 
-    canvas.on('pointermove', (event) =>{
-        if (mousedown) {
-            dragging = true
-            drag_point = clicked_point
+    canvas.on('pointermove', (event) => {
+        const [mx, my] = d3.pointer(event)
+
+        if (mousedown && !dragging && pointerDownPos) {
+            const dx = mx - pointerDownPos[0]
+            const dy = my - pointerDownPos[1]
+            if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+                dragging = true
+                drag_point = clicked_point
+            }
         }
 
-        if (!drag_point){ // hover behavior
-            const [mx, my] = d3.pointer(event)
+        if (!drag_point) { // hover behavior
             const item = findClosest(mx, my)
-            if (item !== current_hover){
-                current_hover = item
-                if (current_hover == null){
-                    bus.execute_event("point_hover", null)
-                } else {
-                    bus.execute_event("point_hover", current_hover.GeneID)
+
+            if (current_display_gene && current_just_bands) {
+                const my_period = currentYScale.invert(my)
+                let nextHover = null
+                let bestDist = Infinity
+                for (const band of current_just_bands) {
+                    if (my_period <= band.high && my_period >= band.low) {
+                        const dist = Math.abs(my_period - band.mid)
+                        if (dist < bestDist) {
+                            bestDist = dist
+                            nextHover = band.id
+                        }
+                    }
                 }
-            } else {return}
-        } else { // if dragging
-            const pointerX = d3.pointer(event, canvas.node())[0]
-            closest_point_to_drag = snapPhase(pointerX)
+                if (nextHover !== hovering_just_interval) {
+                    hovering_just_interval = nextHover
+                    if (!selected_just_interval) {
+                        updatePointConfidence(hovering_just_interval)
+                    }
+                    drawConfInt(current_display_gene)
+                }
+            }
+            if (item !== current_hover) {
+                current_hover = item
+                bus.execute_event("point_hover", current_hover ? current_hover.GeneID : null)
+            }
+        } else { // phase dragging
+            closest_point_to_drag = snapPhase(mx)
             drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale, RADIUS_HOVER, RADIUS_SELECT, true)
         }
     })
 
+    let lastPointerUp = { x: null, y: null, time: null }
+    let singleClickTimer = null
+    const doubleClickDelay = 300 // ms
+    const doubleClickDist = 10 // px
+
+    function clearJustIntervalSelection() {
+        selected_just_interval = null
+        if (hovering_just_interval) {
+            updatePointConfidence(hovering_just_interval)
+        } else {
+            clearPointConfidence()
+        }
+        rebuildQuadtree(currentXScale, currentYScale)
+        drawConfInt(current_display_gene)
+    }
+
+    function handleSingleClick(point, hoverInterval) {
+        if (point) {
+            addPoints(point)
+            if (!selected_just_interval) {
+                bus.execute_event("gene_label_select", point)
+            }
+            return
+        }
+
+        if (hoverInterval) {
+            if (selected_just_interval === hoverInterval) return
+            selected_just_interval = hoverInterval
+            updatePointConfidence(hoverInterval)
+            rebuildQuadtree(currentXScale, currentYScale)
+            drawConfInt(current_display_gene)
+            return
+        }
+
+        // Click away: clear CI lock, or clear the displayed gene
+        if (selected_just_interval) {
+            clearJustIntervalSelection()
+        } else {
+            bus.execute_event("gene_label_select", null)
+        }
+    }
+
+    function handleDoubleClick(point) {
+        // Deselect a selected gene on double-click; otherwise zoom out only
+        if (point && current_selection.has(point)) {
+            const sizeBefore = current_selection.size
+            removePoints(point)
+            if (current_selection.size < sizeBefore) {
+                bus.execute_event("gene_label_select", null)
+                drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
+                return
+            }
+        }
+        // Zoom out takes prio over CI select / display gene / point selection
+        canvas.transition().duration(500).call(zoom.transform, d3.zoomIdentity)
+    }
+
     canvas.on('pointerup', (event) => {
-        if (drag_point && closest_point_to_drag != null && drag_point.phase !== closest_point_to_drag) {
+        const didDragPhase = drag_point && closest_point_to_drag != null && drag_point.phase !== closest_point_to_drag
+        if (didDragPhase) {
             drag_point.phase = closest_point_to_drag
             rebuildQuadtree(currentXScale, currentYScale)
             drawPoints(CanvasCtx, currentXScale, currentYScale, RADIUS_NORMAL)
+            drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
         }
-        if (clicked_point && !dragging){
-            updatePoints(clicked_point)
-        }
+
+        const pointerWasDrag = dragging
+        const point = clicked_point
+        const hoverInterval = hovering_just_interval
+
+        const shortDistance = lastPointerUp.x != null
+            && Math.hypot(event.clientX - lastPointerUp.x, event.clientY - lastPointerUp.y) <= doubleClickDist
+        const shortTime = lastPointerUp.time != null
+            && Date.now() - lastPointerUp.time <= doubleClickDelay
+        const isDoubleClick = shortTime && shortDistance
+        lastPointerUp = { x: event.clientX, y: event.clientY, time: Date.now() }
+
         drag_point = null
         dragging = false
         mousedown = false
         clicked_point = null
         closest_point_to_drag = null
+        pointerDownPos = null
+
+        if (pointerWasDrag || didDragPhase) {
+            if (singleClickTimer) {
+                clearTimeout(singleClickTimer)
+                singleClickTimer = null
+            }
+            return
+        }
+
+        if (isDoubleClick) {
+            if (singleClickTimer) {
+                clearTimeout(singleClickTimer)
+                singleClickTimer = null
+            }
+            handleDoubleClick(point)
+            return
+        }
+
+        if (point) {
+            if (singleClickTimer) {
+                clearTimeout(singleClickTimer)
+                singleClickTimer = null
+            }
+            handleSingleClick(point, hoverInterval)
+            return
+        }
+
+        if (singleClickTimer) clearTimeout(singleClickTimer)
+        singleClickTimer = setTimeout(() => {
+            singleClickTimer = null
+            handleSingleClick(null, hoverInterval)
+        }, doubleClickDelay)
     })
 
+    function updateCurrentDisplayGene(item) {
+        current_display_gene = item || null
+        hovering_just_interval = null
+        selected_just_interval = null
+        current_just_bands = item ? justIntervalBands(item) : null
+        clearPointConfidence()
+        rebuildQuadtree(currentXScale, currentYScale)
+        drawConfInt(current_display_gene)
+    }
+
     //bus subscription
-    bus.subscribe_to("point_hover", "mainplot", (current_hover) => {
+    bus.subscribe_to("point_hover", "mainplot", () => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     })
     bus.subscribe_to("selection_add", "mainplot", (item) => {
@@ -586,6 +894,7 @@ export function plotStepSeqMain(
     })
     bus.subscribe_to("resetSelection", "mainplot", () => {
         current_selection = new Set()
+        updateCurrentDisplayGene(null)
         bus.execute_event("selection_modified", current_selection)
     })
     bus.subscribe_to("StepSeqTPMUpdate", "mainplot", ([high_val, low_val]) => {
@@ -596,6 +905,10 @@ export function plotStepSeqMain(
     })
     bus.subscribe_to("StepSeqStdUpdate", "mainplot", ([high_val, low_val]) => {
         setFilterRange("relative_std", high_val, low_val)
+    })
+    bus.subscribe_to("gene_label_select", "mainplot", (item) => {
+        updateCurrentDisplayGene(item)
+        drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
     })
 }
 

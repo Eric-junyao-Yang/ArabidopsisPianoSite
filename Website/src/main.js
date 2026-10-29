@@ -197,7 +197,7 @@ export function renderSelectionPanel(selected_genes) {
         label.className = "gene-tag-label"
         label.textContent = GeneID
         label.addEventListener("click", () => {
-            bus.execute_event("gene_label_select", GeneID)
+            bus.execute_event("gene_label_select", item)
         })
 
         const remove = document.createElement("button")
@@ -293,16 +293,19 @@ bus.subscribe_to("selection_modified", "main", (selection) => {
     renderSelectionPanel(selection)
 })
 
-bus.subscribe_to("gene_label_select", "main", (GeneID) => {
-    const meta_item = osc_perGene_meta_lookup.get(GeneID)
-    const VST_dat = VST_lookup.get(GeneID)
-    if (!meta_item || !VST_dat) return
+bus.subscribe_to("gene_label_select", "main", (item) => {
+    if (!item) {
+        plotStepSeq.renderEmpty()
+        return
+    }
+    const VST_dat = VST_lookup.get(item.GeneID)
+    if (!VST_dat) return
     plotStepSeq.updatePlot({
         metaValues,
         shared,
-        cur_mu: osc_perGene_mu[meta_item.index],
-        cur_std: osc_perGene_std[meta_item.index],
-        meta_item,
+        cur_mu: osc_perGene_mu[item.index],
+        cur_std: osc_perGene_std[item.index],
+        meta_item: item,
         VST_dat,
     })
 })
