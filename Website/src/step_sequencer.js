@@ -220,10 +220,10 @@ export function plotStepSeqMain(
             while (cur_phase < 24) {
                 HightlightCanvasCtx.fillStyle = cur_phase === closest_point_to_drag ? "blue" : "red"
                 HightlightCanvasCtx.beginPath()
-                HightlightCanvasCtx.moveTo(xSc(cur_phase) + selected_radius, ySc(current_hover.period))
-                HightlightCanvasCtx.arc(xSc(cur_phase), ySc(current_hover.period), selected_radius, 0, 2*Math.PI)
+                HightlightCanvasCtx.moveTo(xSc(cur_phase) + selected_radius, ySc(drag_point.period))
+                HightlightCanvasCtx.arc(xSc(cur_phase), ySc(drag_point.period), selected_radius, 0, 2*Math.PI)
                 HightlightCanvasCtx.fill()
-                cur_phase += current_hover.period
+                cur_phase += drag_point.period
             }
         }
         //hover highlight
@@ -882,8 +882,10 @@ export function plotStepSeqMain(
     })
     bus.subscribe_to("selection_del", "mainplot", (item) => {
         current_selection.delete(item)
-        bus.execute_event("selection_modified", current_selection)       
-        updateCurrentDisplayGene(null) 
+        bus.execute_event("selection_modified", current_selection)
+        if (current_display_gene && item && current_display_gene.GeneID === item.GeneID) {
+            updateCurrentDisplayGene(null)
+        }
     })
     bus.subscribe_to("selection_modified", "mainplot", () => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)

@@ -1,4 +1,4 @@
-import { interpolate_waveform, maxAbsScaling, ldTimepoints } from "/src/catmullrom.js"
+import { toUnipolarWavetable, ldTimepoints } from "/src/catmullrom.js"
 import { Midi } from "https://esm.sh/@tonejs/midi@2.0.28"
 
 const LOOKAHEAD_SEC = 0.1
@@ -13,9 +13,7 @@ export function midiToFreq(midiNote) {
 export function geneToWavetable(GeneID, normalized_counts_lookup, tableSize = 2048) {
     const item = normalized_counts_lookup.get(GeneID)
     if (!item) return null
-    const points = ldTimepoints(item)
-    const interpolated = interpolate_waveform(points, tableSize)
-    return maxAbsScaling(interpolated)
+    return toUnipolarWavetable(ldTimepoints(item), tableSize)
 }
 
 export async function loadMidiEvents(filePath, maxTracks = Infinity) {

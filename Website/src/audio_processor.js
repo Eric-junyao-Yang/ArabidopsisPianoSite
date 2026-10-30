@@ -1,18 +1,21 @@
-import { interpolate_waveform, catmullrom } from "/src/catmullrom.js"
+import { toUnipolarWavetable, catmullrom } from "/src/catmullrom.js"
 
 const TABLE_SIZE = 2048
 
 class SynthAudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super()
-        this.phases = new Map()
-        this.table = new Float32Array(TABLE_SIZE)
+        this.table = new Float32Array(TABLE_SIZE).fill(0.5)
         this.voices = new Map()
         this.octave = 0
+        this.attackInc = 1 / (sampleRate * 0.005)
+        this.releaseInc = 1 / (sampleRate * 0.03)
+        this.invSampleRate = 1 / sampleRate
 
         this.port.onmessage = (event) => {
             if (event.data.type === "updatePoints") {
-                this.table = interpolate_waveform(event.data.points, TABLE_SIZE)
+                // Same path as MIDI / gene tables: interpolate → maxAbs → [0, 1]
+                this.table = toUnipolarWavetable(event.data.points, TABLE_SIZE)
             }
             if (event.data.type === "keyDownUpdate") {
                 if (this.voices.has(event.data.freq)){
@@ -43,16 +46,11 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
     generateSound(freq, channels, gain, data){
         const internal_freq = freq * Math.pow(2, this.octave)
         const outputLength = channels[0].length
-        // let phase = this.phases.get(freq) ?? 0
-        const increment = internal_freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
-        
-        const attackIncrement = 1 / (sampleRate * 0.005)
-        const releaseIncrement = 1/ (sampleRate * 0.03)
+        const increment = internal_freq * TABLE_SIZE * this.invSampleRate
 
         for (let i=0; i < outputLength; i ++){
-            // envelope
             if (data.state === "attack"){
-                data.lvl += attackIncrement
+                data.lvl += this.attackInc
                 if (data.lvl >= 1){
                     data.lvl = 1
                     data.state = "sustain"
@@ -60,22 +58,21 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
             }
 
             if (data.state === "release"){
-                data.lvl -= releaseIncrement
-
+                data.lvl -= this.releaseInc
                 if (data.lvl <= 0){
                     data.lvl = 0
                     data.state = "finished"
                 }
             }
 
-            //wavetable
             const base = Math.floor(data.phase)
-            const i0 = base % TABLE_SIZE //lookup index in wavetable
+            const i0 = base % TABLE_SIZE
             const i1 = (i0 + 1) % TABLE_SIZE
             const frac = data.phase - base
             const sample = (this.table[i0] * (1-frac) + this.table[i1] * frac) * 2 - 1
-            for (const channel of channels){
-                channel[i] += sample * gain * data.lvl
+            const amp = sample * gain * data.lvl
+            for (let c = 0; c < channels.length; c++) {
+                channels[c][i] += amp
             }
             data.phase += increment
 
@@ -83,29 +80,29 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                 data.phase %= TABLE_SIZE
             }
         }
-        // this.phases.set(freq, phase)
     }
 
-    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
+    process(inputs, outputs) {
         const channels = outputs[0]
-        const bufferSize = channels[0].length
         const totalKeys = this.voices.size
 
-        for (const channel of channels){
-            channel.fill(0)
+        for (let c = 0; c < channels.length; c++) {
+            channels[c].fill(0)
         }
 
         if (totalKeys === 0) {
             return true
         }
 
-        const gain = 0.2 //1 / totalKeys
+        const gain = 0.2
+        const finished = []
 
         for (const [freq, data] of this.voices){
             this.generateSound(freq, channels, gain, data)
-            if (data.state === "finished"){
-                this.voices.delete(freq)
-            }
+            if (data.state === "finished") finished.push(freq)
+        }
+        for (let i = 0; i < finished.length; i++) {
+            this.voices.delete(finished[i])
         }
         return true
     }

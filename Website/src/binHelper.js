@@ -1,9 +1,15 @@
+const metaJsonCache = new Map()
+
 export async function meta_to_json(path_to_meta, file_name) {
-    const resp = await fetch(path_to_meta)
-    if (!resp.ok) {
-        throw new Error(`Failed to fetch meta ${path_to_meta}: ${resp.status}`)
+    let meta_json = metaJsonCache.get(path_to_meta)
+    if (!meta_json) {
+        const resp = await fetch(path_to_meta)
+        if (!resp.ok) {
+            throw new Error(`Failed to fetch meta ${path_to_meta}: ${resp.status}`)
+        }
+        meta_json = await resp.json()
+        metaJsonCache.set(path_to_meta, meta_json)
     }
-    const meta_json = await resp.json()
     const meta_json_dat = meta_json[file_name]
     if (!meta_json_dat) {
         throw new Error(`No entry "${file_name}" in ${path_to_meta}`)

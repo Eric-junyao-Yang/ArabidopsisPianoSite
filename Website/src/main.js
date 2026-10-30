@@ -102,26 +102,40 @@ let midiEvents = null
 let midiTransport = null
 const midiTrackGenes = new Map() // trackIndex → GeneID
 
-document.getElementById("activateMidi").addEventListener("click", async () => {
+function syncMidiTrackWavetables() {
+    for (const [trackIndex, GeneID] of midiTrackGenes) {
+        const waveform = geneToWavetable(GeneID, normalized_counts_lookup)
+        if (waveform && midiNode) setTrackWavetable(midiNode, trackIndex, waveform)
+    }
+}
+
+let midiLoadPromise = null
+async function ensureMidiLoaded() {
     await initMidiAudio()
     if (!midiEvents) {
-        const loaded = await loadMidiEvents(MIDI_FILE, MIDI_TRACKS.length)
-        midiEvents = loaded.events
-        midiTransport.setEvents(midiEvents)
-        // Re-send any genes chosen before audio was ready
-        for (const [trackIndex, GeneID] of midiTrackGenes) {
-            bus.execute_event("midi_track_gene", { trackIndex, GeneID })
+        if (!midiLoadPromise) {
+            midiLoadPromise = loadMidiEvents(MIDI_FILE, MIDI_TRACKS.length)
+                .then((loaded) => {
+                    midiEvents = loaded.events
+                    midiTransport.setEvents(midiEvents)
+                    // Genes chosen before the worklet existed still need uploading
+                    syncMidiTrackWavetables()
+                })
+                .catch((err) => {
+                    midiLoadPromise = null
+                    throw err
+                })
         }
+        await midiLoadPromise
     }
+}
+
+document.getElementById("activateMidi").addEventListener("click", () => {
+    ensureMidiLoaded()
 })
 
 document.getElementById("play").addEventListener("click", async () => {
-    await initMidiAudio()
-    if (!midiEvents) {
-        const loaded = await loadMidiEvents(MIDI_FILE, MIDI_TRACKS.length)
-        midiEvents = loaded.events
-        midiTransport.setEvents(midiEvents)
-    }
+    await ensureMidiLoaded()
     if (midiTransport.isPlaying) {
         midiTransport.stop()
         document.getElementById("play").textContent = "play"
@@ -134,55 +148,79 @@ document.getElementById("play").addEventListener("click", async () => {
 // --------------------------------------- Audio ---------------------------------------
 let SynthContext = null
 let synth_node = null
+let synthReady = null
 async function start() {
-    if (SynthContext) return
-    SynthContext = new AudioContext()
-    await SynthContext.audioWorklet.addModule("/src/audio_processor.js")
-    synth_node = new AudioWorkletNode(SynthContext, "synth-audio-processor")
+    if (!synthReady) {
+        synthReady = (async () => {
+            SynthContext = new AudioContext()
+            await SynthContext.audioWorklet.addModule("/src/audio_processor.js")
+            synth_node = new AudioWorkletNode(SynthContext, "synth-audio-processor")
 
-    const compressor = SynthContext.createDynamicsCompressor()
-    compressor.threshold.value = -3
-    compressor.knee.value = 0
-    compressor.ratio.value = 20
-    compressor.attack.value = 0.003
-    compressor.release.value = 0.05
-    synth_node.connect(compressor).connect(SynthContext.destination)
-    await SynthContext.resume()
-    synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
-    assign_keyboard_keys(synth_node)
-    setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"))
+            const compressor = SynthContext.createDynamicsCompressor()
+            compressor.threshold.value = -3
+            compressor.knee.value = 0
+            compressor.ratio.value = 20
+            compressor.attack.value = 0.003
+            compressor.release.value = 0.05
+            synth_node.connect(compressor).connect(SynthContext.destination)
+            synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
+            assign_keyboard_keys(synth_node)
+            setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"))
+        })().catch((err) => {
+            synthReady = null
+            throw err
+        })
+    }
+    await synthReady
+    if (SynthContext.state === "suspended") await SynthContext.resume()
 }
 
 // Step Seq
 const activeVoices = new Map()
 let stepSeqAudioContext = null
 let masterCompressor = null
+let stepSeqReady = null
 async function initStepSeqAudio() {
-    if (stepSeqAudioContext) return
-    stepSeqAudioContext = new AudioContext()
-    await stepSeqAudioContext.audioWorklet.addModule("/src/audio_processor.js")
-    await stepSeqAudioContext.resume()
-    masterCompressor = stepSeqAudioContext.createDynamicsCompressor()
-    masterCompressor.threshold.value = -6
-    masterCompressor.knee.value = 3
-    masterCompressor.ratio.value = 4
-    masterCompressor.attack.value = 0.003
-    masterCompressor.release.value = 0.15
-    masterCompressor.connect(stepSeqAudioContext.destination)
+    if (!stepSeqReady) {
+        stepSeqReady = (async () => {
+            stepSeqAudioContext = new AudioContext()
+            await stepSeqAudioContext.audioWorklet.addModule("/src/audio_processor.js")
+            masterCompressor = stepSeqAudioContext.createDynamicsCompressor()
+            masterCompressor.threshold.value = -6
+            masterCompressor.knee.value = 3
+            masterCompressor.ratio.value = 4
+            masterCompressor.attack.value = 0.003
+            masterCompressor.release.value = 0.15
+            masterCompressor.connect(stepSeqAudioContext.destination)
+        })().catch((err) => {
+            stepSeqReady = null
+            throw err
+        })
+    }
+    await stepSeqReady
+    if (stepSeqAudioContext.state === "suspended") await stepSeqAudioContext.resume()
 }
 
 // SynthSlides
 let synthSlidesAudioContext = null
 let synthSlides_node = null
 let synthSlideDestinationConnection = false
+let synthSlidesReady = null
 async function initSynthSlidesAudio() {
-    if (synthSlidesAudioContext) return
-    synthSlidesAudioContext = new AudioContext()
-    await synthSlidesAudioContext.audioWorklet.addModule("/src/audio_processor.js")
-    await synthSlidesAudioContext.resume()
-    synthSlides_node = new AudioWorkletNode(synthSlidesAudioContext, "synthslides-audio-processor")
-    synthSlides_node.connect(synthSlidesAudioContext.destination)
-    synthSlideDestinationConnection = true
+    if (!synthSlidesReady) {
+        synthSlidesReady = (async () => {
+            synthSlidesAudioContext = new AudioContext()
+            await synthSlidesAudioContext.audioWorklet.addModule("/src/audio_processor.js")
+            synthSlides_node = new AudioWorkletNode(synthSlidesAudioContext, "synthslides-audio-processor")
+            synthSlides_node.connect(synthSlidesAudioContext.destination)
+            synthSlideDestinationConnection = true
+        })().catch((err) => {
+            synthSlidesReady = null
+            throw err
+        })
+    }
+    await synthSlidesReady
+    if (synthSlidesAudioContext.state === "suspended") await synthSlidesAudioContext.resume()
 }
 
 // existing sounds needs to be scaled as new sounds join
@@ -197,27 +235,33 @@ function rescaleGains() {
 // Midi Player
 let midiCtx = null
 let midiNode = null
+let midiReady = null
 async function initMidiAudio() {
-    if (midiCtx) {
-        if (midiCtx.state === "suspended") await midiCtx.resume()
-        return
+    if (!midiReady) {
+        midiReady = (async () => {
+            midiCtx = new AudioContext()
+            await midiCtx.audioWorklet.addModule("/src/audio_processor.js")
+            midiNode = new AudioWorkletNode(midiCtx, "midi-audio-processor")
+            midiNode.connect(midiCtx.destination)
+            midiTransport = createMidiTransport(midiCtx, midiNode, {
+                onStop: () => {
+                    const btn = document.getElementById("play")
+                    if (btn) btn.textContent = "play"
+                },
+            })
+            if (midiEvents) midiTransport.setEvents(midiEvents)
+        })().catch((err) => {
+            midiReady = null
+            throw err
+        })
     }
-    midiCtx = new AudioContext()
-    await midiCtx.audioWorklet.addModule("/src/audio_processor.js")
-    await midiCtx.resume()
-    midiNode = new AudioWorkletNode(midiCtx, "midi-audio-processor")
-    midiNode.connect(midiCtx.destination)
-    midiTransport = createMidiTransport(midiCtx, midiNode, {
-        onStop: () => {
-            const btn = document.getElementById("play")
-            if (btn) btn.textContent = "play"
-        },
-    })
-    if (midiEvents) midiTransport.setEvents(midiEvents)
+    await midiReady
+    if (midiCtx.state === "suspended") await midiCtx.resume()
 }
 
 // --------------------------------------- Spawn voices ---------------------------------------
 function createVoice(metaValues, sharedBuffer) {
+    if (!stepSeqAudioContext || !masterCompressor) return null
     const node = new AudioWorkletNode(stepSeqAudioContext, "stepseq-audio-processor", {
         processorOptions: { metaValues, shared: sharedBuffer },
     })
@@ -248,8 +292,9 @@ const qval_span = qval_max - qval_min || 1
 const sweep_max = 5
 const sweep_min = 1
 for (let i = 0; i < osc_perGene_meta.length; i++) {
+    // Higher qval (less confident period) → faster morph across posterior samples
     osc_perGene_meta[i].sweep_frequency =
-        0.2 + ((qvals[i] - qval_min) * (sweep_max - sweep_min)) / qval_span
+        sweep_min + ((qvals[i] - qval_min) * (sweep_max - sweep_min)) / qval_span
     osc_perGene_meta[i].index = i
 }
 
@@ -393,6 +438,7 @@ bus.subscribe_to("synth_waveform_changed", "main", (points) => {
 
 bus.subscribe_to("playNote", "main", ([mv, GeneID, Index, freq, sweep]) => {
     const node = createVoice(mv, shared)
+    if (!node) return
     node.port.postMessage({
         type: "geneSpecifics",
         GeneID,

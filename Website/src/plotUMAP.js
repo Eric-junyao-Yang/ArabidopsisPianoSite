@@ -389,7 +389,10 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
 
 
     function rebuildQuadtree(xSc, ySc) {
-        const passed = umap_arr.filter((d) => d.log_TPM < internal_high_val && d.log_TPM > internal_low_val)
+        // Inclusive bounds — must match drawPointsCanvas / updateSelected
+        const passed = umap_arr.filter(
+            (d) => d.log_TPM >= internal_low_val && d.log_TPM <= internal_high_val
+        )
         quadtree = d3.quadtree()
             .x(d => xSc(d.x))
             .y(d => ySc(d.y))
@@ -410,23 +413,21 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
         hlightCtx.clearRect(0,0,innerWidth, innerHeight)
         if (GeneID_hover) {
             const d_hover = GeneID_Lookup.get(GeneID_hover)
-            const cx_hover = xSc(d_hover.x)
-            const cy_hover = ySc(d_hover.y)
-
-            hlightCtx.beginPath()
-            hlightCtx.arc(cx_hover, cy_hover, HighlightPointSize, 0, 2 * Math.PI)
-            hlightCtx.fillStyle = 'rgba(68, 170, 153, 1)'
-            hlightCtx.fill()
+            if (d_hover) {
+                hlightCtx.beginPath()
+                hlightCtx.arc(xSc(d_hover.x), ySc(d_hover.y), HighlightPointSize, 0, 2 * Math.PI)
+                hlightCtx.fillStyle = 'rgba(68, 170, 153, 1)'
+                hlightCtx.fill()
+            }
         }
         if (GeneID_select) {
             const d_select = GeneID_Lookup.get(GeneID_select)
-            const cx_select = xSc(d_select.x)
-            const cy_select = ySc(d_select.y)
-
-            hlightCtx.beginPath()
-            hlightCtx.arc(cx_select, cy_select, HighlightPointSize, 0, 2 * Math.PI)
-            hlightCtx.fillStyle = 'rgba(221, 204, 119, 1)'
-            hlightCtx.fill()
+            if (d_select) {
+                hlightCtx.beginPath()
+                hlightCtx.arc(xSc(d_select.x), ySc(d_select.y), HighlightPointSize, 0, 2 * Math.PI)
+                hlightCtx.fillStyle = 'rgba(221, 204, 119, 1)'
+                hlightCtx.fill()
+            }
         }
     }
 
@@ -558,11 +559,13 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
 
             if (rafId) cancelAnimationFrame(rafId)
             rafId = requestAnimationFrame(() => {
+                rafId = null
                 if (!scatter.isSupported) {drawPointsCanvas(mainCtx, zx, zy, internal_high_val, internal_low_val)}
                 else {scatter.updateTransform(event.transform)}
+                // Clear hover during zoom; rebuild quadtree only on end (expensive)
+                lastEmittedRow = null
                 bus.execute_event('point_hover', null)
-                drawHighlight(zx, zy, lastEmittedRow?.id, GeneID_select_current)
-                rebuildQuadtree(zx, zy)
+                drawHighlight(zx, zy, null, GeneID_select_current)
                 xAxis.call(d3.axisBottom(zx))
                 yAxis.call(d3.axisLeft(zy))
             })
@@ -574,9 +577,10 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
             currentYScale = zy
             if (!scatter.isSupported) {drawPointsCanvas(mainCtx, zx, zy, internal_high_val, internal_low_val)}
             else {scatter.updateTransform(event.transform)}
+            lastEmittedRow = null
             bus.execute_event('point_hover', null)
-            drawHighlight(zx, zy, lastEmittedRow?.id, GeneID_select_current)
-            rebuildQuadtree(zx, zy)   
+            drawHighlight(zx, zy, null, GeneID_select_current)
+            rebuildQuadtree(zx, zy)
             xAxis.call(d3.axisBottom(zx))
             yAxis.call(d3.axisLeft(zy))
         })

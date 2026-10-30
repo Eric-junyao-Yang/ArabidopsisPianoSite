@@ -71,6 +71,9 @@ export class Synth_Waveform {
     }
 
     draw_interpolation(ctx){
+        // Raw Catmull through control points (edit preview). Audio uses
+        // interpolate → maxAbs via toUnipolarWavetable — live maxAbs here would
+        // rescale the curve on every drag and pull it off the dots.
         const interpolation_array = interpolate_waveform(this.points, 256)
         const max_val = interpolation_array.length
         ctx.lineWidth = 2
@@ -100,9 +103,8 @@ export class Synth_Waveform {
     }
 
     scaleToPlot(input_array){
-        // interpolate_waveform returns values scaled to -1 to 1
-        // plot accepts values between 0 to 1
-        return input_array.map((v,i) => (v + 1) / 2)
+        // maxAbsScaling → bipolar [-1, 1]; plot / control points use [0, 1]
+        return input_array.map((v) => (v + 1) / 2)
     }
 
     updatePointsWithGeneID(GeneID) {
@@ -118,40 +120,38 @@ export class Synth_Waveform {
     }
 
     setupEvents() {
+        const paintAtClient = (clientX, clientY) => {
+            const rect = this.canvas.getBoundingClientRect()
+            const x = clientX - rect.left
+            const y = clientY - rect.top
+            const index = Math.floor(x / this.barsWidth)
+            if (index < 0 || index >= this.n_bars) return
 
-        this.canvas.addEventListener("mousedown", () => {
+            this.points[index] = Math.min(
+                1,
+                Math.max(0, (this.canvas.height - y) / this.canvas.height)
+            )
+            this.bus_execute(this.points)
+            this.draw()
+        }
+
+        this.canvas.addEventListener("pointerdown", (e) => {
             this.dragging = true
+            this.canvas.setPointerCapture?.(e.pointerId)
+            paintAtClient(e.clientX, e.clientY)
         })
 
-        window.addEventListener("mouseup", () => {
+        this.canvas.addEventListener("pointermove", (e) => {
+            if (!this.dragging) return
+            paintAtClient(e.clientX, e.clientY)
+        })
+
+        const endDrag = () => {
             this.dragging = false
-        })
-
-        this.canvas.addEventListener(
-            "mousemove",
-            (e) => {
-
-                if (!this.dragging) return
-
-                const index =
-                    Math.floor(
-                        e.offsetX / this.barsWidth
-                    )
-
-                if (
-                    index < 0 ||
-                    index >= this.n_bars
-                ) return
-
-                this.points[index] = Math.min(
-                    1,
-                    Math.max(0, (this.canvas.height - e.offsetY) / this.canvas.height)
-                )
-
-                this.bus_execute(this.points)
-                this.draw()
-            }
-        )
+        }
+        this.canvas.addEventListener("pointerup", endDrag)
+        this.canvas.addEventListener("pointercancel", endDrag)
+        this.canvas.addEventListener("lostpointercapture", endDrag)
 
         window.addEventListener(
             "resize",

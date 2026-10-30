@@ -9,15 +9,28 @@ export function catmullrom(p0, p1, p2, p3, t) {
     )
 }
 
-/** Mean-center then scale so max |value| = 1. Flat inputs = zeros. */
+/** Mean-center then scale so max |value| = 1. Flat inputs = zeros. (No d3 — safe in AudioWorklet.) */
 export function maxAbsScaling(input_array) {
-    const mu = d3.mean(input_array)
-    const centered = input_array.map((v) => v - mu)
-    const max = Math.max(...centered.map((v) => Math.abs(v)))
-    if (!(max > 0)) {
-        return centered.map(() => 0)
+    const n = input_array.length
+    if (n === 0) return []
+    let sum = 0
+    for (let i = 0; i < n; i++) sum += input_array[i]
+    const mu = sum / n
+
+    const centered = new Array(n)
+    let max = 0
+    for (let i = 0; i < n; i++) {
+        const v = input_array[i] - mu
+        centered[i] = v
+        const a = v < 0 ? -v : v
+        if (a > max) max = a
     }
-    return centered.map((v) => v / max)
+    if (!(max > 0)) {
+        centered.fill(0)
+        return centered
+    }
+    for (let i = 0; i < n; i++) centered[i] /= max
+    return centered
 }
 
 /** Periodic Catmull–Rom resample of a closed loop (e.g. one cycle of expression). */
@@ -44,9 +57,23 @@ export function interpolate_waveform(input_array, output_n_points) {
     return output_array
 }
 
-/** Extract LD_* timepoint values in column order. */
+/**
+ * Canonical audio wavetable build: interpolate → maxAbs (bipolar) → [0, 1].
+ * Worklets map back with `sample * 2 - 1`.
+ */
+export function toUnipolarWavetable(input_array, output_n_points) {
+    const bipolar = maxAbsScaling(interpolate_waveform(input_array, output_n_points))
+    const table = new Float32Array(bipolar.length)
+    for (let i = 0; i < bipolar.length; i++) {
+        table[i] = (bipolar[i] + 1) * 0.5
+    }
+    return table
+}
+
+/** Extract LD_* timepoint values in chronological column order. */
 export function ldTimepoints(row) {
     return Object.keys(row)
         .filter((k) => k.startsWith("LD_"))
+        .sort()
         .map((k) => row[k])
 }

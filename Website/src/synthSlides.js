@@ -196,7 +196,7 @@ const arabidopsisSlide = {
         }
         this.soundFocus = null
         this.soundTimer = null
-        this.bus.execute_event("stopSlideSound", null)
+        this.bus?.execute_event("stopSlideSound", null)
     },
 
     makeWavePlot(g, deck, {varyingParam, slotIndex, slotWidth = 210, playSoundBtn = false, myName = null}) {
@@ -265,7 +265,7 @@ const arabidopsisSlide = {
                         return
                     }
 
-                    const started = await deck.playSound(myName, resetBtn)
+                    await deck.playSound(myName, resetBtn)
 
                     progress
                         .interrupt()

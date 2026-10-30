@@ -173,9 +173,14 @@ export function searchbar(input, listEl, genes, onSelect) {
         input.value = ""
     }
 
+    let inputTimer = null
     function onInput() {
         const query = normalizeQuery(input.value)
-        render(rankMatches(query), query)
+        // Debounce ranking over ~20k genes while typing
+        clearTimeout(inputTimer)
+        inputTimer = setTimeout(() => {
+            render(rankMatches(query), query)
+        }, 50)
     }
 
     function onKeyDown(event) {
@@ -186,6 +191,7 @@ export function searchbar(input, listEl, genes, onSelect) {
 
         if (!open) {
             if (event.key === "Enter") {
+                clearTimeout(inputTimer)
                 const query = normalizeQuery(input.value)
                 const matches = rankMatches(query)
                 if (matches.length === 1 || (matches.length && matches[0].lower === query)) {
@@ -212,10 +218,12 @@ export function searchbar(input, listEl, genes, onSelect) {
                 break
             case "Enter":
                 event.preventDefault()
+                clearTimeout(inputTimer)
                 if (activeIndex >= 0) selectIndex(activeIndex)
                 break
             case "Escape":
                 event.preventDefault()
+                clearTimeout(inputTimer)
                 close()
                 break
             case "Tab":

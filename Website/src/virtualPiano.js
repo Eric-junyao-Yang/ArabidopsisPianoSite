@@ -3,7 +3,7 @@ export function setupVirtualPiano(synth_node, div){
     const containerHeight = div.clientHeight
     const margin = {top: 10, left: 10, bottom: 10, right: 10}
     const innerWidth = containerWidth - (margin.left + margin.right)
-    const innerHeight = containerHeight - (margin.top + margin. bottom)
+    const innerHeight = containerHeight - (margin.top + margin.bottom)
 
     const octaveWidth = 50
     const pianoWidth = innerWidth - (octaveWidth + margin.left)
@@ -43,60 +43,70 @@ export function setupVirtualPiano(synth_node, div){
         { key: "p", index: 8}
     ]
 
-    wKeys.selectAll(".piano-key")
-        .data(wKeys_list)
-        .enter()
-        .append("rect")
-        .attr("class", "piano-key")
-        .attr("id", d => `key-${d.key}`)
-        .attr("width", wKeyWidth)
-        .attr("height", innerHeight)
-        .attr("y", 0)
-        .attr("x", d => d.index * wKeyWidth)
-        .attr("fill", "ivory")
-        .attr("stroke", "black")
-        .attr("stroke-width", 2)
-        .style("cursor", "pointer")
-        .on("pointerdown", function(event, d) {
-            keyDown(synth_node, d.key)
-        })
-        .on("pointerup", function(event, d) {
-            keyUp(synth_node, d.key)
-        })
+    function bindKeyPointer(selection) {
+        selection
+            .style("cursor", "pointer")
+            .on("pointerdown", function(event, d) {
+                event.preventDefault()
+                this.setPointerCapture?.(event.pointerId)
+                keyDown(synth_node, d.key)
+            })
+            .on("pointerup pointercancel lostpointercapture", function(event, d) {
+                keyUp(synth_node, d.key)
+            })
+    }
 
-    bKeys.selectAll(".piano-key")
-        .data(bKeys_list)
-        .enter()
-        .append("rect")
-        .attr("class", "piano-key")
-        .attr("id", d => `key-${d.key}`)
-        .attr("width", bKeyWidth)
-        .attr("height", innerHeight * 2/3)
-        .attr("y", 0)
-        .attr("x", d => (d.index * wKeyWidth) + (wKeyWidth * 3/4))
-        .attr("fill", "ebony")
-        .attr("stroke", "black")
-        .attr("stroke-width", 2)
-        .style("cursor", "pointer")
-        .on("pointerdown", function(event, d) {
-            keyDown(synth_node, d.key)
-        })
-        .on("pointerup", function(event, d) {
-            keyUp(synth_node, d.key)
-        })
+    bindKeyPointer(
+        wKeys.selectAll(".piano-key")
+            .data(wKeys_list)
+            .enter()
+            .append("rect")
+            .attr("class", "piano-key")
+            .attr("id", d => `key-${d.key}`)
+            .attr("width", wKeyWidth)
+            .attr("height", innerHeight)
+            .attr("y", 0)
+            .attr("x", d => d.index * wKeyWidth)
+            .attr("fill", "ivory")
+            .attr("stroke", "black")
+            .attr("stroke-width", 2)
+    )
+
+    bindKeyPointer(
+        bKeys.selectAll(".piano-key")
+            .data(bKeys_list)
+            .enter()
+            .append("rect")
+            .attr("class", "piano-key")
+            .attr("id", d => `key-${d.key}`)
+            .attr("width", bKeyWidth)
+            .attr("height", innerHeight * 2/3)
+            .attr("y", 0)
+            .attr("x", d => (d.index * wKeyWidth) + (wKeyWidth * 3/4))
+            .attr("fill", "ebony")
+            .attr("stroke", "black")
+            .attr("stroke-width", 2)
+    )
+
+    function bindOctavePointer(selection, key) {
+        selection
+            .style("cursor", "pointer")
+            .on("pointerdown", function(event) {
+                event.preventDefault()
+                this.setPointerCapture?.(event.pointerId)
+                keyDown(synth_node, key)
+            })
+            .on("pointerup pointercancel lostpointercapture", () => {
+                keyUp(synth_node, key)
+            })
+    }
 
     // Set up Octaves control buttons
     const octUp = octControls.append('g')
         .attr("transform", `translate(0, ${octaveWidth/2})`)
         .attr("class", "octave-button")
         .attr("id", "octave-up")
-        .style("cursor", "pointer")
-        .on("pointerdown", () => {
-            keyDown(synth_node, "]")
-        })
-        .on("pointerup", () => {
-            keyUp(synth_node, "]")
-        })
+    bindOctavePointer(octUp, "]")
     
     octUp.append('rect')
         .attr("width", octaveWidth)
@@ -115,13 +125,7 @@ export function setupVirtualPiano(synth_node, div){
         .attr("transform", `translate(0, ${(innerHeight - octaveWidth) - octaveWidth/2})`)
         .attr("class", "octave-button")
         .attr("id", "octave-down")
-        .style("cursor", "pointer")
-        .on("pointerdown", () => {
-            keyDown(synth_node, "[")
-        })
-        .on("pointerup", () => {
-            keyUp(synth_node, "[")
-        })
+    bindOctavePointer(octDown, "[")
     octDown.append('rect')
         .attr("width", octaveWidth)
         .attr("height", octaveWidth)
@@ -137,9 +141,15 @@ export function setupVirtualPiano(synth_node, div){
 }
 
 
+function isTypingTarget(el) {
+    if (!el || el === document.body) return false
+    const tag = el.tagName
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable
+}
+
 export function assign_keyboard_keys(synth_node){
-    // const pressed_freq = new Set()
     window.addEventListener('keydown', (e) => {
+        if (isTypingTarget(e.target)) return
         if (e.key === "'") {
             e.preventDefault() // firefox default is quickfind
             return
@@ -147,6 +157,7 @@ export function assign_keyboard_keys(synth_node){
         if (e.repeat) return
         keyDown(synth_node, e.key)
     })
+    // Always release — focus can move into an input while a key is held
     window.addEventListener('keyup', (e) => {
         keyUp(synth_node, e.key)
     })
@@ -168,12 +179,10 @@ function updateDownKeys(key){
         return
     }
     if (key === "[") {
-        const Octdown = document.getElementById("octave-down")
-        Octdown.classList.add("pressed")
+        document.getElementById("octave-down")?.classList.add("pressed")
     }
     if (key === "]") {
-        const Octup = document.getElementById("octave-up")
-        Octup.classList.add("pressed")
+        document.getElementById("octave-up")?.classList.add("pressed")
     }
 }
 
@@ -184,16 +193,15 @@ function updateUpKeys(key){
         return
     }
     if (key === "[") {
-        const Octdown = document.getElementById("octave-down")
-        Octdown.classList.remove("pressed")
+        document.getElementById("octave-down")?.classList.remove("pressed")
     }
     if (key === "]") {
-        const Octup = document.getElementById("octave-up")
-        Octup.classList.remove("pressed")
+        document.getElementById("octave-up")?.classList.remove("pressed")
     }
 }
 
 function keyDown(synth_node, key){
+    if (!synth_node) return
     if (key_freq_map.has(key)){
         synth_node.port.postMessage({type: "keyDownUpdate", freq: key_freq_map.get(key)})
         updateDownKeys(key)
@@ -207,6 +215,7 @@ function keyDown(synth_node, key){
 }
 
 function keyUp(synth_node, key){
+    if (!synth_node) return
     if (key_freq_map.has(key)){
         synth_node.port.postMessage({type: "keyUpUpdate", freq: key_freq_map.get(key)})
         updateUpKeys(key)
