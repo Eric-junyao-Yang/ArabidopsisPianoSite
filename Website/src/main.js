@@ -9,6 +9,9 @@ import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
 import { searchbar } from "/src/searchbar.js"
+import { midiplayer, play } from "/src/midiplayer.js"
+import { interpolate_waveform, maxAbsScaling , ldTimepoints } from "/src/catmullrom.js"
+
 // ---- add a bus for communication between modules ----
 const bus = {
     _listeners: {},
@@ -82,6 +85,19 @@ document.getElementById("SeqReset").addEventListener("click", () => {
     bus.execute_event("resetSelection", null)
 })
 
+// --------------------------------------- MidiPlayer ---------------------------------------
+let midi_events = null
+document.getElementById("activateMidi").addEventListener("click", async () => {
+    await initMidiAudio()
+    midi_events = await midiplayer(midiCtx, midiNode, normalized_counts_lookup)
+})
+
+document.getElementById("play").addEventListener("click", () => {
+    play(midi_events, midiCtx, midiNode)
+})
+
+
+
 // --------------------------------------- Audio ---------------------------------------
 let SynthContext = null
 let synth_node = null
@@ -143,6 +159,20 @@ function rescaleGains() {
     activeVoices.forEach((gain) => {
         gain.gain.value = g
     })
+}
+
+// Midi Player
+let midiCtx = null
+let midiNode = null
+let MidiDestinationConnection = false
+async function initMidiAudio() {
+    if (midiCtx) return
+    midiCtx = new AudioContext()
+    await midiCtx.audioWorklet.addModule("/src/audio_processor.js")
+    await midiCtx.resume()
+    midiNode = new AudioWorkletNode(midiCtx, "midi-audio-processor")
+    midiNode.connect(midiCtx.destination)
+    MidiDestinationConnection = true
 }
 
 // --------------------------------------- Spawn voices ---------------------------------------
@@ -272,8 +302,8 @@ if (TOC1 && PP2AA3) {
 
 // --------------------------------------- Search Bars ---------------------------------------
 searchbar(
-    document.querySelector("#search"),
-    document.querySelector("#results"),
+    document.querySelector("#stepseq-search"),
+    document.querySelector("#stepseq-results"),
     osc_perGene_meta,
     (item) => {
         bus.execute_event("selection_add", item)
@@ -289,6 +319,77 @@ searchbar(
     }
 )
 
+//MIDIs
+const midi_vocal_gene_name_field = document.getElementById("midi-vocal-gene-name")
+const midi_synth1_gene_name_field = document.getElementById("midi-synth1-gene-name")
+const midi_synth2_gene_name_field = document.getElementById("midi-synth2-gene-name")
+const midi_bass_gene_name_field = document.getElementById("midi-bass-gene-name")
+const midi_brass_gene_name_field = document.getElementById("midi-brass-gene-name")
+
+
+function interpolate_for_midi(GeneID, trackIndex){
+    const item = normalized_counts_lookup.get(GeneID)
+    const points = ldTimepoints(item)
+    const interpolated = interpolate_waveform(points, 2048)
+    const waveform = maxAbsScaling(interpolated)
+    midiNode.port.postMessage({
+        type: "updateWavetable",
+        trackIndex: trackIndex,
+        waveform: waveform,
+    })
+} 
+
+
+//Vocal
+searchbar(
+    document.querySelector("#midi-vocal-search"),
+    document.querySelector("#midi-vocal-results"),
+    count_arr,
+    (item) => {
+        interpolate_for_midi(item.GeneID, 1)
+        midi_vocal_gene_name_field.textContent = item.GeneID
+    }
+)
+//Synth1
+searchbar(
+    document.querySelector("#midi-synth1-search"),
+    document.querySelector("#midi-synth1-results"),
+    count_arr,
+    (item) => {
+        interpolate_for_midi(item.GeneID, 2)
+        midi_synth1_gene_name_field.textContent = item.GeneID
+    }
+)
+//Synth2
+searchbar(
+    document.querySelector("#midi-synth2-search"),
+    document.querySelector("#midi-synth2-results"),
+    count_arr,
+    (item) => {
+        interpolate_for_midi(item.GeneID, 3)
+        midi_synth2_gene_name_field.textContent = item.GeneID
+    }
+)
+//Bass
+searchbar(
+    document.querySelector("#midi-bass-search"),
+    document.querySelector("#midi-bass-results"),
+    count_arr,
+    (item) => {
+        interpolate_for_midi(item.GeneID, 4)
+        midi_bass_gene_name_field.textContent = item.GeneID
+    }
+)
+//Brass
+searchbar(
+    document.querySelector("#midi-brass-search"),
+    document.querySelector("#midi-brass-results"),
+    count_arr,
+    (item) => {
+        interpolate_for_midi(item.GeneID, 5)
+        midi_brass_gene_name_field.textContent = item.GeneID
+    }
+)
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("synth_waveform_changed", "main", (points) => {
     if (synth_node) {

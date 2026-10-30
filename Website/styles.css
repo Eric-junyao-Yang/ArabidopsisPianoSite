@@ -70,6 +70,18 @@ body {
     height: 500px;
 }
 
+/* ---- MIDI ---- */
+
+#midi {
+    display: flex;
+    flex-direction: column;
+}
+
+.midi-track {
+    display: flex;
+    flex-direction: row;
+}
+
 /* ---- Step Sequencer ---- */
 
 #SequencerDiv {

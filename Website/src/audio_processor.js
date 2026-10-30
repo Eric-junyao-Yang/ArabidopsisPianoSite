@@ -111,6 +111,113 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
     }
 }
 
+class MidiAudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super()
+        this.tables = new Map(
+            Array.from({length: 4}, (_, i) => [i + 1, new Float32Array(TABLE_SIZE)])
+        )
+        this.voices = new Map()
+        this.octave = 0
+        this.port.onmessage = (event) => {
+            if (event.data.type === "updateWavetable") {
+                this.tables.set(event.data.trackIndex, event.data.waveform)
+            }
+            if (event.data.type === "noteOn") {
+                this.voices.set(event.data.uniqueID, {
+                    "uniqueID": event.data.uniqueID,
+                    "trackIndex": event.data.trackIndex,
+                    "freq": event.data.freq,
+                    "duration": event.data.duration,
+                    "velocity": event.data.velocity,
+                    "when": event.data.when,
+                    "state": "attack",
+                    "lvl": 0,
+                    "phase": 0,
+                    "noteSustain": 0,
+                })
+            }
+        }
+    }
+
+    generateSound(uniqueID, channels, gain, data){
+        const freq = data.freq
+        const outputLength = channels[0].length
+        const increment = freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
+        
+        const attackIncrement = 1 / (sampleRate * 0.005)
+        const releaseIncrement = 1/ (sampleRate * 0.03)
+
+        for (let i=0; i < outputLength; i ++){
+            // envelope
+            if (data.state === "attack"){
+                data.lvl += attackIncrement
+                if (data.lvl >= 1){
+                    data.lvl = 1
+                    data.state = "sustain"
+                }
+            }
+
+            if (data.state === "sustain"){
+                data.noteSustain += 1 / sampleRate
+                if (data.noteSustain >= data.duration){
+                    data.state = "release"
+                }
+            }
+
+            if (data.state === "release"){
+                data.lvl -= releaseIncrement
+
+                if (data.lvl <= 0){
+                    data.lvl = 0
+                    data.state = "finished"
+                }
+            }
+
+            //wavetable
+            const base = Math.floor(data.phase)
+            const i0 = base % TABLE_SIZE //lookup index in wavetable
+            const i1 = (i0 + 1) % TABLE_SIZE
+            const frac = data.phase - base
+            const track_table = this.tables.get(data.trackIndex)
+            const sample = (track_table[i0] * (1-frac) + track_table[i1] * frac) * 2 - 1
+            for (const channel of channels){
+                channel[i] += sample * gain * data.lvl * data.velocity
+            }
+            data.phase += increment
+
+            if (data.phase >= TABLE_SIZE){
+                data.phase %= TABLE_SIZE
+            }
+        }
+    }
+
+    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
+        const channels = outputs[0]
+        const bufferSize = channels[0].length
+        const totalKeys = this.voices.size
+
+        for (const channel of channels){
+            channel.fill(0)
+        }
+
+        if (totalKeys === 0) {
+            return true
+        }
+
+        const gain = 1 / totalKeys
+
+        for (const [uniqueID, data] of this.voices){
+            this.generateSound(uniqueID, channels, gain, data)
+            if (data.state === "finished"){
+                this.voices.delete(uniqueID)
+            }
+        }
+        return true
+    }
+}
+
+
 function gatherCatmullrom(waveTable, phase, N_GRID){
     const p1 = Math.floor(phase) % N_GRID
     const p0 = (p1 - 1 + N_GRID) % N_GRID
@@ -288,3 +395,4 @@ class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
 registerProcessor("synth-audio-processor", SynthAudioProcessor)
 registerProcessor("stepseq-audio-processor", StepSeqAudioProcessor)
 registerProcessor("synthslides-audio-processor", SynthSlidesAudioProcessor)
+registerProcessor("midi-audio-processor", MidiAudioProcessor)

@@ -127,7 +127,100 @@
                      corresponding point of the same gene in the other UMAP. 
                      Double click to reset."></div>
             </div>
-            <div id="midi"></div>
+            <div id="midi">
+                <button id="activateMidi"> activate Midi </button>
+                <button id="play"> play </button>
+                <div class="midi-track">
+                    <div id="midi-vocal-searchbar" class="gene-search">
+                        <label class="gene-search-label" for="midi-vocal-search">Type to search:</label>
+                        <div class="gene-search-field">
+                            <input
+                                id="midi-vocal-search"
+                                type="search"
+                                placeholder="e.g. AT5G61380"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <ul id="midi-vocal-results" class="gene-search-results" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="name"> Vocal </div>
+                    <div class="midi-symbol"> 🎤 </div>
+                    <p id="midi-vocal-gene-name" class="midi-gene-name"></p>
+                </div>
+                <div class="midi-track">
+                    <div id="midi-synth1-searchbar" class="gene-search">
+                        <label class="gene-search-label" for="midi-synth1-search">Type to search:</label>
+                        <div class="gene-search-field">
+                            <input
+                                id="midi-synth1-search"
+                                type="search"
+                                placeholder="e.g. AT5G61380"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <ul id="midi-synth1-results" class="gene-search-results" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="name"> Synth1 </div>
+                    <div class="midi-symbol"> 🎹 </div>
+                    <p id="midi-synth1-gene-name" class="midi-gene-name"></p>
+                </div>
+                <div class="midi-track">
+                    <div id="midi-synth2-searchbar" class="gene-search">
+                        <label class="gene-search-label" for="midi-synth2-search">Type to search:</label>
+                        <div class="gene-search-field">
+                            <input
+                                id="midi-synth2-search"
+                                type="search"
+                                placeholder="e.g. AT5G61380"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <ul id="midi-synth2-results" class="gene-search-results" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="name"> Synth2 </div>
+                    <div class="midi-symbol"> 🎹 </div>
+                    <p id="midi-synth2-gene-name" class="midi-gene-name"></p>
+                </div>
+                <div class="midi-track">
+                    <div id="midi-bass-searchbar" class="gene-search">
+                        <label class="gene-search-label" for="midi-bass-search">Type to search:</label>
+                        <div class="gene-search-field">
+                            <input
+                                id="midi-bass-search"
+                                type="search"
+                                placeholder="e.g. AT5G61380"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <ul id="midi-bass-results" class="gene-search-results" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="name"> Bass </div>
+                    <div class="midi-symbol"> 𝄢 </div>
+                    <p id="midi-bass-gene-name" class="midi-gene-name"></p>
+                </div>
+                <div class="midi-track">
+                    <div id="midi-brass-searchbar" class="gene-search">
+                        <label class="gene-search-label" for="midi-brass-search">Type to search:</label>
+                        <div class="gene-search-field">
+                            <input
+                                id="midi-brass-search"
+                                type="search"
+                                placeholder="e.g. AT5G61380"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <ul id="midi-brass-results" class="gene-search-results" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="name"> Brass </div>
+                    <div class="midi-symbol"> 🎺 </div>
+                    <p id="midi-brass-gene-name" class="midi-gene-name"></p>
+                </div>
+            </div>
         </div>
 
         <div id="SequencerDiv">
@@ -211,16 +304,16 @@
                             <button id="SeqReset">Reset</button>
                         </div>
                         <div id="SeqRightSearchBar" class="gene-search">
-                            <label class="gene-search-label" for="search">Type to search:</label>
+                            <label class="gene-search-label" for="step-seq-search">Type to search:</label>
                             <div class="gene-search-field">
                                 <input
-                                    id="search"
+                                    id="stepseq-search"
                                     type="search"
                                     placeholder="e.g. AT5G61380"
                                     autocomplete="off"
                                     spellcheck="false"
                                 >
-                                <ul id="results" class="gene-search-results" hidden></ul>
+                                <ul id="stepseq-results" class="gene-search-results" hidden></ul>
                             </div>
                         </div>
                         <div id="SeqRightSelectedGeneDisplay"></div>
@@ -305,6 +398,7 @@
             <p>Assumes gene expression loops around after 48 hours (indefinitely)</p>
             <p>Bootstrapping method for confidence interval of period detection assumes the underlying model is sinusoidal and the residuals are independent of each other.</p>
             <p>Uncertanties in period estimation isn't reflected in the Gaussian Process modeling.</p>
+            <p>The smoothing function used on the waveform makes it so they all sound sonically in the same family.</p>
         </div>
     </div>
 
