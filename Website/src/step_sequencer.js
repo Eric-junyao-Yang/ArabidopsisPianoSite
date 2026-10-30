@@ -237,13 +237,13 @@ export function plotStepSeqMain(
     }
 
     const just_tuning = {
-        "Unison" : 1/1,
-        "Octave": 2/1,
-        "Perfect Fifth" : 3/2,
-        "Perfect Fourth" : 4/3,
-        "Major Third" : 5/4,
-        "Minor Third" : 6/5,
-        "Major Sixth" : 5/3,
+        "Unison (1:1)" : 1/1,
+        "Octave (2:1)": 2/1,
+        "Perfect Fifth (3:2)" : 3/2,
+        "Perfect Fourth (4:3)" : 4/3,
+        "Major Third (5:4)" : 5/4,
+        "Minor Third (6:5)" : 6/5,
+        "Major Sixth (5:3)" : 5/3,
     }
 
     function justIntervalBands(item) {

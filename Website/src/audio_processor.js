@@ -114,104 +114,119 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
 class MidiAudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super()
-        this.tables = new Map(
-            Array.from({length: 4}, (_, i) => [i + 1, new Float32Array(TABLE_SIZE)])
-        )
+        // 0-based track slots matching UI / Tone.js track indices.
+        // Midpoint 0.5 → silence after bipolar map (0*2-1 = -1 would be a loud DC click).
+        this.tables = new Map()
+        this.tableReady = new Set()
+        for (let i = 0; i < 8; i++) {
+            this.tables.set(i, new Float32Array(TABLE_SIZE).fill(0.5))
+        }
         this.voices = new Map()
-        this.octave = 0
+        this.voiceGain = 0.15
+        this.attackInc = 1 / (sampleRate * 0.005)
+        this.releaseInc = 1 / (sampleRate * 0.03)
+        this.invSampleRate = 1 / sampleRate
+
         this.port.onmessage = (event) => {
-            if (event.data.type === "updateWavetable") {
-                this.tables.set(event.data.trackIndex, event.data.waveform)
-            }
-            if (event.data.type === "noteOn") {
-                this.voices.set(event.data.uniqueID, {
-                    "uniqueID": event.data.uniqueID,
-                    "trackIndex": event.data.trackIndex,
-                    "freq": event.data.freq,
-                    "duration": event.data.duration,
-                    "velocity": event.data.velocity,
-                    "when": event.data.when,
-                    "state": "attack",
-                    "lvl": 0,
-                    "phase": 0,
-                    "noteSustain": 0,
+            const msg = event.data
+            if (msg.type === "updateWavetable") {
+                const table = msg.waveform
+                if (table && table.length) {
+                    this.tables.set(msg.trackIndex, table)
+                    this.tableReady.add(msg.trackIndex)
+                }
+            } else if (msg.type === "noteOn") {
+                // Skip tracks with no gene assigned yet
+                if (!this.tableReady.has(msg.trackIndex)) return
+                this.voices.set(msg.uniqueID, {
+                    trackIndex: msg.trackIndex,
+                    freq: msg.freq,
+                    velocity: msg.velocity ?? 1,
+                    when: msg.when ?? currentTime,
+                    endTime: (msg.when ?? currentTime) + (msg.duration ?? 0),
+                    state: "pending",
+                    lvl: 0,
+                    phase: 0,
                 })
+            } else if (msg.type === "allNotesOff") {
+                for (const voice of this.voices.values()) {
+                    if (voice.state !== "finished") voice.state = "release"
+                }
             }
         }
     }
 
-    generateSound(uniqueID, channels, gain, data){
-        const freq = data.freq
+    generateSound(channels, data) {
         const outputLength = channels[0].length
-        const increment = freq * TABLE_SIZE / sampleRate // fraction of phase to move per sample
-        
-        const attackIncrement = 1 / (sampleRate * 0.005)
-        const releaseIncrement = 1/ (sampleRate * 0.03)
+        const table = this.tables.get(data.trackIndex)
+        if (!table || table.length === 0) {
+            data.state = "finished"
+            return
+        }
+        const tableLen = table.length
+        const increment = data.freq * tableLen * this.invSampleRate
+        const velGain = this.voiceGain * data.velocity
 
-        for (let i=0; i < outputLength; i ++){
-            // envelope
-            if (data.state === "attack"){
-                data.lvl += attackIncrement
-                if (data.lvl >= 1){
+        for (let i = 0; i < outputLength; i++) {
+            const t = currentTime + i * this.invSampleRate
+
+            if (data.state === "pending") {
+                if (t < data.when) continue
+                data.state = "attack"
+            }
+
+            if (data.state === "attack") {
+                data.lvl += this.attackInc
+                if (data.lvl >= 1) {
                     data.lvl = 1
                     data.state = "sustain"
                 }
             }
 
-            if (data.state === "sustain"){
-                data.noteSustain += 1 / sampleRate
-                if (data.noteSustain >= data.duration){
-                    data.state = "release"
-                }
+            if (data.state === "sustain" && t >= data.endTime) {
+                data.state = "release"
             }
 
-            if (data.state === "release"){
-                data.lvl -= releaseIncrement
-
-                if (data.lvl <= 0){
+            if (data.state === "release") {
+                data.lvl -= this.releaseInc
+                if (data.lvl <= 0) {
                     data.lvl = 0
                     data.state = "finished"
+                    continue
                 }
             }
 
-            //wavetable
             const base = Math.floor(data.phase)
-            const i0 = base % TABLE_SIZE //lookup index in wavetable
-            const i1 = (i0 + 1) % TABLE_SIZE
+            const i0 = base % tableLen
+            const i1 = (i0 + 1) % tableLen
             const frac = data.phase - base
-            const track_table = this.tables.get(data.trackIndex)
-            const sample = (track_table[i0] * (1-frac) + track_table[i1] * frac) * 2 - 1
-            for (const channel of channels){
-                channel[i] += sample * gain * data.lvl * data.velocity
+            // Tables are expected in ~[0, 1]; map to bipolar [-1, 1]
+            const sample = (table[i0] * (1 - frac) + table[i1] * frac) * 2 - 1
+            const amp = sample * velGain * data.lvl
+            for (let c = 0; c < channels.length; c++) {
+                channels[c][i] += amp
             }
-            data.phase += increment
 
-            if (data.phase >= TABLE_SIZE){
-                data.phase %= TABLE_SIZE
-            }
+            data.phase += increment
+            if (data.phase >= tableLen) data.phase %= tableLen
         }
     }
 
-    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
+    process(inputs, outputs) {
         const channels = outputs[0]
-        const bufferSize = channels[0].length
-        const totalKeys = this.voices.size
-
-        for (const channel of channels){
-            channel.fill(0)
+        for (let c = 0; c < channels.length; c++) {
+            channels[c].fill(0)
         }
 
-        if (totalKeys === 0) {
-            return true
+        if (this.voices.size === 0) return true
+
+        const finished = []
+        for (const [id, data] of this.voices) {
+            this.generateSound(channels, data)
+            if (data.state === "finished") finished.push(id)
         }
-
-        const gain = 1 / totalKeys
-
-        for (const [uniqueID, data] of this.voices){
-            this.generateSound(uniqueID, channels, gain, data)
-            if (data.state === "finished"){
-                this.voices.delete(uniqueID)
-            }
+        for (let i = 0; i < finished.length; i++) {
+            this.voices.delete(finished[i])
         }
         return true
     }

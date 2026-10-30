@@ -127,7 +127,11 @@
                      corresponding point of the same gene in the other UMAP. 
                      Double click to reset."></div>
             </div>
-            <div id="midi">
+            <div id="midi" 
+                    class = "help-panel"
+                    data-help-text = "
+                    By assigning a different wavefrom to each MIDI track, you can play a whole song
+                     with sounds derived from the Arabidopsis plant!">
                 <button id="activateMidi"> activate Midi </button>
                 <button id="play"> play </button>
                 <div class="midi-track">
@@ -291,14 +295,34 @@
                     </div>
                 </div>
                 <div id="StepSequencerContainer">
-                    <div id="SeqLeft"></div>
-                    <div id="SeqMid">
+                    <div id="SeqLeft"
+                    class = "help-panel"
+                    data-help-text = "Each point here is a potentially oscillating gene. The nautral 
+                    oscillating frequency of the gene is scaled up and mapped to the y-axis, and the x-axis
+                     represents the phase the wavefrom peaks. Left-click to select a gene. Selected genes are
+                     shown in a list on the right. Multiple genes can be selected at once. Only one gene can 
+                     be 'in focus'. click on a gene to cancel and anywhere else to reset zoom. Scroll to zoom. Once a gene is selected, genes with 
+                     potential small number relationships with the selelcted gene are highlighted. The intensity of the
+                     gene cooresponds to how much the confidence interval of the selected gene and the target gene overlaps.
+                      The confidence interval of the selected gene is shown as colored bands while CI of the targets are shown as 
+                      bars. Click on any of the bands to lock in. This allows easier selelction of target genes. Click outside 
+                      the CI bands to cancel. You can drag and drop genes to an equivalent phase when possible.
+                      The sound triggered when you press play is from 10 samples pulled from the Gaussian Process
+                      Modeling. The quality of the sound and the speed at which the waveform morphs captures 
+                      a sense of confidence in the shape of the wave. Higher variation means less confidence."></div>
+                    <div id="SeqMid" class = "help-panel"
+                            data-help-text = "Drag the ends of the violin plots to filter by each metric.
+                            mean TPM corresponds to average gene expression. q-value is the % chance a 
+                            non-oscillating gene might slip through the analysis (5% or lower is typical but
+                            I included up to 20% for more genes to play with). relative std captures the 
+                            confidence of the fitted waveform.">
                         <div id="violin-TPM"></div>
                         <div id="violin-qVal"></div>
                         <div id="violin-Std"></div>
                     </div>
                     <div id="SeqRight">
-                        <div id="SeqRightButtons">
+                        <div id="SeqRightButtons" class = "help-panel"
+                            data-help-text = "Use these controls to trigger the selected genes.">
                             <button id="SeqPlayPause">Play</button>
                             <button id="SeqStop">Stop</button>
                             <button id="SeqReset">Reset</button>
@@ -316,8 +340,12 @@
                                 <ul id="stepseq-results" class="gene-search-results" hidden></ul>
                             </div>
                         </div>
-                        <div id="SeqRightSelectedGeneDisplay"></div>
-                        <div id="SeqRightPlot"></div>
+                        <div id="SeqRightSelectedGeneDisplay" class = "help-panel"
+                            data-help-text = "Here is the list of genes you selelcted. You can more precicely
+                            select genes to be 'in focus' or remove here."></div>
+                        <div id="SeqRightPlot" class = "help-panel"
+                            data-help-text = "Here is the waveform modeled using Gaussian Process. 10 samples drawn
+                            from the model are displayed here. These will be the collection of waveforms you hear."></div>
                     </div>
                 </div>
 

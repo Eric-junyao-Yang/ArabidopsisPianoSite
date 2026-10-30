@@ -1,53 +1,123 @@
-import { interpolate_waveform, maxAbsScaling , ldTimepoints} from "/src/catmullrom.js"
-import { Midi } from "https://esm.sh/@tonejs/midi@2.0.28";
+import { interpolate_waveform, maxAbsScaling, ldTimepoints } from "/src/catmullrom.js"
+import { Midi } from "https://esm.sh/@tonejs/midi@2.0.28"
 
-export async function midiplayer(midiCtx, midiNode, normalized_counts_lookup){
-    // playSound("AT5G61380", 440, 5, midiNode, normalized_counts_lookup)
-    const file_path = "/dat/NGGYU.mid"
-    const file = await fetch(file_path)
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const midi = new Midi(bytes);
+const LOOKAHEAD_SEC = 0.1
+const SCHEDULER_MS = 25
+const A4_MIDI = 69
+const A4_HZ = 440
+
+export function midiToFreq(midiNote) {
+    return A4_HZ * 2 ** ((midiNote - A4_MIDI) / 12)
+}
+
+export function geneToWavetable(GeneID, normalized_counts_lookup, tableSize = 2048) {
+    const item = normalized_counts_lookup.get(GeneID)
+    if (!item) return null
+    const points = ldTimepoints(item)
+    const interpolated = interpolate_waveform(points, tableSize)
+    return maxAbsScaling(interpolated)
+}
+
+export async function loadMidiEvents(filePath, maxTracks = Infinity) {
+    const response = await fetch(filePath)
+    if (!response.ok) throw new Error(`Failed to load MIDI: ${filePath} (${response.status})`)
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    const midi = new Midi(bytes)
+
     const events = []
     midi.tracks.forEach((track, trackIndex) => {
+        if (trackIndex >= maxTracks) return
         for (const n of track.notes) {
             events.push({
                 time: n.time,
                 duration: n.duration,
                 midi: n.midi,
                 velocity: n.velocity,
-                trackIndex
+                trackIndex,
             })
         }
     })
+    events.sort((a, b) => a.time - b.time || a.trackIndex - b.trackIndex)
 
-    events.sort((a,b) => a.time - b.time || a.trackIndex - b.trackIndex)
-    return events
+    return {
+        events,
+        duration: midi.duration,
+        trackCount: Math.min(midi.tracks.length, maxTracks),
+    }
 }
 
-export function play(events, midiCtx, midiNode){
-    const LOOKAHEAD = 0.1 //sec
+/**
+ * Lookahead scheduler that drives noteOn messages into the MIDI AudioWorklet.
+ * Uses AudioContext.currentTime as the clock; setInterval for the schedule loop.
+ */
+export function createMidiTransport(midiCtx, midiNode, { onStop } = {}) {
+    let events = []
     let playHead = 0
-    let songStartAudioTime = midiCtx.currentTime
+    let songStartAudioTime = 0
+    let timerId = null
+    let noteSerial = 0
 
-    function tick() {
-        const now = midiCtx.currentTime
-        const songTime = now - songStartAudioTime
-        while (playHead < events.length && events[playHead].time <= songTime + LOOKAHEAD){
+    function clearTimer() {
+        if (timerId != null) {
+            clearInterval(timerId)
+            timerId = null
+        }
+    }
+
+    function schedule() {
+        const songTime = midiCtx.currentTime - songStartAudioTime
+        while (playHead < events.length && events[playHead].time <= songTime + LOOKAHEAD_SEC) {
             const e = events[playHead++]
-            const when = songStartAudioTime + e.time
-            const freq = 440 * 2 ** ((e.midi - 69) / 12)
-
+            noteSerial += 1
             midiNode.port.postMessage({
                 type: "noteOn",
-                uniqueID: `${e.trackIndex}_${playHead}`,
+                uniqueID: `${e.trackIndex}_${noteSerial}`,
                 trackIndex: e.trackIndex,
-                freq,
+                freq: midiToFreq(e.midi),
                 duration: e.duration,
                 velocity: e.velocity,
-                when,
+                when: songStartAudioTime + e.time,
             })
         }
-        requestAnimationFrame(tick)
+        if (playHead >= events.length) stop()
     }
-    requestAnimationFrame(tick)
+
+    function stop() {
+        const wasPlaying = timerId != null
+        clearTimer()
+        midiNode.port.postMessage({ type: "allNotesOff" })
+        if (wasPlaying && onStop) onStop()
+    }
+
+    return {
+        setEvents(nextEvents) {
+            events = nextEvents
+            playHead = 0
+        },
+        play() {
+            if (!events.length) return
+            // Clear timer without allNotesOff/onStop so restart is seamless
+            clearTimer()
+            playHead = 0
+            noteSerial = 0
+            songStartAudioTime = midiCtx.currentTime + 0.05
+            timerId = setInterval(schedule, SCHEDULER_MS)
+            schedule()
+        },
+        stop,
+        get isPlaying() {
+            return timerId != null
+        },
+    }
+}
+
+/** Upload a per-track wavetable (copies into the worklet). */
+export function setTrackWavetable(midiNode, trackIndex, waveform) {
+    if (!midiNode || !waveform) return
+    // Structured clone is fine at gene-select rate; keep main-thread buffer intact for re-use.
+    midiNode.port.postMessage({
+        type: "updateWavetable",
+        trackIndex,
+        waveform,
+    })
 }
