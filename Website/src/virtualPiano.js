@@ -1,25 +1,47 @@
+import { PALETTE, THEME } from "/src/plotTheme.js"
+
+// Builds the piano and keeps it fitted to its container (rebuilds on resize; keys are
+// stateless, so a rebuild is cheap and safe).
 export function setupVirtualPiano(synth_node, div){
+    let last = ""
+    const build = () => drawPiano(synth_node, div)
+    build()
+    new ResizeObserver(() => {
+        const key = `${div.clientWidth}x${div.clientHeight}`
+        if (key === last) return
+        last = key
+        build()
+    }).observe(div)
+    last = `${div.clientWidth}x${div.clientHeight}`
+}
+
+function drawPiano(synth_node, div){
+    d3.select(div).selectAll("svg").remove()
     const containerWidth = div.clientWidth
     const containerHeight = div.clientHeight
+    if (!containerWidth || !containerHeight) return
+    const compact = containerWidth < 520
     const margin = {top: 10, left: 10, bottom: 10, right: 10}
     const innerWidth = containerWidth - (margin.left + margin.right)
     const innerHeight = containerHeight - (margin.top + margin.bottom)
 
-    const octaveWidth = 50
-    const pianoWidth = innerWidth - (octaveWidth + margin.left)
+    const octaveWidth = compact ? 38 : 50
+    const gap = 10 // between keys and octave buttons
+    const pianoWidth = innerWidth - (octaveWidth + gap)
 
     const wKeyWidth = pianoWidth / 10
     const bKeyWidth = pianoWidth / 20
 
     const svg = d3.select(div).append("svg")
-        .attr("width", innerWidth)
-        .attr("height", innerHeight)
-        .attr("transform", `translate(${margin.left}, ${margin.top})`)
+        .attr("width", containerWidth)
+        .attr("height", containerHeight)
+        .style("display", "block")
 
-    const wKeys = svg.append('g')
-    const bKeys = svg.append('g')
-    const octControls = svg.append('g')
-        .attr("transform", `translate(${pianoWidth + margin.right}, 0)`)
+    const root = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`)
+    const wKeys = root.append('g')
+    const bKeys = root.append('g')
+    const octControls = root.append('g')
+        .attr("transform", `translate(${pianoWidth + gap}, 0)`)
 
     const wKeys_list = [
         { key: "a", index: 0}, 
@@ -67,10 +89,27 @@ export function setupVirtualPiano(synth_node, div){
             .attr("height", innerHeight)
             .attr("y", 0)
             .attr("x", d => d.index * wKeyWidth)
-            .attr("fill", "ivory")
-            .attr("stroke", "black")
-            .attr("stroke-width", 2)
+            .attr("rx", 5)
+            .attr("fill", "#ffffff")
+            .attr("stroke", THEME.axis)
+            .attr("stroke-width", 1.5)
     )
+
+    // computer-keyboard hints at the bottom of each white key
+    wKeys.selectAll("text.key-hint")
+        .data(wKeys_list)
+        .enter()
+        .append("text")
+        .attr("class", "key-hint")
+        .attr("x", d => d.index * wKeyWidth + wKeyWidth / 2)
+        .attr("y", innerHeight - 10)
+        .attr("text-anchor", "middle")
+        .attr("font-size", 11)
+        .attr("fill", THEME.muted)
+        .style("font-family", THEME.fontMono)
+        .style("text-transform", "uppercase")
+        .attr("pointer-events", "none")
+        .text(d => d.key)
 
     bindKeyPointer(
         bKeys.selectAll(".piano-key")
@@ -83,9 +122,10 @@ export function setupVirtualPiano(synth_node, div){
             .attr("height", innerHeight * 2/3)
             .attr("y", 0)
             .attr("x", d => (d.index * wKeyWidth) + (wKeyWidth * 3/4))
-            .attr("fill", "ebony")
-            .attr("stroke", "black")
-            .attr("stroke-width", 2)
+            .attr("rx", 4)
+            .attr("fill", THEME.ink)
+            .attr("stroke", THEME.ink)
+            .attr("stroke-width", 1.5)
     )
 
     function bindOctavePointer(selection, key) {
@@ -113,13 +153,17 @@ export function setupVirtualPiano(synth_node, div){
         .attr("height", octaveWidth)
         .attr("x", 0)
         .attr("y", 0)
-        .attr("fill", "red")
+        .attr("rx", 10)
+        .attr("fill", "#ffffff")
+        .attr("stroke", THEME.axis)
+        .attr("stroke-width", 1.5)
     octUp.append("polygon")
         .attr("points", 
             `${octaveWidth / 2}, 8
             10, ${octaveWidth - 10}
             ${octaveWidth - 10}, ${octaveWidth - 10}`)
-        .attr("fill", "orange")
+        .attr("fill", PALETTE.indigo)
+        .attr("pointer-events", "none")
 
     const octDown = octControls.append("g")
         .attr("transform", `translate(0, ${(innerHeight - octaveWidth) - octaveWidth/2})`)
@@ -131,13 +175,17 @@ export function setupVirtualPiano(synth_node, div){
         .attr("height", octaveWidth)
         .attr("x", 0)
         .attr("y", 0)
-        .attr("fill", "red")
+        .attr("rx", 10)
+        .attr("fill", "#ffffff")
+        .attr("stroke", THEME.axis)
+        .attr("stroke-width", 1.5)
     octDown.append("polygon")
         .attr("points", 
             `10, 10
             ${octaveWidth - 10}, 10
             ${octaveWidth / 2}, ${octaveWidth - 8}`)
-        .attr("fill", "orange")    
+        .attr("fill", PALETTE.indigo)
+        .attr("pointer-events", "none")
 }
 
 

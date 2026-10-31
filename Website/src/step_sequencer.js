@@ -1,4 +1,10 @@
 import { ldTimepoints } from "/src/catmullrom.js"
+import { PALETTE, THEME, withAlpha, drawAxis, axisLabel, plotTitle } from "/src/plotTheme.js"
+
+// Point colors shared by the main plot: indigo = passes filters, grey = filtered out,
+// teal = hover, rose = in the play list, sand = in focus (matches the UMAP highlight colors).
+const PT_ACTIVE = withAlpha(PALETTE.indigo, 0.6)
+const PT_INACTIVE = withAlpha(THEME.pointInactive, 0.35)
 
 // --------- Plot period vs phase ---------
 export function plotStepSeqMain(
@@ -9,7 +15,14 @@ export function plotStepSeqMain(
     osc_perGene_meta_lookup, 
     metaValues, 
     bus){
-    const margin = {"top": 30, "right": 30, "bottom": 40,"left": 100, }
+    // Size to the container at load (width), keeping a pleasant aspect ratio; given size = max.
+    const host = document.querySelector(div_name)
+    const hostW = host?.clientWidth || canvasWidth
+    canvasWidth = Math.max(320, Math.min(canvasWidth, Math.floor(hostW)))  // clientWidth excludes the frame border
+    // Tall as the width allows, but never taller than ~90% of the viewport
+    canvasHeight = Math.max(420, Math.min(canvasHeight, Math.round(canvasWidth * 0.72), Math.round(window.innerHeight * 0.9)))
+    const compact = canvasWidth < 560
+    const margin = {"top": 30, "right": compact ? 16 : 30, "bottom": 40, "left": compact ? 84 : 100 }
     const innerHeight = canvasHeight - margin.top - margin.bottom
     const innerWidth = canvasWidth - margin.left - margin.right
     const dpr = window.devicePixelRatio || 1
@@ -31,8 +44,8 @@ export function plotStepSeqMain(
         .nice()
 
     const container_div = d3.select(div_name)
-        .style('width', canvasWidth + 'px')
-        .style('height', canvasHeight + 'px')
+        .style('width', '100%')
+        .style('height', (canvasHeight + 2) + 'px') // +2 = the frame's 1px borders (border-box)
         .style('position', 'relative')
 
     const svg = container_div.append('svg')
@@ -140,7 +153,7 @@ export function plotStepSeqMain(
         ctx.clearRect(0, 0, innerWidth, innerHeight)
 
         // Filter-failed genes (always faint grey)
-        ctx.fillStyle = "rgba(128,128,128,0.3)"
+        ctx.fillStyle = PT_INACTIVE
         ctx.beginPath()
         for (let i = 0; i < osc_perGene_meta.length; i++) {
             const d = osc_perGene_meta[i]
@@ -153,8 +166,8 @@ export function plotStepSeqMain(
         ctx.fill()
 
         if (!confidence_focus) {
-            // No interval hovered — single batched steelblue for passed genes
-            ctx.fillStyle = "steelblue"
+            // No interval hovered — single batched fill for passed genes
+            ctx.fillStyle = PT_ACTIVE
             ctx.beginPath()
             for (let i = 0; i < osc_perGene_meta.length; i++) {
                 const d = osc_perGene_meta[i]
@@ -172,12 +185,12 @@ export function plotStepSeqMain(
             const d = osc_perGene_meta[i]
             if (!genes_passed_set.has(d.GeneID)) continue
             const o = d.conf_overlap || 0
-            const alpha = o > 0 ? 0.2 + 0.8 * o : 0.06
+            const alpha = o > 0 ? 0.25 + 0.75 * o : 0.07
             const x = xSc(d.phase)
             const y = ySc(d.period)
 
             if (o > 0) {
-                ctx.strokeStyle = `rgba(70, 130, 180, ${alpha})`
+                ctx.strokeStyle = withAlpha(PALETTE.teal, alpha)
                 ctx.lineWidth = 1
                 ctx.beginPath()
                 ctx.moveTo(x, ySc(d.period_low95))
@@ -185,7 +198,7 @@ export function plotStepSeqMain(
                 ctx.stroke()
             }
 
-            ctx.fillStyle = `rgba(70, 130, 180, ${alpha})`
+            ctx.fillStyle = o > 0 ? withAlpha(PALETTE.teal, alpha) : withAlpha(PALETTE.indigo, alpha)
             ctx.beginPath()
             ctx.moveTo(x + radius, y)
             ctx.arc(x, y, radius, 0, 2 * Math.PI)
@@ -195,44 +208,46 @@ export function plotStepSeqMain(
 
     drawPoints(CanvasCtx, xScale, yScale, RADIUS_NORMAL)
 
+    // halo + dark ring so markers stay readable on dense clusters
+    function marker(ctx, x, y, r, fill) {
+        ctx.beginPath()
+        ctx.arc(x, y, r + 1.5, 0, 2 * Math.PI)
+        ctx.fillStyle = "rgba(255,255,255,0.9)"
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(x, y, r, 0, 2 * Math.PI)
+        ctx.fillStyle = fill
+        ctx.fill()
+        ctx.lineWidth = 1.25
+        ctx.strokeStyle = THEME.ink
+        ctx.stroke()
+    }
+
     function drawHighlight(HightlightCanvasCtx, xSc, ySc, hover_radius = RADIUS_HOVER, selected_radius = RADIUS_SELECT, show_all_phase = false) {
         HightlightCanvasCtx.clearRect(0, 0, innerWidth, innerHeight) //Clear canvas
-        if (current_selection.size > 0) {
-            current_selection.forEach((val) => {
-                HightlightCanvasCtx.fillStyle = "pink"
-                HightlightCanvasCtx.beginPath()
-                HightlightCanvasCtx.moveTo(xSc(val.phase) + selected_radius, ySc(val.period))
-                HightlightCanvasCtx.arc(xSc(val.phase), ySc(val.period), selected_radius, 0, 2*Math.PI)
-                HightlightCanvasCtx.fill()
-            })
-        }
+        current_selection.forEach((val) => {
+            marker(HightlightCanvasCtx, xSc(val.phase), ySc(val.period), selected_radius, PALETTE.rose)
+        })
         if (current_display_gene){
-            HightlightCanvasCtx.fillStyle = "purple"
-            HightlightCanvasCtx.beginPath()
-            HightlightCanvasCtx.moveTo(xSc(current_display_gene.phase) + hover_radius, ySc(current_display_gene.period))
-            HightlightCanvasCtx.arc(xSc(current_display_gene.phase), ySc(current_display_gene.period), hover_radius * 1.5, 0, 2*Math.PI)
-            HightlightCanvasCtx.fill()
+            marker(HightlightCanvasCtx, xSc(current_display_gene.phase), ySc(current_display_gene.period), hover_radius * 1.6, PALETTE.sand)
         }
         // mouse down + drag show possible phases
         if (show_all_phase && drag_point) {
             const min_phase = drag_point.phase % drag_point.period
             let cur_phase = min_phase
             while (cur_phase < 24) {
-                HightlightCanvasCtx.fillStyle = cur_phase === closest_point_to_drag ? "blue" : "red"
-                HightlightCanvasCtx.beginPath()
-                HightlightCanvasCtx.moveTo(xSc(cur_phase) + selected_radius, ySc(drag_point.period))
-                HightlightCanvasCtx.arc(xSc(cur_phase), ySc(drag_point.period), selected_radius, 0, 2*Math.PI)
-                HightlightCanvasCtx.fill()
+                const isClosest = cur_phase === closest_point_to_drag
+                marker(
+                    HightlightCanvasCtx, xSc(cur_phase), ySc(drag_point.period),
+                    isClosest ? selected_radius * 1.3 : selected_radius,
+                    isClosest ? PALETTE.green : PALETTE.purple
+                )
                 cur_phase += drag_point.period
             }
         }
         //hover highlight
         if (current_hover){
-            HightlightCanvasCtx.fillStyle = "orange"
-            HightlightCanvasCtx.beginPath()
-            HightlightCanvasCtx.moveTo(xSc(current_hover.phase) + hover_radius, ySc(current_hover.period))
-            HightlightCanvasCtx.arc(xSc(current_hover.phase), ySc(current_hover.period), hover_radius, 0, 2*Math.PI)
-            HightlightCanvasCtx.fill()
+            marker(HightlightCanvasCtx, xSc(current_hover.phase), ySc(current_hover.period), hover_radius, PALETTE.teal)
         }
     }
 
@@ -289,22 +304,36 @@ export function plotStepSeqMain(
             if (h <= 0) continue
 
             const active = band.id === hovering_just_interval
-            if (band.id === selected_just_interval){
-                confIntCanvasCtx.fillStyle = "rgba(200, 45, 18, 0.88)"
+            const locked = band.id === selected_just_interval
+            if (locked){
+                confIntCanvasCtx.fillStyle = withAlpha(PALETTE.sky, 0.55)
             } else if (active){
-                confIntCanvasCtx.fillStyle = "rgba(255,99,71,0.3)"
+                confIntCanvasCtx.fillStyle = withAlpha(PALETTE.sky, 0.35)
             } else {
-                confIntCanvasCtx.fillStyle = "rgba(255,99,71,0.05)"
+                confIntCanvasCtx.fillStyle = withAlpha(PALETTE.sky, 0.12)
             }
             confIntCanvasCtx.fillRect(x0, y, bandWidth, h)
+            if (locked || active) {
+                // crisp edges so the band extent reads clearly
+                confIntCanvasCtx.strokeStyle = withAlpha(PALETTE.indigo, locked ? 0.9 : 0.5)
+                confIntCanvasCtx.lineWidth = locked ? 1.5 : 1
+                confIntCanvasCtx.beginPath()
+                confIntCanvasCtx.moveTo(x0, y + 0.5); confIntCanvasCtx.lineTo(x0 + bandWidth, y + 0.5)
+                confIntCanvasCtx.moveTo(x0, y + h - 0.5); confIntCanvasCtx.lineTo(x0 + bandWidth, y + h - 0.5)
+                confIntCanvasCtx.stroke()
+            }
 
             if (active) {
-                confIntCanvasCtx.font = "20px Arial"
-                confIntCanvasCtx.fillStyle = "black"
+                confIntCanvasCtx.font = `600 ${compact ? 13 : 15}px Inter, system-ui, sans-serif`
+                confIntCanvasCtx.lineJoin = "round"
                 confIntCanvasCtx.textAlign = "right"
                 confIntCanvasCtx.textBaseline = "middle"
                 const labelY = Math.max(12, Math.min(innerHeight - 4, ySc(band.mid)))
-                confIntCanvasCtx.fillText(band.label, x0 + bandWidth, labelY)
+                confIntCanvasCtx.lineWidth = 4
+                confIntCanvasCtx.strokeStyle = "rgba(255,255,255,0.9)"
+                confIntCanvasCtx.strokeText(band.label, x0 + bandWidth - 6, labelY)
+                confIntCanvasCtx.fillStyle = THEME.ink
+                confIntCanvasCtx.fillText(band.label, x0 + bandWidth - 6, labelY)
             }
         }
     }
@@ -390,8 +419,8 @@ export function plotStepSeqMain(
         }
     }
 
-    const WHITE_KEY_LENGTH = 30
-    const BLACK_KEY_LENGTH = 20
+    const WHITE_KEY_LENGTH = compact ? 24 : 30
+    const BLACK_KEY_LENGTH = compact ? 15 : 20
     const PITCH_SCALE = 10560 // 24hrs * 440 Hz
     const whiteKeys = pitchTable.filter((d) => d.keyColor === "white")
     const blackKeys = pitchTable.filter((d) => d.keyColor === "black")
@@ -418,7 +447,7 @@ export function plotStepSeqMain(
             .attr("width", WHITE_KEY_LENGTH)
             .attr("height", (d) => ySc(PITCH_SCALE / d.botEdge) - ySc(PITCH_SCALE / d.topEdge))
             .attr("fill", "white")
-            .attr("stroke", "black")
+            .attr("stroke", THEME.axis)
             .attr("stroke-width", "1")
 
         leftAxisandKeys.selectAll('.black-key')
@@ -429,9 +458,10 @@ export function plotStepSeqMain(
             .attr("y", (d) => ySc(PITCH_SCALE / d.topEdge))
             .attr("width", BLACK_KEY_LENGTH)
             .attr("height", (d) => ySc(PITCH_SCALE / d.botEdge) - ySc(PITCH_SCALE / d.topEdge))
-            .attr("fill", "black")
-            .attr("stroke", "black")
+            .attr("fill", THEME.ink)
+            .attr("stroke", THEME.ink)
             .attr("stroke-width", "1")
+            .attr("rx", 2)
 
         leftAxisandKeys.selectAll('.white-key-label')
             .data(whiteKeys, (d) => d.pitchName)
@@ -449,7 +479,7 @@ export function plotStepSeqMain(
                 const keyHeight = ySc(PITCH_SCALE / d.botEdge) - ySc(PITCH_SCALE / d.topEdge)
                 return Math.min(keyHeight * 0.3, 20) + 'px'
             })
-            .attr('fill', '#333')
+            .attr('fill', THEME.muted)
             .attr('pointer-events', 'none')
             .text((d) => d.pitchName)
     }
@@ -464,7 +494,7 @@ export function plotStepSeqMain(
         .attr("y1", 0 - SCRUBBER_HANDLE_HEIGHT)
         .attr("x2", xScale(0))
         .attr("y2", innerHeight)
-        .attr("stroke", "red")
+        .attr("stroke", PALETTE.wine)
         .attr("stroke-width", "2")
         .attr("stroke-linecap", "round")
     const scrubber_handle = scrubber.append('rect')
@@ -472,9 +502,10 @@ export function plotStepSeqMain(
         .attr("y", 0 - SCRUBBER_HANDLE_HEIGHT)
         .attr("width", SCRUBBER_HANDLE_WIDTH)
         .attr("height", SCRUBBER_HANDLE_HEIGHT)
-        .attr("fill", "red")
-        .attr("stroke", "red")
+        .attr("fill", PALETTE.wine)
+        .attr("stroke", PALETTE.wine)
         .attr("stroke-width", "1")
+        .attr("rx", 2)
     
     // Animate Scrubber
     let scrubber_time = 0
@@ -541,28 +572,24 @@ export function plotStepSeqMain(
     // ---------- Set up Axis and labels -----------
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
-        .call(d3.axisBottom(xScale))
+    drawAxis(xAxis, d3.axisBottom(xScale).tickSizeOuter(0))
     
     const yAxisLabel = svg.append('g')
         .attr('transform', `translate(${margin.left - WHITE_KEY_LENGTH}, ${margin.top})`)
 
     const yAxis = yAxisLabel.append("g") //use svg so it can be further left of plotArea
         .attr("transform", `translate(0, 0)`)
-        .call(d3.axisLeft(yScale))
-    
-    plotArea.append("text")
+    drawAxis(yAxis, d3.axisLeft(yScale).tickSizeOuter(0))
+
+    axisLabel(plotArea.append("text")
         .attr("x", innerWidth / 2)
-        .attr("y", innerHeight + 30)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", innerHeight + 32))
         .text("Hours")
 
-    yAxisLabel.append("text")
+    axisLabel(yAxisLabel.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", - innerHeight/2)
-        .attr("y", -30)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", -34))
         .text("Period")
 
     plotArea.append("text")
@@ -636,8 +663,8 @@ export function plotStepSeqMain(
         drawHighlight(HightlightCanvasCtx, zx, zy, RADIUS_HOVER, RADIUS_SELECT)
         drawConfInt(current_display_gene, zx, zy)
         drawPiano(zy)
-        xAxis.call(d3.axisBottom(zx))
-        yAxis.call(d3.axisLeft(zy))
+        drawAxis(xAxis, d3.axisBottom(zx).tickSizeOuter(0))
+        drawAxis(yAxis, d3.axisLeft(zy).tickSizeOuter(0))
         if (rebuild) rebuildQuadtree(zx, zy)
     }
     const zoom = d3.zoom()
@@ -917,13 +944,17 @@ export function plotStepSeqMain(
 }
 
 export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
-    const margin = {top: 50, right: 30, bot: 50, left: 60}
+    const host = document.querySelector(div_name)
+    if (host?.clientWidth) {
+        width = Math.max(240, Math.floor(host.clientWidth))
+        height = Math.max(220, Math.min(height, Math.round(width * 0.72)))
+    }
+    const margin = {top: 44, right: 20, bot: 46, left: 54}
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bot
 
     const div = d3.select(div_name)
-        .style("width", width + "px")
-        .style("height", height + "px")
+        .style("height", null) // let the svg define the height (avoids 1-2px scrollbars from borders)
         .style("position", "relative")
 
     div.selectAll('svg').remove()
@@ -932,6 +963,7 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
         .attr("width", width)
         .attr("height", height)
         .style("position", "relative")
+        .style("display", "block")
     
     // const test = svg.append("rect")
     //     .attr("x", 0)
@@ -954,25 +986,20 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
     const yAxisG = plotArea.append('g')
         .attr("class", "y-axis")
     
-    plotArea.append("text")
+    axisLabel(plotArea.append("text")
         .attr("x", innerWidth / 2)
-        .attr("y", innerHeight + 40)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", innerHeight + 36))
         .text("Hours")
     
-    plotArea.append("text")
+    axisLabel(plotArea.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", -innerHeight/2)
-        .attr("y", -30)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", -38))
         .text("VST expression")
     
-    const titleText = plotArea.append("text")
-        .attr("transform", `translate(${innerWidth/2},-10)`)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "23px")
+    const titleText = plotTitle(plotArea.append("text")
+        .attr("transform", `translate(0,-18)`))
+        .style("font-family", THEME.fontMono)
 
     const confIntGroup = plotArea.append("g").attr("class", "conf-int-group")
     const samplesGroup = plotArea.append("g").attr("class", "samples-group")
@@ -1031,8 +1058,8 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
         confIntGroup.selectAll("path")
             .data([mu_std_dat])
             .join("path")
-            .attr("fill", "steelblue")
-            .attr("opacity", 0.1)
+            .attr("fill", PALETTE.indigo)
+            .attr("opacity", 0.12)
             .attr("stroke", "none")
             .attr("d", (d) => area(d))
 
@@ -1040,14 +1067,13 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
             .x((_, i) => xScale((i * period) / metaValues.N_GRID))
             .y((d) => yScale(d * scale + center))
 
-        const colors = d3.schemeTableau10
         samplesGroup.selectAll("path")
             .data(sample_wavs)
             .join("path")
             .attr("fill", "none")
-            .attr("stroke", (_, i) => colors[i % 10])
-            .attr("stroke-width", 3)
-            .attr("opacity", 0.4)
+            .attr("stroke", PALETTE.teal)
+            .attr("stroke-width", 1.75)
+            .attr("opacity", 0.55)
             .attr("d", (dat) => line_sample_wavs(dat))
 
         const line_mu_wav = d3.line()
@@ -1058,9 +1084,9 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
             .data([mu])
             .join("path")
             .attr("fill", "none")
-            .attr("stroke", "red")
-            .attr("stroke-width", 3)
-            .attr("opacity", 0.6)
+            .attr("stroke", PALETTE.indigo)
+            .attr("stroke-width", 2.5)
+            .attr("opacity", 0.95)
             .attr("d", (d) => line_mu_wav(d))
 
         // 16 VST observations, phase-folded onto [0, period)
@@ -1074,9 +1100,10 @@ export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
         vstDotsGroup.selectAll("circle")
             .data(vst_points)
             .join("circle")
-            .attr("r", 5)
-            .attr("fill", "black")
-            .attr("opacity", 0.6)
+            .attr("r", 4.5)
+            .attr("fill", PALETTE.rose)
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 1.5)
             .attr("cx", (d) => xScale(d.x))
             .attr("cy", (d) => yScale(d.y))
     }

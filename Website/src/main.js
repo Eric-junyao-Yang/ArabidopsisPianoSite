@@ -9,6 +9,7 @@ import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
 import { searchbar } from "/src/searchbar.js"
+import { initGlobalAudio } from "/src/globalVolumeControl.js"
 import {
     loadMidiEvents,
     createMidiTransport,
@@ -27,6 +28,10 @@ const bus = {
         Object.values(this._listeners[event] || {}).forEach((fn) => fn(data))
     },
 }
+
+// ---- one shared AudioContext + master volume for the whole page ----
+// Context is created now and auto-resumes on the first user gesture (see globalVolumeControl.js).
+const globalAudio = initGlobalAudio({ workletUrl: "/src/audio_processor.js" })
 
 // --------------------------------------- load data ---------------------------------------
 // UMAP bins are x/y only (same gene order as Normalized_counts / VST).
@@ -69,7 +74,6 @@ document.getElementById("sine").addEventListener("click", () => synth_waveform.s
 document.getElementById("square").addEventListener("click", () => synth_waveform.square())
 document.getElementById("saw").addEventListener("click", () => synth_waveform.saw())
 document.getElementById("triangle").addEventListener("click", () => synth_waveform.triangle())
-document.getElementById("activate").addEventListener("click", start)
 
 // Step sequencer transport
 const playPauseButton = document.getElementById("SeqPlayPause")
@@ -130,10 +134,6 @@ async function ensureMidiLoaded() {
     }
 }
 
-document.getElementById("activateMidi").addEventListener("click", () => {
-    ensureMidiLoaded()
-})
-
 document.getElementById("play").addEventListener("click", async () => {
     await ensureMidiLoaded()
     if (midiTransport.isPlaying) {
@@ -146,34 +146,35 @@ document.getElementById("play").addEventListener("click", async () => {
 })
 
 // --------------------------------------- Audio ---------------------------------------
+// All sources share globalAudio.ctx and feed globalAudio.input (master volume lives there).
+// Each init* is idempotent and awaits the shared worklet module; autoplay unlock is handled
+// by globalAudio itself
+async function sharedContext() {
+    const ctx = await globalAudio.ready
+    await globalAudio.resume()
+    return ctx
+}
+
+// Synth (virtual piano + computer keyboard): built at page load, no activate button needed.
 let SynthContext = null
 let synth_node = null
-let synthReady = null
-async function start() {
-    if (!synthReady) {
-        synthReady = (async () => {
-            SynthContext = new AudioContext()
-            await SynthContext.audioWorklet.addModule("/src/audio_processor.js")
-            synth_node = new AudioWorkletNode(SynthContext, "synth-audio-processor")
+const synthReady = (async () => {
+    SynthContext = await globalAudio.ready
+    synth_node = new AudioWorkletNode(SynthContext, "synth-audio-processor")
 
-            const compressor = SynthContext.createDynamicsCompressor()
-            compressor.threshold.value = -3
-            compressor.knee.value = 0
-            compressor.ratio.value = 20
-            compressor.attack.value = 0.003
-            compressor.release.value = 0.05
-            synth_node.connect(compressor).connect(SynthContext.destination)
-            synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
-            assign_keyboard_keys(synth_node)
-            setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"))
-        })().catch((err) => {
-            synthReady = null
-            throw err
-        })
-    }
-    await synthReady
-    if (SynthContext.state === "suspended") await SynthContext.resume()
-}
+    const compressor = SynthContext.createDynamicsCompressor()
+    compressor.threshold.value = -3
+    compressor.knee.value = 0
+    compressor.ratio.value = 20
+    compressor.attack.value = 0.003
+    compressor.release.value = 0.05
+    synth_node.connect(compressor).connect(globalAudio.input)
+    synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
+    assign_keyboard_keys(synth_node)
+    setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"))
+})().catch((err) => {
+    console.error("Synth audio setup failed", err)
+})
 
 // Step Seq
 const activeVoices = new Map()
@@ -183,22 +184,21 @@ let stepSeqReady = null
 async function initStepSeqAudio() {
     if (!stepSeqReady) {
         stepSeqReady = (async () => {
-            stepSeqAudioContext = new AudioContext()
-            await stepSeqAudioContext.audioWorklet.addModule("/src/audio_processor.js")
+            stepSeqAudioContext = await sharedContext()
             masterCompressor = stepSeqAudioContext.createDynamicsCompressor()
             masterCompressor.threshold.value = -6
             masterCompressor.knee.value = 3
             masterCompressor.ratio.value = 4
             masterCompressor.attack.value = 0.003
             masterCompressor.release.value = 0.15
-            masterCompressor.connect(stepSeqAudioContext.destination)
+            masterCompressor.connect(globalAudio.input)
         })().catch((err) => {
             stepSeqReady = null
             throw err
         })
     }
     await stepSeqReady
-    if (stepSeqAudioContext.state === "suspended") await stepSeqAudioContext.resume()
+    await globalAudio.resume()
 }
 
 // SynthSlides
@@ -209,10 +209,9 @@ let synthSlidesReady = null
 async function initSynthSlidesAudio() {
     if (!synthSlidesReady) {
         synthSlidesReady = (async () => {
-            synthSlidesAudioContext = new AudioContext()
-            await synthSlidesAudioContext.audioWorklet.addModule("/src/audio_processor.js")
+            synthSlidesAudioContext = await sharedContext()
             synthSlides_node = new AudioWorkletNode(synthSlidesAudioContext, "synthslides-audio-processor")
-            synthSlides_node.connect(synthSlidesAudioContext.destination)
+            synthSlides_node.connect(globalAudio.input)
             synthSlideDestinationConnection = true
         })().catch((err) => {
             synthSlidesReady = null
@@ -220,7 +219,7 @@ async function initSynthSlidesAudio() {
         })
     }
     await synthSlidesReady
-    if (synthSlidesAudioContext.state === "suspended") await synthSlidesAudioContext.resume()
+    await globalAudio.resume()
 }
 
 // existing sounds needs to be scaled as new sounds join
@@ -239,10 +238,9 @@ let midiReady = null
 async function initMidiAudio() {
     if (!midiReady) {
         midiReady = (async () => {
-            midiCtx = new AudioContext()
-            await midiCtx.audioWorklet.addModule("/src/audio_processor.js")
+            midiCtx = await sharedContext()
             midiNode = new AudioWorkletNode(midiCtx, "midi-audio-processor")
-            midiNode.connect(midiCtx.destination)
+            midiNode.connect(globalAudio.input)
             midiTransport = createMidiTransport(midiCtx, midiNode, {
                 onStop: () => {
                     const btn = document.getElementById("play")
@@ -256,7 +254,7 @@ async function initMidiAudio() {
         })
     }
     await midiReady
-    if (midiCtx.state === "suspended") await midiCtx.resume()
+    await globalAudio.resume()
 }
 
 // --------------------------------------- Spawn voices ---------------------------------------
@@ -340,7 +338,7 @@ plotViolin(
     d3.select("#filter_slider"), "log10(mean TPM)", bus, "synth_TPM_filter"
 )
 
-plotStepSeqMain(1200, 800, "#SeqLeft", osc_perGene_meta, osc_perGene_meta_lookup, metaValues, bus)
+plotStepSeqMain(1800, 1200, "#SeqLeft", osc_perGene_meta, osc_perGene_meta_lookup, metaValues, bus)
 const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
 
 const violinOpts = { top: 20, right: 20, bottom: 20, left: 50 }
@@ -379,7 +377,12 @@ new SlidesTemplate(
 )
 
 const step_seq_plot_div = document.getElementById("Gene_Plots")
-const introSvg = d3.select(step_seq_plot_div).append("svg").attr("width", 800).attr("height", 300)
+// viewBox keeps the 800x300 layout but lets the figure scale down on narrow screens
+const introSvg = d3.select(step_seq_plot_div).append("svg")
+    .attr("viewBox", "0 0 800 300")
+    .attr("preserveAspectRatio", "xMidYMid meet")
+    .style("width", "100%")
+    .style("height", "auto")
 const TOC1 = normalized_counts_lookup.get("AT5G61380")
 const PP2AA3 = normalized_counts_lookup.get("AT1G13320")
 if (TOC1 && PP2AA3) {
@@ -477,7 +480,7 @@ bus.subscribe_to("resetSelection", "main", () => {
 bus.subscribe_to("updateParams", "main", (params) => {
     if (!synthSlides_node) return
     if (!synthSlideDestinationConnection) {
-        synthSlides_node.connect(synthSlidesAudioContext.destination)
+        synthSlides_node.connect(globalAudio.input)
         synthSlideDestinationConnection = true
     }
     synthSlides_node.port.postMessage({
@@ -490,7 +493,7 @@ bus.subscribe_to("updateParams", "main", (params) => {
 
 bus.subscribe_to("stopSlideSound", "main", () => {
     if (synthSlides_node && synthSlideDestinationConnection) {
-        synthSlides_node.disconnect(synthSlidesAudioContext.destination)
+        synthSlides_node.disconnect(globalAudio.input)
         synthSlideDestinationConnection = false
     }
 })
@@ -498,4 +501,4 @@ bus.subscribe_to("stopSlideSound", "main", () => {
 
 
 
-// TODO: Play Sample becomes playing a midi ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) Add master volumn for page (or for app); avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); Change the Synth play button audiocontext handling; May allow mapping of volume to log expression
+// TODO: Play Sample becomes playing a midi ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); May allow mapping of volume to log expression

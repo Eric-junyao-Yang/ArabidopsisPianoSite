@@ -1,4 +1,5 @@
 import { interpolate_waveform } from "/src/catmullrom.js"
+import { PALETTE, THEME } from "/src/plotTheme.js"
 
 const arabidopsisSlide = {
     elements: {
@@ -13,7 +14,7 @@ const arabidopsisSlide = {
                 .attr("x", 5)
                 .attr("y", 290)
                 .attr("font-size", "8px")
-                .style("fill", "grey")
+                .style("fill", THEME.muted)
                 .text("modified from SciGrafik and Agrisera")
         },
         genome(g) {
@@ -23,15 +24,15 @@ const arabidopsisSlide = {
                 .attr("x", 150).attr("y", 80)
             g.append("text")
                 .attr("x", 530).attr("y", 290)
-                .attr("font-size", "8px").style("fill", "grey")
+                .attr("font-size", "8px").style("fill", THEME.muted)
                 .text("modified from lumencandela")
             g.append("text")
                 .attr("x", 390).attr("y", 240)
-                .attr("font-size", "15px").style("fill", "red")
+                .attr("font-size", "15px").attr("font-weight", 600).style("fill", PALETTE.wine)
                 .text("gene")
             g.append("text")
                 .attr("x", 526).attr("y", 240)
-                .attr("font-size", "15px").style("fill", "red")
+                .attr("font-size", "15px").attr("font-weight", 600).style("fill", PALETTE.wine)
                 .text("gene")
         },
         stimuli(g){
@@ -72,30 +73,25 @@ const arabidopsisSlide = {
                     .attr("transform", `translate(0, 0)`)
                     .call(d3.axisLeft(yScale))
 
-                chart.append("rect")
-                    .attr("x", xScale(0)).attr("y", 0)
-                    .attr("width", xScale(16)).attr("height", innerHeight)
-                    .attr("fill", "orange").attr("opacity", 0.3)
-                chart.append("rect")
-                    .attr("x", xScale(24)).attr("y", 0)
-                    .attr("width", xScale(16)).attr("height", innerHeight)
-                    .attr("fill", "orange").attr("opacity", 0.3)
-                chart.append("rect")
-                    .attr("x", xScale(16)).attr("y", 0)
-                    .attr("width", xScale(8)).attr("height", innerHeight)
-                    .attr("fill", "grey").attr("opacity", 0.3)
-                chart.append("rect")
-                    .attr("x", xScale(40)).attr("y", 0)
-                    .attr("width", xScale(8)).attr("height", innerHeight)
-                    .attr("fill", "grey").attr("opacity", 0.3)
-                
+                // light = warm sand, dark = indigo tint (same as the step-sequencer intro figure)
+                const shade = (x0, x1, color, opacity) => chart.append("rect")
+                    .attr("x", xScale(x0)).attr("y", 0)
+                    .attr("width", xScale(x1) - xScale(x0)).attr("height", innerHeight)
+                    .attr("fill", color).attr("opacity", opacity)
+                shade(0, 16, PALETTE.sand, 0.28)
+                shade(24, 40, PALETTE.sand, 0.28)
+                shade(16, 24, PALETTE.indigo, 0.12)
+                shade(40, 48, PALETTE.indigo, 0.12)
+
                 const circles_TOC = chart.selectAll("circle.TOC").data(deck.TOC1, (d, i) => i)
                 circles_TOC.exit().remove()
                 circles_TOC.enter()
                     .append("circle")
                     .attr("class", "TOC")
-                    .attr("r", 3)
-                    .attr("fill", "blue")
+                    .attr("r", 3.5)
+                    .attr("fill", PALETTE.rose)
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 1.25)
                     .merge(circles_TOC)
                     .attr("cx", (d, i) => xScale(2 + 3 * i))
                     .attr("cy", d => yScale(d))
@@ -113,8 +109,9 @@ const arabidopsisSlide = {
                     .append("path")
                     .attr("class", "TOC")
                     .attr("fill", "none")
-                    .attr("stroke", "salmon")
-                    .attr("stroke-width", 1)
+                    .attr("stroke", PALETTE.rose)
+                    .attr("stroke-width", 2)
+                    .attr("stroke-linejoin", "round")
                     .merge(path_TOC)
                     .attr("d", lineGen)
             }
@@ -218,7 +215,9 @@ const arabidopsisSlide = {
                 .attr("x", innerWidth/2)
                 .attr("y", -20)
                 .attr("text-anchor", "middle")
-                .attr("font-size", "20px")
+                .attr("font-size", "15px")
+                .attr("font-weight", 600)
+                .attr("fill", THEME.ink)
                 .text(myName)
 
             const button = chart.append('g')
@@ -231,8 +230,10 @@ const arabidopsisSlide = {
                 .attr("y", -15)
                 .attr("width", 100)
                 .attr("height", 30)
-                .attr("rx", 5)
-                .attr("fill", "orange")
+                .attr("rx", 8)
+                .attr("fill", "#ffffff")
+                .attr("stroke", PALETTE.indigo)
+                .attr("stroke-width", 1.5)
             
             button.append('rect') // progress bar
                 .attr('class', 'progress-bar')
@@ -240,13 +241,18 @@ const arabidopsisSlide = {
                 .attr("y", -15)
                 .attr("width", 0) //max 100
                 .attr("height", 30)
-                .attr("rx", 5)
-                .attr("fill", "red")
+                .attr("rx", 8)
+                .attr("fill", PALETTE.sky)
+                .attr("opacity", 0.85)
 
             button.append("text")
                 .attr('class', 'text')
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
+                .attr("font-size", "13px")
+                .attr("font-weight", 600)
+                .attr("fill", PALETTE.indigo)
+                .style("pointer-events", "none")
                 .text("Play Sound")
 
             const progress = button.select(".progress-bar")
@@ -291,8 +297,9 @@ const arabidopsisSlide = {
         const path = chart.append("path")
             .attr("class", "sin")
             .attr("fill", "none")
-            .attr("stroke", "salmon")
-            .attr("stroke-width", 1)
+            .attr("stroke", PALETTE.indigo)
+            .attr("stroke-width", 2)
+            .attr("stroke-linejoin", "round")
             
         let t = 0
         function animate(){

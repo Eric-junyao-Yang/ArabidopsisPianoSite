@@ -1,4 +1,5 @@
 import { interpolate_waveform, ldTimepoints } from "/src/catmullrom.js"
+import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plotTheme.js"
 
 export function plotGene(g, gene_dats, gene_names, opts = {
     width: 800,
@@ -23,45 +24,45 @@ export function plotGene(g, gene_dats, gene_names, opts = {
     const chart = g.append('g').attr("transform", `translate(${margin.left}, ${margin.top})`)
 
     const tickVals = d3.range(16).map(i => 2 + 3 * i)
-    const xAxis = chart.append('g')
-        .attr('transform', `translate(0, ${innerHeight})`)
-        .call(d3.axisBottom(xScale).tickValues(tickVals))
-    const yAxis = chart.append("g")
-        .attr("transform", `translate(0, 0)`)
-        .call(d3.axisLeft(yScale))
+    // Day/night shading goes first so grid, axes and data sit on top of it.
+    // Light = warm sand, dark = cool indigo tint: separable without relying on hue alone.
+    const shade = (x0, x1, color, opacity) => chart.append("rect")
+        .attr("x", xScale(x0)).attr("y", 0)
+        .attr("width", xScale(x1) - xScale(x0)).attr("height", innerHeight)
+        .attr("fill", color).attr("opacity", opacity)
+    shade(0, 16, PALETTE.sand, 0.28)
+    shade(24, 40, PALETTE.sand, 0.28)
+    shade(16, 24, PALETTE.indigo, 0.12)
+    shade(40, 48, PALETTE.indigo, 0.12)
+
+    chart.append("g").attr("class", "grid")
+        .selectAll("line")
+        .data(yScale.ticks(5))
+        .join("line")
+        .attr("x1", 0).attr("x2", innerWidth)
+        .attr("y1", d => yScale(d)).attr("y2", d => yScale(d))
+        .attr("stroke", THEME.grid)
+        .attr("stroke-width", 1)
+
+    const xAxis = drawAxis(chart.append('g')
+        .attr('transform', `translate(0, ${innerHeight})`),
+        d3.axisBottom(xScale).tickValues(tickVals).tickSizeOuter(0))
+    const yAxis = drawAxis(chart.append("g")
+        .attr("transform", `translate(0, 0)`),
+        d3.axisLeft(yScale).ticks(5).tickSizeOuter(0))
     
-    const xLab = chart.append('text')
-        .attr('transform', `translate(${innerWidth/2}, ${innerHeight + 32 })`)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+    const xLab = axisLabel(chart.append('text')
+        .attr('transform', `translate(${innerWidth/2}, ${innerHeight + 34 })`))
         .text("Time (h)")
-    const yLab = chart.append('text')
+    const yLab = axisLabel(chart.append('text')
         .attr("transform", "rotate(-90)")
         .attr("x", -innerHeight/2)
-        .attr("y", -30)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", -36))
         .text("Fold change relative to mean")
 
-    chart.append("rect")
-        .attr("x", xScale(0)).attr("y", 0)
-        .attr("width", xScale(16)).attr("height", innerHeight)
-        .attr("fill", "orange").attr("opacity", 0.3)
-    chart.append("rect")
-        .attr("x", xScale(24)).attr("y", 0)
-        .attr("width", xScale(16)).attr("height", innerHeight)
-        .attr("fill", "orange").attr("opacity", 0.3)
-    chart.append("rect")
-        .attr("x", xScale(16)).attr("y", 0)
-        .attr("width", xScale(8)).attr("height", innerHeight)
-        .attr("fill", "grey").attr("opacity", 0.3)
-    chart.append("rect")
-        .attr("x", xScale(40)).attr("y", 0)
-        .attr("width", xScale(8)).attr("height", innerHeight)
-        .attr("fill", "grey").attr("opacity", 0.3)
-    
-    const circle_colors = ["blue", "red"]
-    const line_colors = ["steelblue", "salmon"]
+    // Housekeeping gene = indigo, circadian gene = rose (colorblind-safe pair)
+    const circle_colors = [PALETTE.indigo, PALETTE.rose]
+    const line_colors = [PALETTE.indigo, PALETTE.rose]
 
     // Draw circle and line for each series
     gene_dat_norms.forEach( (result, idx) => {
@@ -74,8 +75,10 @@ export function plotGene(g, gene_dats, gene_names, opts = {
         circles_TOC.enter()
             .append("circle")
             .attr("class", `TOC ${unique_class_idx}`)
-            .attr("r", 3)
+            .attr("r", 3.5)
             .attr("fill", circle_colors[idx])
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 1.25)
             .merge(circles_TOC)
             .attr("cx", (d, i) => xScale(2 + 3 * i))
             .attr("cy", d => yScale(d))
@@ -94,7 +97,9 @@ export function plotGene(g, gene_dats, gene_names, opts = {
             .attr("class", `TOC ${unique_class_idx}`)
             .attr("fill", "none")
             .attr("stroke", line_colors[idx])
-            .attr("stroke-width", 1)
+            .attr("stroke-width", 2)
+            .attr("stroke-linejoin", "round")
+            .attr("opacity", 0.9)
             .merge(path_TOC)
             .attr("d", lineGen)
     })
@@ -129,6 +134,7 @@ export function plotGene(g, gene_dats, gene_names, opts = {
         .attr("x", 25)
         .attr("y", 5)
         .attr("font-size", "12px")
+        .attr("fill", THEME.ink)
         .text(d => d.gene_name != null ? `${d.id} (${d.gene_name})` : d.id)
     legendEach.merge(legend)
         .attr("transform", (d, i) => `translate(${innerWidth + 30}, ${innerHeight/2 - (5*gene_dats.length) + i * 20})`)

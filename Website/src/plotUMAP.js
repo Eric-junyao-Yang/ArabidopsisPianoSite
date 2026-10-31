@@ -4,6 +4,15 @@
 //     return originalGetContext.call(this, type, ...args)
 // }
 
+import { THEME, hexToRgb01, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "/src/plotTheme.js"
+
+const ACTIVE_RGB = hexToRgb01(THEME.pointActive).map((v) => v.toFixed(4)).join(", ")
+const INACTIVE_RGB = hexToRgb01(THEME.pointInactive).map((v) => v.toFixed(4)).join(", ")
+// Semi-transparent so dense regions read as darker (density) instead of a flat blob.
+const ACTIVE_ALPHA = 0.55
+const INACTIVE_ALPHA = 0.4
+const POINT_RADIUS_PX = 2.5
+
 class ScatterGL {
     constructor(canvas, data, xScale, yScale, innerWidth, innerHeight, dpr) {
         this.data = data
@@ -79,9 +88,9 @@ class ScatterGL {
                 float alpha = smoothstep(1.0, 0.8, dist);
 
                 if (vSelected > 0.5) {
-                        fragColor = vec4(0.8, 0.4, 0.47, alpha); //vec4(0.27, 0.67, 0.6, 1.0)
+                        fragColor = vec4(${ACTIVE_RGB}, alpha * ${ACTIVE_ALPHA.toFixed(2)});
                     } else {
-                        fragColor = vec4(0.6, 0.6, 0.6, alpha * 0.8);    
+                        fragColor = vec4(${INACTIVE_RGB}, alpha * ${INACTIVE_ALPHA.toFixed(2)});
                     }
             }
         `
@@ -198,7 +207,7 @@ class ScatterGL {
         const gl = this.gl
 
         // point size
-        const radiusPx = 4
+        const radiusPx = POINT_RADIUS_PX
         const rx = (radiusPx * this.dpr) / (this.physicalWidth / 2)
         const ry = (radiusPx * this.dpr) / (this.physicalHeight / 2)
         gl.uniform2f(this.pointRadiusLoc, rx, ry)
@@ -269,6 +278,11 @@ class ScatterGL {
         this.render()
     }
 
+    destroy() {
+        // Free the GPU context so repeated resizes don't exhaust the browser's WebGL context limit
+        this.gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    }
+
     get isSupported() {
         return !!this.gl
     }
@@ -276,9 +290,29 @@ class ScatterGL {
 
 
 
+// width/height are fallbacks: the plot fills its container and redraws (keeping filter + selection)
+// when the container is resized.
 export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
+    const container = document.getElementById(div_name)
+    // State that must survive a redraw
+    const state = { low: null, high: null, selected: null }
+    let current = null
 
-    const margin = { top: 20, right: 20, bottom: 40, left: 50 }
+    function redraw() {
+        current?.destroy()
+        // keep non-plot children (e.g. the help button added by helpPopup.js)
+        container.querySelectorAll(':scope > svg, :scope > canvas').forEach((n) => n.remove())
+        const [w, h] = containerSize(container, width, height)
+        current = buildUMAP(w, h, umap_arr, div_name, plot_title, displayGeneID, bus, state)
+    }
+    redraw()
+    onResize(container, redraw)
+    return current.node
+}
+
+function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID, bus, state){
+
+    const margin = { top: 34, right: 16, bottom: 40, left: 46 }
     const dpr = window.devicePixelRatio || 1 //1 css coordinate = typically 2x2 physical pixel
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
@@ -337,34 +371,37 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
     )
 
     let [internal_low_val, internal_high_val] = yScale.domain()
+    if (state.low !== null) { internal_low_val = state.low; internal_high_val = state.high }
 
     //CPU fallback
     function drawPointsCanvas(mainCtx, xSc, ySc, high_val = internal_high_val, low_val = internal_low_val) {
         //Clear canvas
         mainCtx.clearRect(0,0,innerWidth, innerHeight)
 
-        mainCtx.fillStyle = "gray"
+        mainCtx.fillStyle = withAlpha(THEME.pointInactive, INACTIVE_ALPHA)
         mainCtx.beginPath()
         for (let i=0; i< umap_arr.length; i++){
             const d = umap_arr[i]
             if (d.log_TPM < low_val || d.log_TPM > high_val){
-                mainCtx.moveTo(xSc(d.x) + 3, ySc(d.y))
-                mainCtx.arc(xSc(d.x), ySc(d.y), 3, 0, 2 * Math.PI)
+                mainCtx.moveTo(xSc(d.x) + POINT_RADIUS_PX, ySc(d.y))
+                mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
             }
         }
         mainCtx.fill()
 
-        mainCtx.fillStyle = "steelblue"
+        mainCtx.fillStyle = withAlpha(THEME.pointActive, ACTIVE_ALPHA)
         mainCtx.beginPath()
         for (let i=0; i< umap_arr.length; i++){
             const d = umap_arr[i]
             if (d.log_TPM >= low_val && d.log_TPM <= high_val){
-                mainCtx.moveTo(xSc(d.x) + 3, ySc(d.y))
-                mainCtx.arc(xSc(d.x), ySc(d.y), 3, 0, 2 * Math.PI)
+                mainCtx.moveTo(xSc(d.x) + POINT_RADIUS_PX, ySc(d.y))
+                mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
             }
         }
         mainCtx.fill()
     }
+
+    if (state.low !== null && scatter.isSupported) scatter.updateSelected(state.low, state.high)
 
     let mainCtx = null
     if (!scatter.isSupported) {
@@ -376,8 +413,10 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
 
     const highlightCanvas = d3.select(`#${div_name}`)
         .append('canvas')
-        .attr('width', innerWidth)
-        .attr('height', innerHeight)
+        .attr('width', physicalWidth)
+        .attr('height', physicalHeight)
+        .style('width', innerWidth + 'px')
+        .style('height', innerHeight + 'px')
         .style('position', 'absolute')
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
@@ -401,33 +440,38 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
 
     
     const hlightCtx = highlightCanvas.node().getContext('2d')
+    hlightCtx.scale(dpr, dpr) // crisp markers on retina screens
 
-    const notHighlightPointSize = 2
-    const HighlightPointSize = 6
+    const HighlightPointSize = 5.5
 
     // Build a quick look up from GeneID -> Index
     const GeneID_Lookup = new Map(umap_arr.map(r => [r.GeneID, r]))
-    var GeneID_select_current = null
+    var GeneID_select_current = state.selected
+
+    // White halo + dark ring keeps the marker visible on dense, same-colored clusters
+    function drawMarker(x, y, fill, r) {
+        hlightCtx.beginPath()
+        hlightCtx.arc(x, y, r + 2, 0, 2 * Math.PI)
+        hlightCtx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+        hlightCtx.fill()
+        hlightCtx.beginPath()
+        hlightCtx.arc(x, y, r, 0, 2 * Math.PI)
+        hlightCtx.fillStyle = fill
+        hlightCtx.fill()
+        hlightCtx.lineWidth = 1.5
+        hlightCtx.strokeStyle = THEME.ink
+        hlightCtx.stroke()
+    }
 
     function drawHighlight(xSc, ySc, GeneID_hover, GeneID_select) {
         hlightCtx.clearRect(0,0,innerWidth, innerHeight)
         if (GeneID_hover) {
             const d_hover = GeneID_Lookup.get(GeneID_hover)
-            if (d_hover) {
-                hlightCtx.beginPath()
-                hlightCtx.arc(xSc(d_hover.x), ySc(d_hover.y), HighlightPointSize, 0, 2 * Math.PI)
-                hlightCtx.fillStyle = 'rgba(68, 170, 153, 1)'
-                hlightCtx.fill()
-            }
+            if (d_hover) drawMarker(xSc(d_hover.x), ySc(d_hover.y), THEME.hover, HighlightPointSize)
         }
         if (GeneID_select) {
             const d_select = GeneID_Lookup.get(GeneID_select)
-            if (d_select) {
-                hlightCtx.beginPath()
-                hlightCtx.arc(xSc(d_select.x), ySc(d_select.y), HighlightPointSize, 0, 2 * Math.PI)
-                hlightCtx.fillStyle = 'rgba(221, 204, 119, 1)'
-                hlightCtx.fill()
-            }
+            if (d_select) drawMarker(xSc(d_select.x), ySc(d_select.y), THEME.selected, HighlightPointSize)
         }
     }
 
@@ -437,40 +481,37 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
 
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
-        .call(d3.axisBottom(xScale))
-
     const yAxis = plotArea.append("g")
-        .attr("transform", `translate(0, 0)`) // y-axis positioned at x=0 in data space ${xScale(0)}
-        .call(d3.axisLeft(yScale))
-    
-    plotArea.append("text")
+    const xAxisGen = (sc) => d3.axisBottom(sc).ticks(Math.max(3, Math.floor(innerWidth / 80))).tickSizeOuter(0)
+    const yAxisGen = (sc) => d3.axisLeft(sc).ticks(Math.max(3, Math.floor(innerHeight / 60))).tickSizeOuter(0)
+    drawAxis(xAxis, xAxisGen(xScale))
+    drawAxis(yAxis, yAxisGen(yScale))
+
+    axisLabel(plotArea.append("text")
         .attr("x", innerWidth / 2)
-        .attr("y", innerHeight + 30)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", innerHeight + 32))
         .text("dim1")
 
-    plotArea.append("text")
+    axisLabel(plotArea.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", - innerHeight/2)
-        .attr("y", -30)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", -34))
         .text("dim2")
 
-    plotArea.append("text")
-        .attr("x", innerWidth / 2)
-        .attr("y", -5)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "15px")
+    plotTitle(plotArea.append("text")
+        .attr("x", 0)
+        .attr("y", -16))
         .text(plot_title)
-    
+
     const hoverLabel = plotArea.append("text")
         .attr("id", `hover-label-${div_name}`)
-        .attr("x", 10)
-        .attr("y", 20)
-        .attr("text-anchor", "left")
-        .attr("font-size", "12px")
+        .attr("x", innerWidth - 4)
+        .attr("y", -16)
+        .attr("text-anchor", "end")
+        .attr("fill", THEME.hover === "#44AA99" ? "#2c7f72" : THEME.hover) // darker teal: AA contrast on white
+        .attr("font-size", 12)
+        .attr("font-weight", 600)
+        .style("font-family", THEME.fontMono)
 
     // Custom mouse over behavior
 
@@ -566,8 +607,8 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
                 lastEmittedRow = null
                 bus.execute_event('point_hover', null)
                 drawHighlight(zx, zy, null, GeneID_select_current)
-                xAxis.call(d3.axisBottom(zx))
-                yAxis.call(d3.axisLeft(zy))
+                drawAxis(xAxis, xAxisGen(zx))
+                drawAxis(yAxis, yAxisGen(zy))
             })
         })
         .on("end", (event) => {
@@ -581,8 +622,8 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
             bus.execute_event('point_hover', null)
             drawHighlight(zx, zy, null, GeneID_select_current)
             rebuildQuadtree(zx, zy)
-            xAxis.call(d3.axisBottom(zx))
-            yAxis.call(d3.axisLeft(zy))
+            drawAxis(xAxis, xAxisGen(zx))
+            drawAxis(yAxis, yAxisGen(zy))
         })
 
     mainCanvas.call(zoom)
@@ -602,12 +643,14 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
             drawPointsCanvas(mainCtx, currentXScale, currentYScale, high_val, low_val)
             internal_high_val = high_val
             internal_low_val = low_val
+            state.low = low_val; state.high = high_val
             rebuildQuadtree(currentXScale, currentYScale)
         }
         else {
             scatter.updateSelected(low_val, high_val)
             internal_high_val = high_val
             internal_low_val = low_val
+            state.low = low_val; state.high = high_val
             rebuildQuadtree(currentXScale, currentYScale)
         }
     })
@@ -615,7 +658,10 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
     bus.subscribe_to("point_select", div_name, (GeneID) => {
         drawHighlight(currentXScale, currentYScale, GeneID, GeneID)
         GeneID_select_current = GeneID
+        state.selected = GeneID
     })
 
-    return plotArea.node()
+    if (GeneID_select_current) drawHighlight(currentXScale, currentYScale, null, GeneID_select_current)
+
+    return { node: plotArea.node(), destroy: () => scatter.destroy() }
 }

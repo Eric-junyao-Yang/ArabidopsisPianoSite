@@ -21,7 +21,7 @@ export class SlidesTemplate{
             const svg = d3.select(element).append("svg")
                 .attr("viewBox", "0 0 24 24")
                 .attr("fill", "none")
-                .attr("stroke", "purple")
+                .attr("stroke", "#332288")
                 .attr("stroke-width", 2.5)
                 .attr("stroke-linecap", "round")
                 .attr("stroke-linejoin", "round")
@@ -33,8 +33,12 @@ export class SlidesTemplate{
         // Create Slides
         const parent = this.slideElement
         this.svg = d3.select(this.slideElement).append("svg")
-            .attr("width", parent.clientWidth)
-            .attr("height", parent.clientHeight)
+            // Slides are authored on a 650x300 canvas; the viewBox scales them to any container width
+            .attr("viewBox", "0 0 650 300")
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .style("width", "100%")
+            .style("height", "100%")
+            .style("display", "block")
 
         // Bind events
         this.leftBtn.addEventListener("click", () => this.prevSlide())

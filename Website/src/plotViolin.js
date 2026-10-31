@@ -1,3 +1,5 @@
+import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plotTheme.js"
+
 export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 20, left: 50}, 
     Arr, d3_select_div, y_lab, bus, execute_event = ""){
 
@@ -17,13 +19,11 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .range([innerHeight, 0])
         .nice()
     
-    plotArea.append("g").call( d3.axisLeft(yScale) )
-    plotArea.append("text")
+    drawAxis(plotArea.append("g"), d3.axisLeft(yScale).ticks(Math.max(4, Math.floor(innerHeight / 50))).tickSizeOuter(0))
+    axisLabel(plotArea.append("text")
         .attr("transform", "rotate(90)")
         .attr("x", innerHeight/2)
-        .attr("y", 40)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "12px")
+        .attr("y", 40))
         .text(y_lab)
 
     const histogram = d3.histogram()
@@ -48,8 +48,11 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
 
     plotArea.append("path")
         .datum(curveDat)
-        .style("stroke", "none")
-        .style("fill", "pink")
+        .style("stroke", PALETTE.indigo)
+        .style("stroke-width", 1.25)
+        .style("stroke-opacity", 0.8)
+        .style("fill", PALETTE.indigo)
+        .style("fill-opacity", 0.18)
         .attr("d", curve)
 
     // Add quantile
@@ -70,8 +73,9 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
     function plotQuantile(quant){
         const qval = quantile(sortedArr, quant)
         plotArea.append("line")
-            .attr("stroke", "blue")
+            .attr("stroke", PALETTE.teal)
             .attr("stroke-width", 2)
+            .attr("stroke-linecap", "round")
             .attr("x1", binScale(0))
             .attr("y1", yScale(qval))
             .attr("x2", widthAtY(yScale(qval)))
@@ -93,24 +97,30 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('width', innerWidth)
         .attr('height', yScale(low_val) - yScale(high_val))
         .attr('stroke', 'none')
-        .attr('fill', 'orange')
-        .attr('opacity', 0.3)
-        .attr('rx', 5)
+        .attr('fill', PALETTE.sand)
+        .attr('opacity', 0.35)
+        .attr('rx', 4)
+        .style('cursor', 'grab')
+        .style('touch-action', 'none')
         .on("dblclick", () => {
             [low_val, high_val] = [ymin, ymax]
             updateScrubber(true)
         })
 
     // Top bar
-    const SCRUBBER_HANDLES_HEIGHT = 6
+    const SCRUBBER_HANDLES_HEIGHT = 14 // generous hit area for touch
     const scrubber_handle_top = plotArea.append('rect')
         .attr('x', 0)
         .attr('y', yScale(high_val) - SCRUBBER_HANDLES_HEIGHT / 2)
         .attr('width', innerWidth)
         .attr('height', SCRUBBER_HANDLES_HEIGHT)
         .attr('stroke', 'none')
-        .attr('fill', 'orange')
+        .attr('fill', PALETTE.sand)
         .attr('opacity', 0)
+        .style('cursor', 'ns-resize')
+        .style('touch-action', 'none')
+        .on('mouseenter', function () { d3.select(this).attr('opacity', 0.5) })
+        .on('mouseleave', function () { d3.select(this).attr('opacity', 0) })
         
     // Bot bar
     const scrubber_handle_bot = plotArea.append('rect')
@@ -119,23 +129,29 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('width', innerWidth)
         .attr('height', SCRUBBER_HANDLES_HEIGHT)
         .attr('stroke', 'none')
-        .attr('fill', 'orange')
+        .attr('fill', PALETTE.sand)
         .attr('opacity', 0)
+        .style('cursor', 'ns-resize')
+        .style('touch-action', 'none')
+        .on('mouseenter', function () { d3.select(this).attr('opacity', 0.5) })
+        .on('mouseleave', function () { d3.select(this).attr('opacity', 0) })
         
     // Circle Handles (visual only)
     const scrubber_top_circle = plotArea.append('circle')
         .attr('cx', innerWidth / 2)
         .attr('cy', yScale(high_val))
-        .attr('r', 3)
-        .attr('stroke', "none")
-        .attr('fill', 'orange')
+        .attr('r', 4.5)
+        .attr('stroke', THEME.ink)
+        .attr('stroke-width', 1.5)
+        .attr('fill', PALETTE.sand)
         .attr('pointer-events', 'none')
     const scrubber_bot_circle = plotArea.append('circle')
         .attr('cx', innerWidth / 2)
         .attr('cy', yScale(low_val))
-        .attr('r', 3)
-        .attr('stroke', "none")
-        .attr('fill', 'orange')
+        .attr('r', 4.5)
+        .attr('stroke', THEME.ink)
+        .attr('stroke-width', 1.5)
+        .attr('fill', PALETTE.sand)
         .attr('pointer-events', 'none')
 
     // scrubbing
