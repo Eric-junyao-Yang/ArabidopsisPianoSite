@@ -1,14 +1,16 @@
         <div id="SequencerDiv" style="display: grid;grid-template-columns: 1fr 1fr;outline: 2px solid purple;">
-            <div id="StepSequencer" style="outline: 2px solid orange;"></div>
-            <div id="SeqRight" style="display: grid;grid-template-rows: 1fr 1fr 1fr 1fr;outline: 2px solid blue;">
-                <div id="SeqRightButtons" style="outline: 2px solid red;">
-                    <button id="SeqPlayPause">Play</button>
-                    <button id="SeqStop">Stop</button>
-                    <button id="SeqReset">Reset</button>
+            <div id="StepSeqMain" style="outline: 2px solid orange;"></div>
+            <div id="StepSeqControls" style="outline: 2px solid crimson;">
+                <div id="StepSeqControlButtons">
+                    <button id="StepSeqPlayPause">Play</button>
+                    <button id="StepSeqStop">Stop</button>
+                    <button id="StepSeqReset">Reset</button>
                 </div>
-                <div id="SeqRightSearchBar" style="outline: 2px solid yellow;"></div>
-                <div id="SeqRightSelectedGeneDisplay" style="outline: 2px solid green;"></div>
-                <div id="SeqRightPlot" style="outline: 2px solid maroon;"></div>
+            </div>
+            <div id="StepSeqGPDisplay" style="display: grid;grid-template-rows: auto auto auto;outline: 2px solid blue;">
+                <div id="StepSeqGPSearchBar" style="outline: 2px solid yellow;"></div>
+                <div id="StepSeqGPSelectedGenes" style="outline: 2px solid green;"></div>
+                <div id="StepSeqGPPlot" style="outline: 2px solid maroon;"></div>
             </div>
 
         </div>

@@ -61,7 +61,7 @@ for (let i = 0; i < count_arr.length; i++) {
 
 const [metaValues, osc_perGene_meta, shared, osc_perGene_mu, osc_perGene_std] =
     await load_waveforms("/dat/waveforms.bin", "/dat/bin_meta.json")
-
+console.log(osc_perGene_meta)
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 
@@ -76,7 +76,7 @@ document.getElementById("saw").addEventListener("click", () => synth_waveform.sa
 document.getElementById("triangle").addEventListener("click", () => synth_waveform.triangle())
 
 // Step sequencer transport
-const playPauseButton = document.getElementById("SeqPlayPause")
+const playPauseButton = document.getElementById("StepSeqPlayPause")
 let isPlay = false
 playPauseButton.addEventListener("click", async () => {
     await initStepSeqAudio()
@@ -84,12 +84,12 @@ playPauseButton.addEventListener("click", async () => {
     playPauseButton.textContent = isPlay ? "Pause" : "Play"
     bus.execute_event("seqPlayPause", isPlay)
 })
-document.getElementById("SeqStop").addEventListener("click", () => {
+document.getElementById("StepSeqStop").addEventListener("click", () => {
     isPlay = false
     playPauseButton.textContent = "Play"
     bus.execute_event("seqStop", null)
 })
-document.getElementById("SeqReset").addEventListener("click", () => {
+document.getElementById("StepSeqReset").addEventListener("click", () => {
     bus.execute_event("resetSelection", null)
 })
 
@@ -299,7 +299,7 @@ for (let i = 0; i < osc_perGene_meta.length; i++) {
 const osc_perGene_meta_lookup = new Map(osc_perGene_meta.map((v) => [v.GeneID, v]))
 
 export function renderSelectionPanel(selected_genes) {
-    const panel = document.getElementById("SeqRightSelectedGeneDisplay")
+    const panel = document.getElementById("StepSeqGPSelectedGenes")
     panel.innerHTML = ""
 
     for (const item of selected_genes) {
@@ -338,25 +338,46 @@ plotViolin(
     d3.select("#filter_slider"), "log10(mean TPM)", bus, "synth_TPM_filter"
 )
 
-plotStepSeqMain(1800, 1200, "#SeqLeft", osc_perGene_meta, osc_perGene_meta_lookup, metaValues, bus)
-const plotStepSeq = plotStepSeqWave(600, 400, "#SeqRightPlot")
+// Main plot first (violin column width is reserved in CSS). Then size violins to the
+// combined height of #StepSeqMain + #StepSeqControls so they share one visual column.
+plotStepSeqMain(1800, 1200, "#StepSeqMain", osc_perGene_meta, osc_perGene_meta_lookup, metaValues, bus)
 
-const violinOpts = { top: 20, right: 20, bottom: 20, left: 50 }
+const stepSeqContainer = document.getElementById("StepSequencerContainer")
+const stepSeqMainEl = document.getElementById("StepSeqMain")
+const stepSeqControlsEl = document.getElementById("StepSeqControls")
+const stepSeqViolinEl = document.getElementById("StepSeqViolin")
+const stepSeqViolinStyles = getComputedStyle(stepSeqViolinEl)
+const stepSeqRowGap = parseFloat(getComputedStyle(stepSeqContainer).rowGap) || 0
+const violinChromeY =
+    (parseFloat(stepSeqViolinStyles.paddingTop) || 0) +
+    (parseFloat(stepSeqViolinStyles.paddingBottom) || 0) +
+    (parseFloat(stepSeqViolinStyles.borderTopWidth) || 0) +
+    (parseFloat(stepSeqViolinStyles.borderBottomWidth) || 0)
+const violinHeight = Math.max(
+    320,
+    Math.round(
+        stepSeqMainEl.offsetHeight + stepSeqControlsEl.offsetHeight + stepSeqRowGap - violinChromeY
+    )
+)
+
+const violinOpts = { top: 16, right: 8, bottom: 16, left: 50 }
 plotViolin(
-    130, 500, violinOpts,
+    100, violinHeight, violinOpts,
     osc_perGene_meta.map((v) => v.log_TPM),
     d3.select("#violin-TPM"), "log10(mean TPM)", bus, "StepSeqTPMUpdate"
 )
 plotViolin(
-    130, 500, violinOpts,
+    100, violinHeight, violinOpts,
     osc_perGene_meta.map((v) => v.qval),
     d3.select("#violin-qVal"), "q-value", bus, "StepSeqqValUpdate"
 )
 plotViolin(
-    130, 500, violinOpts,
+    100, violinHeight, violinOpts,
     osc_perGene_meta.map((v) => v.relative_std),
     d3.select("#violin-Std"), "relative std", bus, "StepSeqStdUpdate"
 )
+
+const plotStepSeq = plotStepSeqWave(600, 400, "#StepSeqGPPlot")
 
 setupHelpPopUps(document, window)
 
@@ -391,8 +412,8 @@ if (TOC1 && PP2AA3) {
 
 // --------------------------------------- Search Bars ---------------------------------------
 searchbar(
-    document.querySelector("#stepseq-search"),
-    document.querySelector("#stepseq-results"),
+    document.querySelector("#StepSeqGPSearch"),
+    document.querySelector("#StepSeqGPResults"),
     osc_perGene_meta,
     (item) => {
         bus.execute_event("selection_add", item)

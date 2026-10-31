@@ -10,7 +10,7 @@ const PT_INACTIVE = withAlpha(THEME.pointInactive, 0.35)
 export function plotStepSeqMain(
     canvasWidth = 600, 
     canvasHeight = 400, 
-    div_name = "#StepSequencer", 
+    div_name = "#StepSeqMain", 
     osc_perGene_meta, 
     osc_perGene_meta_lookup, 
     metaValues, 
@@ -584,7 +584,7 @@ export function plotStepSeqMain(
     axisLabel(plotArea.append("text")
         .attr("x", innerWidth / 2)
         .attr("y", innerHeight + 32))
-        .text("Hours")
+        .text("Waveform peak time (Hours)")
 
     axisLabel(yAxisLabel.append("text")
         .attr("transform", "rotate(-90)")
@@ -943,7 +943,7 @@ export function plotStepSeqMain(
     })
 }
 
-export function plotStepSeqWave(width, height, div_name = "#SeqRightPlot"){
+export function plotStepSeqWave(width, height, div_name = "#StepSeqGPPlot"){
     const host = document.querySelector(div_name)
     if (host?.clientWidth) {
         width = Math.max(240, Math.floor(host.clientWidth))

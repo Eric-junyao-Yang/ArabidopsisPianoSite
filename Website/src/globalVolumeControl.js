@@ -15,7 +15,6 @@
 // "Click to enable sound" (and can itself be clicked), so no separate activate button
 // is needed.
 
-const STORAGE_KEY = "arabidopsisPiano.volume"
 const DEFAULT_VOLUME = 0.8 // slider position 0..1
 const UNITY_AT = 0.8 // slider position that maps to gain 1.0 (the pre-existing loudness)
 const GESTURE_EVENTS = ["pointerup", "click", "keydown", "touchend"]
@@ -23,29 +22,6 @@ const GESTURE_EVENTS = ["pointerup", "click", "keydown", "touchend"]
 /** Perceptual slider -> gain curve (quadratic), 1.0 at UNITY_AT, ~+4 dB headroom at 100%. */
 function sliderToGain(v) {
     return (v * v) / (UNITY_AT * UNITY_AT)
-}
-
-function loadSavedState() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-        if (saved && typeof saved.volume === "number") {
-            return {
-                volume: Math.min(1, Math.max(0, saved.volume)),
-                muted: !!saved.muted,
-            }
-        }
-    } catch (_) {
-        /* storage unavailable or corrupt: fall through */
-    }
-    return { volume: DEFAULT_VOLUME, muted: false }
-}
-
-function saveState(state) {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    } catch (_) {
-        /* private mode etc. */
-    }
 }
 
 const ICONS = {
@@ -88,7 +64,7 @@ export function initGlobalAudio({ workletUrl, mount = document.body }) {
 
     input.connect(limiter).connect(masterGain).connect(ctx.destination)
 
-    const state = loadSavedState()
+    const state = { volume: DEFAULT_VOLUME, muted: false }
 
     function applyGain() {
         const target = state.muted ? 0 : sliderToGain(state.volume)
@@ -160,7 +136,6 @@ export function initGlobalAudio({ workletUrl, mount = document.body }) {
         // moving the slider while muted is an implicit unmute
         if (state.volume > 0) state.muted = false
         applyGain()
-        saveState(state)
         updateWidget()
     }
 
@@ -169,7 +144,6 @@ export function initGlobalAudio({ workletUrl, mount = document.body }) {
         // unmuting at volume 0 would stay silent; restore something audible
         if (!state.muted && state.volume === 0) state.volume = DEFAULT_VOLUME
         applyGain()
-        saveState(state)
         updateWidget()
     }
 

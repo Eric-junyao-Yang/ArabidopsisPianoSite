@@ -343,7 +343,14 @@
             </div>
 
             <div id="StepSequencerContainer" class="seq-workspace">
-                <div id="SeqLeft"
+                <div id="StepSeqTutorial">
+                    <p>Content of the tutorial here...</p>
+                    <span>1/3</span>
+                    <button type="button">prev</button>
+                    <button type="button">next</button>
+                    <button type="button">✕</button>
+                </div>
+                <div id="StepSeqMain"
                     class="help-panel plot-frame plot-frame--seq-main"
                     data-help-text="Each point here is a potentially oscillating gene. The nautral
                     oscillating frequency of the gene is scaled up and mapped to the y-axis, and the x-axis
@@ -359,48 +366,48 @@
                       Modeling. The quality of the sound and the speed at which the waveform morphs captures
                       a sense of confidence in the shape of the wave. Higher variation means less confidence."></div>
 
-                <div class="seq-rest">
-                    <div id="SeqMid" class="help-panel panel panel--filters"
-                            data-help-text="Drag the ends of the violin plots to filter by each metric.
-                            mean TPM corresponds to average gene expression. q-value is the % chance a
-                            non-oscillating gene might slip through the analysis (5% or lower is typical but
-                            I included up to 20% for more genes to play with). relative std captures the
-                            confidence of the fitted waveform.">
-                        <div id="violin-TPM" class="violin-slot"></div>
-                        <div id="violin-qVal" class="violin-slot"></div>
-                        <div id="violin-Std" class="violin-slot"></div>
+                <div id="StepSeqControls" class="panel panel--seq-controls">
+                    <div id="StepSeqControlButtons" class="help-panel toolbar"
+                    data-help-text="Use these controls to trigger the selected genes.">
+                    <button type="button" id="StepSeqPlayPause" class="btn btn--primary">Play</button>
+                    <button type="button" id="StepSeqStop" class="btn">Stop</button>
+                    <button type="button" id="StepSeqReset" class="btn btn--ghost">Reset</button>
+                    </div>
+                </div>
+
+                <div id="StepSeqViolin" class="help-panel panel panel--filters"
+                        data-help-text="Drag the ends of the violin plots to filter by each metric.
+                        mean TPM corresponds to average gene expression. q-value is the % chance a
+                        non-oscillating gene might slip through the analysis (5% or lower is typical but
+                        I included up to 20% for more genes to play with). relative std captures the
+                        confidence of the fitted waveform.">
+                    <div id="violin-TPM" class="violin-slot"></div>
+                    <div id="violin-qVal" class="violin-slot"></div>
+                    <div id="violin-Std" class="violin-slot"></div>
+                </div>
+
+                <div id="StepSeqGPDisplay" class="panel panel--seq-gp">
+                    <div id="StepSeqGPSearchBar" class="gene-search">
+                        <label class="gene-search-label" for="StepSeqGPSearch">Find gene</label>
+                        <div class="gene-search-field">
+                            <input
+                                id="StepSeqGPSearch"
+                                type="search"
+                                placeholder="e.g. AT5G61380"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <ul id="StepSeqGPResults" class="gene-search-results" hidden></ul>
+                        </div>
                     </div>
 
-                    <aside id="SeqRight" class="panel panel--seq-side">
-                        <div id="SeqRightButtons" class="help-panel toolbar"
-                            data-help-text="Use these controls to trigger the selected genes.">
-                            <button type="button" id="SeqPlayPause" class="btn btn--primary">Play</button>
-                            <button type="button" id="SeqStop" class="btn">Stop</button>
-                            <button type="button" id="SeqReset" class="btn btn--ghost">Reset</button>
-                        </div>
+                    <div id="StepSeqGPSelectedGenes" class="help-panel gene-tag-tray"
+                        data-help-text="Here is the list of genes you selelcted. You can more precicely
+                        select genes to be 'in focus' or remove here."></div>
 
-                        <div id="SeqRightSearchBar" class="gene-search">
-                            <label class="gene-search-label" for="stepseq-search">Find gene</label>
-                            <div class="gene-search-field">
-                                <input
-                                    id="stepseq-search"
-                                    type="search"
-                                    placeholder="e.g. AT5G61380"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                >
-                                <ul id="stepseq-results" class="gene-search-results" hidden></ul>
-                            </div>
-                        </div>
-
-                        <div id="SeqRightSelectedGeneDisplay" class="help-panel gene-tag-tray"
-                            data-help-text="Here is the list of genes you selelcted. You can more precicely
-                            select genes to be 'in focus' or remove here."></div>
-
-                        <div id="SeqRightPlot" class="help-panel plot-frame plot-frame--seq-wave"
-                            data-help-text="Here is the waveform modeled using Gaussian Process. 10 samples drawn
-                            from the model are displayed here. These will be the collection of waveforms you hear."></div>
-                    </aside>
+                    <div id="StepSeqGPPlot" class="help-panel plot-frame plot-frame--seq-wave"
+                        data-help-text="Here is the waveform modeled using Gaussian Process. 10 samples drawn
+                        from the model are displayed here. These will be the collection of waveforms you hear."></div>
                 </div>
             </div>
         </section>
