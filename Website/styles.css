@@ -899,11 +899,53 @@ main {
     grid-area: gp;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
     gap: var(--space-3);
     min-width: 0;
     width: 100%;
     align-items: start;
+}
+
+.capsule-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px;
+    gap: 2px;
+    width: max-content;
+    max-width: 100%;
+    background: var(--color-bg-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+}
+
+.capsule-toggle .btn {
+    min-height: 2rem;
+    padding: 0.35rem 0.95rem;
+    border-color: transparent;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-ink-muted);
+    font-size: 0.82rem;
+}
+
+.capsule-toggle .btn:hover {
+    background: var(--color-bg-elevated);
+    color: var(--cb-indigo);
+    border-color: transparent;
+    box-shadow: var(--shadow-sm);
+}
+
+.capsule-toggle .btn[aria-pressed="true"] {
+    background: var(--cb-indigo);
+    border-color: var(--cb-indigo);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.capsule-toggle .btn[aria-pressed="true"]:hover {
+    background: color-mix(in srgb, var(--cb-indigo) 85%, black);
+    border-color: color-mix(in srgb, var(--cb-indigo) 85%, black);
+    color: #fff;
 }
 
 #StepSeqGPPlot,

@@ -2,7 +2,8 @@ import { Synth_Waveform } from "/src/synth_waveform.js"
 import { plotUMAP } from "/src/plotUMAP.js"
 import { load_waveforms, bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plotViolin.js"
-import { plotStepSeqMain, plotStepSeqWave } from "/src/step_sequencer.js"
+import { plotStepSeqMain } from "/src/step_sequencer.js"
+import { plotGPWave } from "/src/GPplot.js"
 import { SlidesTemplate } from "/src/slideTemplate.js"
 import { synthSlides } from "/src/synthSlides.js"
 import { plotGene } from "/src/gene_plots.js"
@@ -377,7 +378,7 @@ plotViolin(
     d3.select("#violin-Std"), "relative std", bus, "StepSeqStdUpdate"
 )
 
-const plotStepSeq = plotStepSeqWave(600, 400, "#StepSeqGPPlot")
+const plotGP = plotGPWave(600, 400, "#StepSeqGPPlot")
 
 setupHelpPopUps(document, window)
 
@@ -479,12 +480,12 @@ bus.subscribe_to("selection_modified", "main", (selection) => {
 
 bus.subscribe_to("gene_label_select", "main", (item) => {
     if (!item) {
-        plotStepSeq.renderEmpty()
+        plotGP.renderEmpty()
         return
     }
     const VST_dat = VST_lookup.get(item.GeneID)
     if (!VST_dat) return
-    plotStepSeq.updatePlot({
+    plotGP.updatePlot({
         metaValues,
         shared,
         cur_mu: osc_perGene_mu[item.index],
@@ -495,7 +496,7 @@ bus.subscribe_to("gene_label_select", "main", (item) => {
 })
 
 bus.subscribe_to("resetSelection", "main", () => {
-    plotStepSeq.renderEmpty()
+    plotGP.renderEmpty()
 })
 
 bus.subscribe_to("updateParams", "main", (params) => {

@@ -46,7 +46,8 @@ tutorialContent = {
     "step3": {
         "focus_object": "StepSeqMain - GPplot",
         "content": "Focusing on the points here first. These are actual experimental data. We can see there is quite a bit of noise \
-        and the points look quite clustered together. Just looking at the points, how sure are we that this gene is really oscillating?"
+        and the points look quite clustered together. You can toggle between the full experimental period of 48 hours, or \
+        wrap the data around the detected period to see how convincing the period is. Just looking at the points, how sure are we that this gene is really oscillating?"
     },
     "step3": {
         "focus_object": "StepSeqMain - q-value",
@@ -91,7 +92,7 @@ tutorialContent = {
         "focus_object": "StepSeqMain - mainplot, focused on AT5G14740, show Perfect Fifth",
         "content": "These other bands show frequencies with small integer ratio relationship with the focused gene. For example, a frequency that is \
         a perfect fifth to our selected freqency would indicate for every 2 cycles the selected gene completes, the other gene would have completed 3. \
-        If you click on a band, it locks the band in, and shows you any gene whose detected period's 95% CI intersects with your focused gene. Deeper the color \
+        If you click on a band, it locks the band in (click away to cancel), and shows you any gene whose detected period's 95% CI intersects with your focused gene. Deeper the color \
         the more they overlap."
     },
     "step3": {

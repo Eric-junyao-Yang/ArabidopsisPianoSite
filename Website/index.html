@@ -405,9 +405,19 @@
                         data-help-text="Here is the list of genes you selelcted. You can more precicely
                         select genes to be 'in focus' or remove here."></div>
 
+                    <div id="StepSeqGPViewToggle" class="capsule-toggle" role="group"
+                        aria-label="Waveform time axis">
+                        <button type="button" id="StepSeqGPViewPhase" class="btn"
+                            aria-pressed="true" title="Phase-wrapped: one detected period">Phase</button>
+                        <button type="button" id="StepSeqGPViewFull" class="btn"
+                            aria-pressed="false" title="Full 48-hour experimental period">48 h</button>
+                    </div>
+
                     <div id="StepSeqGPPlot" class="help-panel plot-frame plot-frame--seq-wave"
                         data-help-text="Here is the waveform modeled using Gaussian Process. 10 samples drawn
-                        from the model are displayed here. These will be the collection of waveforms you hear."></div>
+                        from the model are displayed here. These will be the collection of waveforms you hear.
+                        Use the Phase / 48 h toggle to switch between one period (phase-wrapped) and the full
+                        experimental window."></div>
                 </div>
             </div>
         </section>
