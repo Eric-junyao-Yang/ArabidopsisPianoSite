@@ -573,17 +573,17 @@ export function plotStepSeqMain(
     const xAxis = plotArea.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
     drawAxis(xAxis, d3.axisBottom(xScale).tickSizeOuter(0))
-    
-    const yAxisLabel = svg.append('g')
+
+    const yAxis = svg.append('g')
         .attr('transform', `translate(${margin.left - WHITE_KEY_LENGTH}, ${margin.top})`)
 
-    const yAxis = yAxisLabel.append("g") //use svg so it can be further left of plotArea
+    const yAxisLabel = yAxis.append("g") //use svg so it can be further left of plotArea
         .attr("transform", `translate(0, 0)`)
     drawAxis(yAxis, d3.axisLeft(yScale).tickSizeOuter(0))
 
-    axisLabel(plotArea.append("text")
+    axisLabel(xAxis.append("text")
         .attr("x", innerWidth / 2)
-        .attr("y", innerHeight + 32))
+        .attr("y", 32))
         .text("Waveform peak time (Hours)")
 
     axisLabel(yAxisLabel.append("text")
@@ -597,6 +597,11 @@ export function plotStepSeqMain(
         .attr("y", -5)
         .attr("text-anchor", "middle")
         .attr("font-size", "15px")
+
+    // assign label for tutorial to fetch DOM Bbox
+    xAxis.attr("data-tutorial-region", "x-axis")
+    yAxis.attr("data-tutorial-region", "y-axis")
+    leftAxisandKeys.attr("data-tutorial-region", "piano")
 
     // Hover & selection control
     let quadtree = null
@@ -920,6 +925,12 @@ export function plotStepSeqMain(
     })
     bus.subscribe_to("selection_modified", "mainplot", () => {
         drawHighlight(HightlightCanvasCtx, currentXScale, currentYScale)
+    })
+    // Tutorial (and anything else) can replace the whole selection at once.
+    // Parameter name must not shadow the outer `let current_selection`.
+    bus.subscribe_to("selection_set", "mainplot", (next) => {
+        current_selection = next instanceof Set ? new Set(next) : new Set(next || [])
+        bus.execute_event("selection_modified", current_selection)
     })
     bus.subscribe_to("seqPlayPause", "mainplot", (playState) => {
         playPause(playState)

@@ -786,9 +786,16 @@ main {
     color: var(--cb-indigo);
 }
 
+.midi-track-display {
+    width: 1000px;
+    height: 80px;
+    outline: 1px solid gold;
+}
+
 /* ---------- Step sequencer workspace ---------- */
 .seq-workspace,
 #StepSequencerContainer {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -813,18 +820,94 @@ main {
     }
 }
 
+/* ---------- Step sequencer tutorial chrome ---------- */
+
+#StepSeqTutorialMask {
+    position: absolute;
+    inset: 0;
+    z-index: 999;
+    background: rgba(27, 29, 41, 0.45);
+    pointer-events: auto;
+}
+
+#StepSeqTooltip {
+    display: none;
+    position: absolute;
+    z-index: 1005;
+    max-width: min(22rem, calc(100% - 1.5rem));
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    pointer-events: auto;
+}
+
+#StepSeqTooltip .tutorial-tooltip__body {
+    margin: 0 0 var(--space-3);
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: var(--color-ink);
+}
+
+#StepSeqTooltip .tutorial-tooltip__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+#StepSeqTooltip .tutorial-tooltip__count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+#StepSeqTooltip .tutorial-tooltip__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+#StepSeqTooltip .tutorial-tooltip__actions .btn {
+    min-height: 2rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+}
+
+.tutorial-highlight {
+    position: absolute;
+    z-index: 1004; 
+    border: 2px solid var(--cb-sky);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 70%);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+/*
+ * unmask  → .tutorial-elevated  (above the dim mask → looks bright)
+ * block   → .tutorial-block-interaction on the *unmasked* element
+ */
+.tutorial-elevated {
+    position: relative;
+    z-index: 1003;
+}
+
+.tutorial-block-interaction,
+.tutorial-block-interaction * {
+    pointer-events: none;
+}
+
 #StepSeqMain,
 .plot-frame--seq-main {
     grid-area: main;
     width: 100%;
     min-height: 320px;
     overflow: auto;
-}
-
-#StepSeqTutorial {
-    position: absolute;
-    border: 1px solid red;
-    z-index: 1000;
 }
 
 .panel--seq-controls,

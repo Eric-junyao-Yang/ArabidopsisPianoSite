@@ -17,7 +17,8 @@ import {
     geneToWavetable,
     setTrackWavetable,
 } from "/src/midiplayer.js"
-
+import { stepSeqTutorial } from "/src/StepSeqTutorial.js"
+import { midiTrackPlots } from "/src/midiTrackPlot.js"
 // ---- add a bus for communication between modules ----
 const bus = {
     _listeners: {},
@@ -62,7 +63,6 @@ for (let i = 0; i < count_arr.length; i++) {
 
 const [metaValues, osc_perGene_meta, shared, osc_perGene_mu, osc_perGene_std] =
     await load_waveforms("/dat/waveforms.bin", "/dat/bin_meta.json")
-console.log(osc_perGene_meta)
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 
@@ -105,6 +105,7 @@ const MIDI_TRACKS = [
 const MIDI_FILE = "/dat/NGGYU.mid"
 let midiEvents = null
 let midiTransport = null
+let midiTrackCounts = null
 const midiTrackGenes = new Map() // trackIndex → GeneID
 
 function syncMidiTrackWavetables() {
@@ -122,9 +123,13 @@ async function ensureMidiLoaded() {
             midiLoadPromise = loadMidiEvents(MIDI_FILE, MIDI_TRACKS.length)
                 .then((loaded) => {
                     midiEvents = loaded.events
+                    midiTrackCounts = loaded.trackCount
                     midiTransport.setEvents(midiEvents)
                     // Genes chosen before the worklet existed still need uploading
                     syncMidiTrackWavetables()
+
+                    // Plot
+                    midiTrackPlots(midiEvents, midiTrackCounts, MIDI_TRACKS)
                 })
                 .catch((err) => {
                     midiLoadPromise = null
@@ -135,14 +140,14 @@ async function ensureMidiLoaded() {
     }
 }
 
-document.getElementById("play").addEventListener("click", async () => {
+document.getElementById("midi_play").addEventListener("click", async () => {
     await ensureMidiLoaded()
     if (midiTransport.isPlaying) {
         midiTransport.stop()
-        document.getElementById("play").textContent = "play"
+        document.getElementById("midi_play").textContent = "play"
     } else {
         midiTransport.play()
-        document.getElementById("play").textContent = "stop"
+        document.getElementById("midi_play").textContent = "stop"
     }
 })
 
@@ -446,6 +451,19 @@ for (const track of MIDI_TRACKS) {
         }
     )
 }
+
+// --------------------------------------- Tutorial ---------------------------------------
+const tutorial = new stepSeqTutorial(bus, osc_perGene_meta_lookup)
+document.getElementById("StepSeqTooltipPrev").addEventListener("click", () => {
+    tutorial.prevStep()
+})
+document.getElementById("StepSeqTooltipNext").addEventListener("click", () => {
+    tutorial.nextStep()
+})
+document.getElementById("StepSeqTooltipClose").addEventListener("click", () => {
+    tutorial.close()
+})
+
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {
     midiTrackGenes.set(trackIndex, GeneID)
