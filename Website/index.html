@@ -105,6 +105,8 @@
                         </div>
                     </div>
 
+                    <span id="synth_waveform_name">Custom Waveform</span>
+                    
                     <div class="canvas-shell">
                         <canvas id="Synth_Waveform" width="1000" height="200"></canvas>
                     </div>
@@ -112,16 +114,17 @@
 
                 <div id="Synth_Keyboard_div" class="keyboard-shell" aria-label="Virtual keyboard"></div>
                 <div id="pushSound">
-                    <label>Assign current gene [AT#G#####] to Arabidopsis Jukebox tracks</label>
-                    <select>
+                    <label>Assign current gene </label> <span id="synth_to_midi_gene_id">[AT#G#####]</span> <label> to Arabidopsis Jukebox tracks</label>
+                    <select id="synth_to_midi_track_select">
                         <option value="">Select a track</option>
-                        <option value="vocal">Vocal</option>
-                        <option value="synth1">Synth1</option>
-                        <option value="synth2">Synth2</option>
-                        <option value="brass">Brass</option>
-                        <option value="bass">Bass</option>
+                        <option value="0">Vocal</option>
+                        <option value="1">Synth1</option>
+                        <option value="2">Synth2</option>
+                        <option value="3">Brass</option>
+                        <option value="4">Bass</option>
                     </select>
-                    <button type="button">send!</button>
+                    <button id ="send_waveform_to_midi" type="button">send</button>
+                    <span id="synth_to_midi_success">success!</span>
                 </div>
             </div>
 
@@ -154,125 +157,158 @@
                     data-help-text="
                     By assigning a different wavefrom to each MIDI track, you can play a whole song
                      with sounds derived from the Arabidopsis plant!">
-                <div class="panel__header">
-                    <h3 class="panel__title">Arabidopsis Jukebox</h3>
-                    <div class="toolbar">
-                        <input type="range" min="0" max="100" step="1" value="0" aria-label="midi progress">
-                        <span>0:00 / 0:00</span>
-                        <button type="button" id="midi_play" class="btn btn--primary">play</button>
+                <div class="panel__header midi-header">
+                    <div class="midi-header__titles">
+                        <h3 class="panel__title">Arabidopsis Jukebox</h3>
+                        <p class="midi-header__sub">Gene expression as instrument timbre — one gene per track</p>
                     </div>
                 </div>
 
+                <div class="midi-transport" role="group" aria-label="MIDI playback">
+                    <button type="button" id="midi_play" class="btn btn--primary midi-transport__play">play</button>
+                    <input
+                        id="midi_progress_bar"
+                        class="midi-transport__scrubber"
+                        type="range"
+                        min="0"
+                        max="0"
+                        step="any"
+                        value="0"
+                        aria-label="Song position">
+                    <div class="midi-transport__time">
+                        <span id="midi_time_display">00:00</span><span id="midi_total_time"> / 00:00</span>
+                    </div>
+                </div>
+
+                <p class="midi-hint" id="midi_load_hint">
+                    Assign a gene to each track to load its sound. Unloaded tracks stay silent.
+                </p>
+
                 <div class="midi-tracks">
-                    <div class="midi-track">
-                        <div class="midi-track__meta">
-                            <span class="midi-track__name">Vocal</span>
-                            <span class="midi-symbol" aria-hidden="true">🎤</span>
-                            <p id="midi-vocal-gene-name" class="midi-gene-name"></p>
-                        </div>
-                        <div id="midi-vocal-searchbar" class="gene-search">
-                            <label class="gene-search-label" for="midi-vocal-search">Assign gene</label>
-                            <div class="gene-search-field">
-                                <input
-                                    id="midi-vocal-search"
-                                    type="search"
-                                    placeholder="e.g. AT5G61380"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                >
-                                <ul id="midi-vocal-results" class="gene-search-results" hidden></ul>
+                    <article class="midi-track is-unloaded" data-track-id="vocal" data-track-index="0">
+                        <div class="midi-track__side">
+                            <div class="midi-track__meta">
+                                <span class="midi-symbol" aria-hidden="true">🎤</span>
+                                <span class="midi-track__name">Vocal</span>
+                                <span class="midi-track__badge" data-midi-badge>No sound</span>
+                                <p id="midi-vocal-gene-name" class="midi-gene-name" data-midi-gene></p>
+                            </div>
+                            <div id="midi-vocal-searchbar" class="gene-search">
+                                <label class="gene-search-label" for="midi-vocal-search">Assign gene</label>
+                                <div class="gene-search-field">
+                                    <input
+                                        id="midi-vocal-search"
+                                        type="search"
+                                        placeholder="e.g. AT5G61380"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+                                    <ul id="midi-vocal-results" class="gene-search-results" hidden></ul>
+                                </div>
                             </div>
                         </div>
-                        <div id="midi-vocal-display" class="midi-track-display"></div>
-                    </div>
+                        <div id="midi-vocal-display" class="midi-track-display" role="img" aria-label="Vocal note roll"></div>
+                    </article>
 
-                    <div class="midi-track">
-                        <div class="midi-track__meta">
-                            <span class="midi-track__name">Synth1</span>
-                            <span class="midi-symbol" aria-hidden="true">🎹</span>
-                            <p id="midi-synth1-gene-name" class="midi-gene-name"></p>
-                        </div>
-                        <div id="midi-synth1-searchbar" class="gene-search">
-                            <label class="gene-search-label" for="midi-synth1-search">Assign gene</label>
-                            <div class="gene-search-field">
-                                <input
-                                    id="midi-synth1-search"
-                                    type="search"
-                                    placeholder="e.g. AT5G61380"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                >
-                                <ul id="midi-synth1-results" class="gene-search-results" hidden></ul>
+                    <article class="midi-track is-unloaded" data-track-id="synth1" data-track-index="1">
+                        <div class="midi-track__side">
+                            <div class="midi-track__meta">
+                                <span class="midi-symbol" aria-hidden="true">🎹</span>
+                                <span class="midi-track__name">Synth1</span>
+                                <span class="midi-track__badge" data-midi-badge>No sound</span>
+                                <p id="midi-synth1-gene-name" class="midi-gene-name" data-midi-gene></p>
+                            </div>
+                            <div id="midi-synth1-searchbar" class="gene-search">
+                                <label class="gene-search-label" for="midi-synth1-search">Assign gene</label>
+                                <div class="gene-search-field">
+                                    <input
+                                        id="midi-synth1-search"
+                                        type="search"
+                                        placeholder="e.g. AT5G61380"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+                                    <ul id="midi-synth1-results" class="gene-search-results" hidden></ul>
+                                </div>
                             </div>
                         </div>
-                        <div id="midi-synth1-display" class="midi-track-display"></div>
-                    </div>
+                        <div id="midi-synth1-display" class="midi-track-display" role="img" aria-label="Synth1 note roll"></div>
+                    </article>
 
-                    <div class="midi-track">
-                        <div class="midi-track__meta">
-                            <span class="midi-track__name">Synth2</span>
-                            <span class="midi-symbol" aria-hidden="true">🎹</span>
-                            <p id="midi-synth2-gene-name" class="midi-gene-name"></p>
-                        </div>
-                        <div id="midi-synth2-searchbar" class="gene-search">
-                            <label class="gene-search-label" for="midi-synth2-search">Assign gene</label>
-                            <div class="gene-search-field">
-                                <input
-                                    id="midi-synth2-search"
-                                    type="search"
-                                    placeholder="e.g. AT5G61380"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                >
-                                <ul id="midi-synth2-results" class="gene-search-results" hidden></ul>
+                    <article class="midi-track is-unloaded" data-track-id="synth2" data-track-index="2">
+                        <div class="midi-track__side">
+                            <div class="midi-track__meta">
+                                <span class="midi-symbol" aria-hidden="true">🎹</span>
+                                <span class="midi-track__name">Synth2</span>
+                                <span class="midi-track__badge" data-midi-badge>No sound</span>
+                                <p id="midi-synth2-gene-name" class="midi-gene-name" data-midi-gene></p>
+                            </div>
+                            <div id="midi-synth2-searchbar" class="gene-search">
+                                <label class="gene-search-label" for="midi-synth2-search">Assign gene</label>
+                                <div class="gene-search-field">
+                                    <input
+                                        id="midi-synth2-search"
+                                        type="search"
+                                        placeholder="e.g. AT5G61380"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+                                    <ul id="midi-synth2-results" class="gene-search-results" hidden></ul>
+                                </div>
                             </div>
                         </div>
-                        <div id="midi-synth2-display" class="midi-track-display"></div>
-                    </div>
+                        <div id="midi-synth2-display" class="midi-track-display" role="img" aria-label="Synth2 note roll"></div>
+                    </article>
 
-                    <div class="midi-track">
-                        <div class="midi-track__meta">
-                            <span class="midi-track__name">Bass</span>
-                            <span class="midi-symbol" aria-hidden="true">𝄢</span>
-                            <p id="midi-bass-gene-name" class="midi-gene-name"></p>
-                        </div>
-                        <div id="midi-bass-searchbar" class="gene-search">
-                            <label class="gene-search-label" for="midi-bass-search">Assign gene</label>
-                            <div class="gene-search-field">
-                                <input
-                                    id="midi-bass-search"
-                                    type="search"
-                                    placeholder="e.g. AT5G61380"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                >
-                                <ul id="midi-bass-results" class="gene-search-results" hidden></ul>
+                    <article class="midi-track is-unloaded" data-track-id="bass" data-track-index="3">
+                        <div class="midi-track__side">
+                            <div class="midi-track__meta">
+                                <span class="midi-symbol" aria-hidden="true">𝄢</span>
+                                <span class="midi-track__name">Bass</span>
+                                <span class="midi-track__badge" data-midi-badge>No sound</span>
+                                <p id="midi-bass-gene-name" class="midi-gene-name" data-midi-gene></p>
+                            </div>
+                            <div id="midi-bass-searchbar" class="gene-search">
+                                <label class="gene-search-label" for="midi-bass-search">Assign gene</label>
+                                <div class="gene-search-field">
+                                    <input
+                                        id="midi-bass-search"
+                                        type="search"
+                                        placeholder="e.g. AT5G61380"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+                                    <ul id="midi-bass-results" class="gene-search-results" hidden></ul>
+                                </div>
                             </div>
                         </div>
-                        <div id="midi-bass-display" class="midi-track-display"></div>
-                    </div>
+                        <div id="midi-bass-display" class="midi-track-display" role="img" aria-label="Bass note roll"></div>
+                    </article>
 
-                    <div class="midi-track">
-                        <div class="midi-track__meta">
-                            <span class="midi-track__name">Brass</span>
-                            <span class="midi-symbol" aria-hidden="true">🎺</span>
-                            <p id="midi-brass-gene-name" class="midi-gene-name"></p>
-                        </div>
-                        <div id="midi-brass-searchbar" class="gene-search">
-                            <label class="gene-search-label" for="midi-brass-search">Assign gene</label>
-                            <div class="gene-search-field">
-                                <input
-                                    id="midi-brass-search"
-                                    type="search"
-                                    placeholder="e.g. AT5G61380"
-                                    autocomplete="off"
-                                    spellcheck="false"
-                                >
-                                <ul id="midi-brass-results" class="gene-search-results" hidden></ul>
+                    <article class="midi-track is-unloaded" data-track-id="brass" data-track-index="4">
+                        <div class="midi-track__side">
+                            <div class="midi-track__meta">
+                                <span class="midi-symbol" aria-hidden="true">🎺</span>
+                                <span class="midi-track__name">Brass</span>
+                                <span class="midi-track__badge" data-midi-badge>No sound</span>
+                                <p id="midi-brass-gene-name" class="midi-gene-name" data-midi-gene></p>
+                            </div>
+                            <div id="midi-brass-searchbar" class="gene-search">
+                                <label class="gene-search-label" for="midi-brass-search">Assign gene</label>
+                                <div class="gene-search-field">
+                                    <input
+                                        id="midi-brass-search"
+                                        type="search"
+                                        placeholder="e.g. AT5G61380"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+                                    <ul id="midi-brass-results" class="gene-search-results" hidden></ul>
+                                </div>
                             </div>
                         </div>
-                        <div id="midi-brass-display" class="midi-track-display"></div>
-                    </div>
+                        <div id="midi-brass-display" class="midi-track-display" role="img" aria-label="Brass note roll"></div>
+                    </article>
                 </div>
             </div>
         </section>

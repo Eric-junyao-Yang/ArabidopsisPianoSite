@@ -17,7 +17,7 @@ export class Synth_Waveform {
         // suscribe to bus
         this.bus.subscribe_to("point_select", null, (GeneID) => {
             if (!GeneID){
-                this.reset()
+                // this.reset()
                 return
             }
             this.updatePointsWithGeneID(GeneID)
@@ -160,6 +160,7 @@ export class Synth_Waveform {
             this.dragging = true
             this.canvas.setPointerCapture?.(e.pointerId)
             paintAtClient(e.clientX, e.clientY)
+            this.bus.execute_event("point_select", null)
         })
 
         this.canvas.addEventListener("pointermove", (e) => {

@@ -132,6 +132,14 @@ class MidiAudioProcessor extends AudioWorkletProcessor {
                     this.tables.set(msg.trackIndex, table)
                     this.tableReady.add(msg.trackIndex)
                 }
+            } else if (msg.type === "clearWavetable") {
+                this.tables.set(msg.trackIndex, new Float32Array(TABLE_SIZE).fill(0.5))
+                this.tableReady.delete(msg.trackIndex)
+                for (const voice of this.voices.values()) {
+                    if (voice.trackIndex === msg.trackIndex && voice.state !== "finished") {
+                        voice.state = "release"
+                    }
+                }
             } else if (msg.type === "noteOn") {
                 // Skip tracks with no gene assigned yet
                 if (!this.tableReady.has(msg.trackIndex)) return

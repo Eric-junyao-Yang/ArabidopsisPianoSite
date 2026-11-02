@@ -626,6 +626,10 @@ main {
     gap: var(--space-3);
 }
 
+#synth_to_midi_success {
+    display: none;
+}
+
 #Synth_Searchbar {
     width: 100%;
     max-width: 24rem;
@@ -729,67 +733,446 @@ main {
     overflow: auto;
 }
 
-/* ---------- MIDI ---------- */
+/* ---------- MIDI / Arabidopsis Jukebox ---------- */
 
 .panel--midi {
     width: 100%;
+    padding: var(--space-4);
+    background:
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--cb-teal) 6%, white) 0%,
+            var(--color-bg-elevated) 42%,
+            var(--color-bg-elevated) 100%
+        );
+    border-color: color-mix(in srgb, var(--cb-teal) 22%, var(--color-border));
+}
+
+.midi-header {
+    margin-bottom: var(--space-2);
+}
+
+.midi-header__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.midi-header__sub {
+    margin: 0;
+    max-width: 36rem;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--color-ink-muted);
+}
+
+.midi-transport {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    margin: 0 0 var(--space-2);
+    padding: 0.4rem 0.65rem 0.4rem 0.4rem;
+    background: color-mix(in srgb, var(--color-bg-elevated) 82%, var(--cb-teal));
+    border: 1px solid color-mix(in srgb, var(--cb-teal) 28%, var(--color-border));
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.midi-transport__play {
+    min-width: 3.75rem;
+    min-height: 2rem;
+    padding-inline: 0.75rem;
+    font-size: 0.82rem;
+}
+
+.midi-transport__time {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.15em;
+    min-width: 7.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+    user-select: none;
+}
+
+#midi_time_display {
+    color: var(--color-ink);
+    font-weight: 600;
+}
+
+/* Scrubber: filled track via --fill (set from midiplayer.js) */
+.midi-transport__scrubber {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 1.5rem;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.midi-transport__scrubber::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--cb-teal) var(--fill, 0%),
+        color-mix(in srgb, var(--color-border-strong) 70%, white) var(--fill, 0%)
+    );
+}
+
+.midi-transport__scrubber::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-border-strong) 70%, white);
+}
+
+.midi-transport__scrubber::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--cb-teal);
+}
+
+.midi-transport__scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--cb-teal);
+    box-shadow: 0 1px 3px rgb(27 29 41 / 30%);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.midi-transport__scrubber::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--cb-teal);
+    box-shadow: 0 1px 3px rgb(27 29 41 / 30%);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.midi-transport__scrubber:hover::-webkit-slider-thumb,
+.midi-transport__scrubber:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cb-teal) 35%, transparent);
+}
+
+.midi-transport__scrubber:hover::-moz-range-thumb,
+.midi-transport__scrubber:focus-visible::-moz-range-thumb {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cb-teal) 35%, transparent);
+}
+
+.midi-transport__scrubber:focus-visible {
+    outline: none;
+}
+
+.midi-hint {
+    margin: 0 0 var(--space-2);
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--color-ink-muted);
+    background: var(--color-bg-sunken);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--cb-sand);
+    border-radius: var(--radius-sm);
 }
 
 .midi-tracks {
+    position: relative;
     display: grid;
-    grid-template-rows: repeat(auto-fit, minmax(100px, 1fr));
-    gap: var(--space-3);
+    gap: 0.4rem;
+    isolation: isolate;
 }
 
 .midi-track {
-    display: flex;
-    flex-direction: row;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(11.5rem, 15rem) minmax(0, 1fr);
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    padding: 0.35rem 0.55rem;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-bg-sunken);
-    transition: border-color var(--transition-fast), background var(--transition-fast);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-elevated);
+    color: var(--cb-indigo);
+    transition: border-color var(--transition-fast), background var(--transition-fast),
+                box-shadow var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 
-.midi-track:hover,
-.midi-track:focus-within {
+.midi-track:hover {
     border-color: var(--color-border-strong);
-    background: var(--color-bg-elevated);
+}
+
+/* Raise the active track so its gene dropdown paints above siblings.
+   (opacity/filter on unloaded tracks create stacking contexts that otherwise trap z-index.) */
+.midi-track:focus-within {
+    z-index: 40;
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Unloaded = no wavetable assigned → silent in the audio worklet */
+.midi-track.is-unloaded {
+    opacity: 0.78;
+    filter: grayscale(0.45);
+    border-style: dashed;
+    border-color: var(--color-border-strong);
+    background: var(--color-bg-sunken);
+    color: var(--color-ink-muted);
+}
+
+.midi-track.is-unloaded:hover,
+.midi-track.is-unloaded:focus-within {
+    opacity: 0.95;
+    filter: grayscale(0.15);
+}
+
+.midi-track.is-unloaded .midi-track-display {
+    opacity: 0.45;
+    border-color: var(--color-border-strong);
+}
+
+.midi-track.is-loaded {
+    opacity: 1;
+    filter: none;
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--cb-teal) 45%, var(--color-border));
+    background:
+        linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--cb-teal) 7%, white) 0,
+            var(--color-bg-elevated) 7rem
+        );
+}
+
+.midi-track__side {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+    min-width: 0;
 }
 
 .midi-track__meta {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: 0.3rem 0.35rem;
+    min-width: 0;
 }
 
 .midi-track__name {
-    font-weight: 600;
-    font-size: 0.92rem;
+    font-weight: 700;
+    font-size: 0.82rem;
     color: var(--color-ink);
+    white-space: nowrap;
+}
+
+.midi-track__badge {
+    flex: 0 0 auto;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink-muted) 14%, white);
+    color: var(--color-ink-muted);
+    border: 1px solid color-mix(in srgb, var(--color-ink-muted) 18%, white);
+}
+
+.midi-track.is-loaded .midi-track__badge {
+    background: color-mix(in srgb, var(--cb-teal) 16%, white);
+    color: var(--cb-green);
+    border-color: color-mix(in srgb, var(--cb-teal) 35%, white);
 }
 
 .midi-symbol {
-    margin-left: auto;
-    opacity: 0.8;
-    font-size: 1rem;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cb-indigo) 8%, white);
+    font-size: 0.78rem;
+    line-height: 1;
+}
+
+.midi-track.is-unloaded .midi-symbol {
+    background: color-mix(in srgb, var(--color-ink-muted) 10%, white);
 }
 
 .midi-gene-name {
+    display: none;
     margin: 0;
-    flex: 1 1 100%;
-    min-height: 1.2em;
+    min-width: 0;
+    max-width: 100%;
+    width: max-content;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.15rem 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--cb-indigo) 8%, white);
+    border: 1px solid color-mix(in srgb, var(--cb-indigo) 18%, white);
     font-family: var(--font-mono);
-    font-size: 0.78rem;
+    font-size: 0.68rem;
+    font-weight: 600;
     color: var(--cb-indigo);
+    line-height: 1.2;
+}
+
+.midi-track.is-loaded .midi-gene-name {
+    display: inline-flex;
+    flex: 0 1 auto;
+}
+
+.midi-gene-name__id {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.midi-track-remove {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--cb-wine) 12%, white);
+    color: var(--cb-wine);
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.midi-track-remove:hover,
+.midi-track-remove:focus-visible {
+    background: var(--cb-wine);
+    color: #fff;
+    outline: none;
+}
+
+.midi-track-remove:active {
+    transform: scale(0.94);
+}
+
+.midi-track .gene-search {
+    gap: 0;
+}
+
+.midi-track .gene-search-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.midi-track .gene-search-field input[type="search"] {
+    min-height: 1.85rem;
+    padding: 0.25rem 0.55rem;
+    font-size: 0.78rem;
+}
+
+.midi-track .gene-search-results {
+    z-index: 50;
+    max-height: 200px;
 }
 
 .midi-track-display {
-    width: 1000px;
-    height: 80px;
-    outline: 1px solid gold;
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    height: 40px;
+    overflow: hidden;
+    color: inherit;
+    border-radius: 6px;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 9px,
+            color-mix(in srgb, var(--color-border) 70%, transparent) 9px,
+            color-mix(in srgb, var(--color-border) 70%, transparent) 10px
+        ),
+        color-mix(in srgb, var(--color-bg-sunken) 85%, white);
+    border: 1px solid var(--color-border);
+}
+
+.midi-track.is-loaded .midi-track-display {
+    border-color: color-mix(in srgb, var(--cb-teal) 30%, var(--color-border));
+    color: var(--cb-indigo);
+}
+
+.midi-track-display svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.midi-track-display .midi-playhead {
+    color: var(--cb-rose);
+}
+
+@media (max-width: 820px) {
+    .midi-track {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+        align-items: stretch;
+    }
+
+    .midi-track-display {
+        height: 36px;
+    }
+}
+
+@media (max-width: 560px) {
+    .midi-transport {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+            "play time"
+            "scrub scrub";
+        row-gap: var(--space-2);
+        padding: var(--space-2);
+    }
+
+    .midi-transport__play { grid-area: play; }
+    .midi-transport__time {
+        grid-area: time;
+        justify-self: end;
+        min-width: 0;
+    }
+    .midi-transport__scrubber { grid-area: scrub; }
+
+    .midi-track {
+        padding: 0.4rem 0.5rem;
+    }
 }
 
 /* ---------- Step sequencer workspace ---------- */

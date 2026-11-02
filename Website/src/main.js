@@ -16,6 +16,7 @@ import {
     createMidiTransport,
     geneToWavetable,
     setTrackWavetable,
+    clearTrackWavetable,
 } from "/src/midiplayer.js"
 import { stepSeqTutorial } from "/src/StepSeqTutorial.js"
 import { midiTrackPlots } from "/src/midiTrackPlot.js"
@@ -106,7 +107,65 @@ const MIDI_FILE = "/dat/NGGYU.mid"
 let midiEvents = null
 let midiTransport = null
 let midiTrackCounts = null
+let midiSongTime = null
 const midiTrackGenes = new Map() // trackIndex → GeneID
+const midiTrackEls = new Map(
+    MIDI_TRACKS.map((track) => [
+        track.trackIndex,
+        document.querySelector(`.midi-track[data-track-index="${track.trackIndex}"]`),
+    ])
+)
+
+function setMidiTrackLoaded(trackIndex, GeneID) {
+    const el = midiTrackEls.get(trackIndex)
+    if (!el) return
+    const loaded = Boolean(GeneID)
+    el.classList.toggle("is-unloaded", !loaded)
+    el.classList.toggle("is-loaded", loaded)
+    el.setAttribute("aria-busy", loaded ? "false" : "true")
+
+    const badge = el.querySelector("[data-midi-badge]")
+    if (badge) badge.textContent = loaded ? "Loaded" : "No sound"
+
+    const geneEl = el.querySelector("[data-midi-gene]")
+    if (geneEl) {
+        geneEl.replaceChildren()
+        if (GeneID) {
+            const idSpan = document.createElement("span")
+            idSpan.className = "midi-gene-name__id"
+            idSpan.textContent = GeneID
+
+            const removeButton = document.createElement("button")
+            removeButton.type = "button"
+            removeButton.className = "midi-track-remove"
+            removeButton.setAttribute("aria-label", `Remove ${GeneID} from track`)
+            removeButton.textContent = "×"
+            removeButton.addEventListener("click", (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                bus.execute_event("midi_track_gene", { trackIndex, GeneID: null })
+            })
+
+            geneEl.append(idSpan, removeButton)
+        }
+    }
+
+    updateMidiLoadHint()
+}
+
+function updateMidiLoadHint() {
+    const hint = document.getElementById("midi_load_hint")
+    if (!hint) return
+    const loaded = midiTrackGenes.size
+    const total = MIDI_TRACKS.length
+    if (loaded === 0) {
+        hint.textContent = "Assign a gene to each track to load its sound. Unloaded tracks stay silent."
+    } else if (loaded < total) {
+        hint.textContent = `${loaded} of ${total} tracks loaded. Unloaded tracks stay silent until you assign a gene.`
+    } else {
+        hint.textContent = `${loaded} of ${total} tracks loaded.`
+    }
+}
 
 function syncMidiTrackWavetables() {
     for (const [trackIndex, GeneID] of midiTrackGenes) {
@@ -115,33 +174,70 @@ function syncMidiTrackWavetables() {
     }
 }
 
-let midiLoadPromise = null
-async function ensureMidiLoaded() {
-    await initMidiAudio()
-    if (!midiEvents) {
-        if (!midiLoadPromise) {
-            midiLoadPromise = loadMidiEvents(MIDI_FILE, MIDI_TRACKS.length)
-                .then((loaded) => {
-                    midiEvents = loaded.events
-                    midiTrackCounts = loaded.trackCount
-                    midiTransport.setEvents(midiEvents)
-                    // Genes chosen before the worklet existed still need uploading
-                    syncMidiTrackWavetables()
+/** Format mm:ss for the scrubber before the transport exists. */
+function formatMidiClock(time) {
+    const safe = Math.max(0, Number(time) || 0)
+    const minutes = Math.floor(safe / 60)
+    const seconds = Math.floor(safe % 60)
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+}
 
-                    // Plot
-                    midiTrackPlots(midiEvents, midiTrackCounts, MIDI_TRACKS)
-                })
-                .catch((err) => {
-                    midiLoadPromise = null
-                    throw err
-                })
-        }
-        await midiLoadPromise
+function applyMidiDurationToUi(duration) {
+    const total = Math.max(0, Number(duration) || 0)
+    const totalEl = document.getElementById("midi_total_time")
+    const bar = document.getElementById("midi_progress_bar")
+    if (totalEl) totalEl.textContent = ` / ${formatMidiClock(total)}`
+    if (bar) {
+        bar.max = String(total)
+        bar.step = "any"
     }
 }
 
+// File + plots load on page start (no AudioContext needed).
+// Audio worklet / transport still wait for first play (browser autoplay policy).
+let midiDataPromise = null
+function loadMidiData() {
+    if (!midiDataPromise) {
+        midiDataPromise = loadMidiEvents(MIDI_FILE, MIDI_TRACKS.length)
+            .then((loaded) => {
+                midiEvents = loaded.events
+                midiSongTime = loaded.duration
+                midiTrackCounts = loaded.trackCount
+                applyMidiDurationToUi(midiSongTime)
+                midiTrackPlots(midiEvents, MIDI_TRACKS, bus)
+                // If the user already hit play, wire events into the live transport
+                if (midiTransport) {
+                    midiTransport.setEvents(midiEvents, midiSongTime)
+                    syncMidiTrackWavetables()
+                }
+            })
+            .catch((err) => {
+                midiDataPromise = null
+                throw err
+            })
+    }
+    return midiDataPromise
+}
+
+loadMidiData()
+
+async function ensureMidiReady() {
+    await Promise.all([loadMidiData(), initMidiAudio()])
+}
+
+// recieve waveform from synth to midi
+document.getElementById("send_waveform_to_midi").addEventListener("click", () => {
+    const trackIndex = document.getElementById("synth_to_midi_track_select").value
+    const GeneID = document.getElementById("synth_to_midi_gene_id").textContent
+    bus.execute_event("midi_track_gene", {
+        trackIndex: Number(trackIndex),
+        GeneID: GeneID,
+    })
+    document.getElementById("synth_to_midi_success").style.display = "block"
+})
+
 document.getElementById("midi_play").addEventListener("click", async () => {
-    await ensureMidiLoaded()
+    await ensureMidiReady()
     if (midiTransport.isPlaying) {
         midiTransport.stop()
         document.getElementById("midi_play").textContent = "play"
@@ -249,11 +345,11 @@ async function initMidiAudio() {
             midiNode.connect(globalAudio.input)
             midiTransport = createMidiTransport(midiCtx, midiNode, {
                 onStop: () => {
-                    const btn = document.getElementById("play")
+                    const btn = document.getElementById("midi_play")
                     if (btn) btn.textContent = "play"
                 },
-            })
-            if (midiEvents) midiTransport.setEvents(midiEvents)
+            }, bus)
+            if (midiEvents && midiSongTime) midiTransport.setEvents(midiEvents, midiSongTime)
         })().catch((err) => {
             midiReady = null
             throw err
@@ -435,9 +531,9 @@ searchbar(
     }
 )
 
-// MIDI track gene search → bus → wavetable (0-based trackIndex matches MIDI file tracks)
+// MIDI track gene search
 for (const track of MIDI_TRACKS) {
-    const nameEl = document.getElementById(`midi-${track.id}-gene-name`)
+    setMidiTrackLoaded(track.trackIndex, null) // start unloaded
     searchbar(
         document.querySelector(`#midi-${track.id}-search`),
         document.querySelector(`#midi-${track.id}-results`),
@@ -447,7 +543,6 @@ for (const track of MIDI_TRACKS) {
                 trackIndex: track.trackIndex,
                 GeneID: item.GeneID,
             })
-            if (nameEl) nameEl.textContent = item.GeneID
         }
     )
 }
@@ -466,10 +561,17 @@ document.getElementById("StepSeqTooltipClose").addEventListener("click", () => {
 
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {
+    if (!GeneID) {
+        midiTrackGenes.delete(trackIndex)
+        setMidiTrackLoaded(trackIndex, null)
+        if (midiNode) clearTrackWavetable(midiNode, trackIndex)
+        return
+    }
     midiTrackGenes.set(trackIndex, GeneID)
+    setMidiTrackLoaded(trackIndex, GeneID)
     const waveform = geneToWavetable(GeneID, normalized_counts_lookup)
     if (!waveform) return
-    // Queue until worklet exists (user may search before Activate)
+    // Queue until worklet exists (user may search before first play)
     if (midiNode) setTrackWavetable(midiNode, trackIndex, waveform)
 })
 
@@ -538,7 +640,15 @@ bus.subscribe_to("stopSlideSound", "main", () => {
     }
 })
 
-
+bus.subscribe_to("point_select", "main", (GeneID) => {
+    if (!GeneID) {
+        document.getElementById("synth_waveform_name").textContent = "Custom Waveform"
+        document.getElementById("synth_to_midi_gene_id").textContent = ""
+    } else {
+        document.getElementById("synth_waveform_name").textContent = GeneID
+        document.getElementById("synth_to_midi_gene_id").textContent = GeneID
+    }
+})
 
 
 // TODO: Play Sample becomes playing a midi ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); May allow mapping of volume to log expression
