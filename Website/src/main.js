@@ -561,7 +561,7 @@ plotViolin(
 plotViolin(
     100, violinHeight, violinOpts,
     osc_perGene_meta.map((v) => v.qval),
-    d3.select("#violin-qVal"), "q-value", bus, "StepSeqqValUpdate"
+    d3.select("#violin-qVal"), "q-value", bus, "StepSeqqValUpdate", 0.05, 0.00
 )
 plotViolin(
     100, violinHeight, violinOpts,

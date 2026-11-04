@@ -1,7 +1,7 @@
 import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plotTheme.js"
 
 export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 20, left: 50}, 
-    Arr, d3_select_div, y_lab, bus, execute_event = ""){
+    Arr, d3_select_div, y_lab, bus, execute_event = "", default_high = null, default_low = null){
 
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
@@ -215,6 +215,12 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         
         updateScrubber()
     }))
+
+    // apply default scrubber values
+    if (default_high !== null && default_low !== null){
+        [high_val, low_val] = [default_high, default_low]
+        updateScrubber()
+    }
 }
 
 /** Assumes arr is already sorted ascending. */
