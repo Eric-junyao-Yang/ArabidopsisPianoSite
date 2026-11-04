@@ -95,7 +95,7 @@ export function plotStepSeqMain(
 
     // Filter ranges from the three violin scrubbers (inclusive). null = no constraint yet.
     const filterRanges = {
-        log_TPM: null,
+        log_period_sd: null,
         qval: null,
         relative_std: null,
     }
@@ -121,7 +121,7 @@ export function plotStepSeqMain(
         for (let i = 0; i < osc_perGene_meta.length; i++) {
             const d = osc_perGene_meta[i]
             if (
-                inRange(d.log_TPM, filterRanges.log_TPM) &&
+                inRange(d.log_period_sd, filterRanges.log_period_sd) &&
                 inRange(d.qval, filterRanges.qval) &&
                 inRange(d.relative_std, filterRanges.relative_std)
             ) {
@@ -486,46 +486,154 @@ export function plotStepSeqMain(
 
     drawPiano(yScale)
     // ------------ Scrubber --------------
-    const SCRUBBER_HANDLE_WIDTH = 5
-    const SCRUBBER_HANDLE_HEIGHT = 10
-    const scrubber = plotArea.append('g')
-    const scrubber_needle = scrubber.append('line')
-        .attr("x1", xScale(0))
-        .attr("y1", 0 - SCRUBBER_HANDLE_HEIGHT)
-        .attr("x2", xScale(0))
-        .attr("y2", innerHeight)
-        .attr("stroke", PALETTE.wine)
-        .attr("stroke-width", "2")
-        .attr("stroke-linecap", "round")
-    const scrubber_handle = scrubber.append('rect')
-        .attr("x", xScale(0) - SCRUBBER_HANDLE_WIDTH/2)
-        .attr("y", 0 - SCRUBBER_HANDLE_HEIGHT)
-        .attr("width", SCRUBBER_HANDLE_WIDTH)
-        .attr("height", SCRUBBER_HANDLE_HEIGHT)
-        .attr("fill", PALETTE.wine)
-        .attr("stroke", PALETTE.wine)
-        .attr("stroke-width", "1")
-        .attr("rx", 2)
-    
-    // Animate Scrubber
+    // Overlay above the canvas so the rail/knob can receive pointer events
+    // (main SVG is pointer-events:none and sits under the interaction canvas).
+    const TRACK_H = 20
+    const TRACK_Y = -14 // centerline in the top margin
+    const TRACK_HIT_H = 22
+    const KNOB_R = 6
+    const NEEDLE_HIT_W = 14
+    const trackX0 = PADDING
+    const trackWidth = innerWidth - 2 * PADDING
     let scrubber_time = 0
+    let isScrubbing = false
+
+    const scrubberSvg = container_div.append('svg')
+        .attr('width', canvasWidth)
+        .attr('height', canvasHeight)
+        .style('position', 'absolute')
+        .style('left', '0')
+        .style('top', '0')
+        .style('pointer-events', 'none')
+        .style('z-index', '2')
+
+    const scrubberLayer = scrubberSvg.append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`)
+
+    // Rail + elapsed fill (behind the playhead)
+    const scrubberTrack = scrubberLayer.append('rect')
+        .attr('x', trackX0)
+        .attr('y', TRACK_Y - TRACK_H / 2)
+        .attr('width', trackWidth)
+        .attr('height', TRACK_H)
+        .attr('rx', TRACK_H / 8)
+        .attr('fill', THEME.grid)
+        .attr('pointer-events', 'none')
+
+    const scrubberProgress = scrubberLayer.append('rect')
+        .attr('x', trackX0)
+        .attr('y', TRACK_Y - TRACK_H / 2)
+        .attr('width', 0)
+        .attr('height', TRACK_H)
+        .attr('rx', TRACK_H / 8)
+        .attr('fill', withAlpha(PALETTE.wine, 0.45))
+        .attr('pointer-events', 'none')
+
+    // Generous invisible hit area over the rail for click-to-seek / drag
+    const scrubberTrackHit = scrubberLayer.append('rect')
+        .attr('x', trackX0)
+        .attr('y', TRACK_Y - TRACK_HIT_H / 2)
+        .attr('width', trackWidth)
+        .attr('height', TRACK_HIT_H)
+        .attr('fill', 'transparent')
+        .style('pointer-events', 'all')
+        .style('cursor', 'pointer')
+        .style('touch-action', 'none')
+
+    const scrubber = scrubberLayer.append('g')
+
+    scrubber.append('line')
+        .attr('x1', xScale(0))
+        .attr('x2', xScale(0))
+        .attr('y1', TRACK_Y)
+        .attr('y2', innerHeight)
+        .attr('stroke', withAlpha(PALETTE.wine, 0.85))
+        .attr('stroke-width', 1.5)
+        .attr('stroke-linecap', 'round')
+        .attr('pointer-events', 'none')
+
+    const scrubberKnob = scrubber.append('rect')
+        .attr('x', xScale(0) - KNOB_R)
+        .attr('y', TRACK_Y - KNOB_R * 2)
+        .attr('width', KNOB_R * 2)
+        .attr('height', KNOB_R * 4)
+        .attr('fill', PALETTE.wine)
+        .attr('stroke', THEME.surface)
+        .attr('rx', KNOB_R / 2)
+        .attr('stroke-width', 2)
+        .attr('pointer-events', 'none')
+
+    // Needle hit target for dragging along the plot itself
+    const scrubberNeedleHit = scrubber.append('rect')
+        .attr('x', xScale(0) - NEEDLE_HIT_W / 2)
+        .attr('y', TRACK_Y)
+        .attr('width', NEEDLE_HIT_W)
+        .attr('height', innerHeight - TRACK_Y)
+        .attr('fill', 'transparent')
+        .style('pointer-events', 'all')
+        .style('cursor', 'ew-resize')
+        .style('touch-action', 'none')
+
+    function updateScrubberVisual() {
+        const x = currentXScale(scrubber_time)
+        // Needle/knob are drawn at xScale(0) (== PADDING); shift so screen x matches
+        scrubber.attr('transform', `translate(${x - PADDING},0)`)
+        scrubberProgress.attr('width', Math.max(0, Math.min(trackWidth, x - trackX0)))
+    }
+
+    function setScrubberTime(t, { clamp = false } = {}) {
+        if (clamp) {
+            const [d0, d1] = currentXScale.domain()
+            t = Math.max(d0, Math.min(d1, t))
+        }
+        scrubber_time = t
+        updateScrubberVisual()
+    }
+
+    function setScrubbing(active) {
+        isScrubbing = active
+        scrubberKnob.attr('r', active ? KNOB_R + 1.5 : KNOB_R)
+        scrubberTrackHit.style('cursor', active ? 'grabbing' : 'pointer')
+        scrubberNeedleHit.style('cursor', active ? 'grabbing' : 'ew-resize')
+    }
+
+    const scrubberDrag = d3.drag()
+        .container(scrubberLayer.node())
+        .on('start', (event) => {
+            setScrubbing(true)
+            setScrubberTime(currentXScale.invert(event.x), { clamp: true })
+        })
+        .on('drag', (event) => {
+            setScrubberTime(currentXScale.invert(event.x), { clamp: true })
+        })
+        .on('end', () => setScrubbing(false))
+
+    scrubberTrackHit.call(scrubberDrag)
+    scrubberNeedleHit.call(scrubberDrag)
+    updateScrubberVisual()
+
+    // Animate Scrubber
     let t_minus1 = null
-    const scrubber_velocity = 3 //move horizontally n hrs per second
-    function animateScrubber(t0){
-        if (t_minus1){
-            const dt = (t0 - t_minus1) / 1000
-            const scrubber_time_tm1 = scrubber_time //to check if note is passed
-            scrubber_time = (scrubber_time + dt * scrubber_velocity) % 24
-            const scrubber_time_t0 = scrubber_time //to check if note is passed
-            checkSelectedGenes(scrubber_time_tm1, scrubber_time_t0)
-            const new_x = currentXScale(scrubber_time)
-            scrubber.attr('transform', `translate(${new_x - PADDING},0)`) //if needle starts at 0 on scale, it needs to be shifted by padding for transform to work
+    const scrubber_velocity = 3 // move horizontally n hrs per second
+    function animateScrubber(t0) {
+        if (isScrubbing) {
+            // Keep the RAF loop alive while seeking, but don't override the drag
             t_minus1 = t0
-            if (isPlay){requestAnimationFrame(animateScrubber)} 
-            else {t_minus1 = null}
+            if (isPlay) requestAnimationFrame(animateScrubber)
+            return
+        }
+        if (t_minus1) {
+            const dt = (t0 - t_minus1) / 1000
+            const scrubber_time_tm1 = scrubber_time
+            scrubber_time = (scrubber_time + dt * scrubber_velocity) % 24
+            checkSelectedGenes(scrubber_time_tm1, scrubber_time)
+            updateScrubberVisual()
+            t_minus1 = t0
+            if (isPlay) requestAnimationFrame(animateScrubber)
+            else t_minus1 = null
         } else {
             t_minus1 = t0
-            if (isPlay){requestAnimationFrame(animateScrubber)}
+            if (isPlay) requestAnimationFrame(animateScrubber)
         }
     }
     
@@ -540,8 +648,7 @@ export function plotStepSeqMain(
 
     function playStop(){
         isPlay = false
-        scrubber_time = 0
-        scrubber.attr('transform', `translate(0,0)`)
+        setScrubberTime(0)
     }
 
     const period_to_freq_scaled = 440 / (1/24) // mapping 24 hours to 440Hz
@@ -670,6 +777,7 @@ export function plotStepSeqMain(
         drawPiano(zy)
         drawAxis(xAxis, d3.axisBottom(zx).tickSizeOuter(0))
         drawAxis(yAxis, d3.axisLeft(zy).tickSizeOuter(0))
+        updateScrubberVisual()
         if (rebuild) rebuildQuadtree(zx, zy)
     }
     const zoom = d3.zoom()
@@ -943,8 +1051,8 @@ export function plotStepSeqMain(
         updateCurrentDisplayGene(null)
         bus.execute_event("selection_modified", current_selection)
     })
-    bus.subscribe_to("StepSeqTPMUpdate", "mainplot", ([high_val, low_val]) => {
-        setFilterRange("log_TPM", high_val, low_val)
+    bus.subscribe_to("StepSeqPeriodSDUpdate", "mainplot", ([high_val, low_val]) => {
+        setFilterRange("log_period_sd", high_val, low_val)
     })
     bus.subscribe_to("StepSeqqValUpdate", "mainplot", ([high_val, low_val]) => {
         setFilterRange("qval", high_val, low_val)

@@ -71,11 +71,79 @@ const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 const synth_waveform_canvas = document.getElementById("Synth_Waveform")
 const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, count_arr)
 
-document.getElementById("reset").addEventListener("click", () => synth_waveform.reset())
-document.getElementById("sine").addEventListener("click", () => synth_waveform.sine())
-document.getElementById("square").addEventListener("click", () => synth_waveform.square())
-document.getElementById("saw").addEventListener("click", () => synth_waveform.saw())
-document.getElementById("triangle").addEventListener("click", () => synth_waveform.triangle())
+/** Current gene driving the synth waveform (null = custom / preset). */
+let currentSynthGeneID = null
+let synthToMidiStatusTimer = null
+
+const synthWaveformLabelEl = document.getElementById("synth_waveform_name")
+const synthWaveformLabelTextEl = synthWaveformLabelEl?.querySelector(".synth-waveform-label__text")
+const synthToMidiGeneEl = document.getElementById("synth_to_midi_gene_id")
+const synthToMidiTrackSelect = document.getElementById("synth_to_midi_track_select")
+const synthToMidiSendBtn = document.getElementById("send_waveform_to_midi")
+const synthToMidiStatusEl = document.getElementById("synth_to_midi_success")
+const synthToMidiPanel = document.getElementById("pushSound")
+
+function setSynthToMidiStatus(message, kind = "success") {
+    if (!synthToMidiStatusEl) return
+    if (synthToMidiStatusTimer) {
+        clearTimeout(synthToMidiStatusTimer)
+        synthToMidiStatusTimer = null
+    }
+    if (!message) {
+        synthToMidiStatusEl.hidden = true
+        synthToMidiStatusEl.textContent = ""
+        synthToMidiStatusEl.classList.remove("is-success", "is-error")
+        return
+    }
+    synthToMidiStatusEl.hidden = false
+    synthToMidiStatusEl.textContent = message
+    synthToMidiStatusEl.classList.toggle("is-success", kind === "success")
+    synthToMidiStatusEl.classList.toggle("is-error", kind === "error")
+    synthToMidiStatusTimer = setTimeout(() => setSynthToMidiStatus(null), 2200)
+}
+
+function syncSynthToMidiControls() {
+    const hasGene = Boolean(currentSynthGeneID)
+    if (synthToMidiPanel) {
+        synthToMidiPanel.classList.toggle("is-disabled", !hasGene)
+        synthToMidiPanel.setAttribute("aria-disabled", hasGene ? "false" : "true")
+    }
+    if (synthToMidiTrackSelect) synthToMidiTrackSelect.disabled = !hasGene
+    if (synthToMidiSendBtn) synthToMidiSendBtn.disabled = !(hasGene)
+}
+
+function updateSynthGeneUI(GeneID) {
+    currentSynthGeneID = GeneID || null
+    const label = currentSynthGeneID || "Custom Waveform"
+    if (synthWaveformLabelTextEl) synthWaveformLabelTextEl.textContent = label
+    else if (synthWaveformLabelEl) synthWaveformLabelEl.textContent = label
+    synthWaveformLabelEl?.classList.toggle("has-gene", Boolean(currentSynthGeneID))
+
+    if (synthToMidiGeneEl) {
+        synthToMidiGeneEl.textContent = currentSynthGeneID || "selected gene"
+        synthToMidiGeneEl.classList.toggle("is-empty", !currentSynthGeneID)
+    }
+    setSynthToMidiStatus(null)
+    syncSynthToMidiControls()
+}
+
+function applySynthPreset(fn) {
+    fn()
+    // Presets / reset leave the gene data behind — clear selection so UI matches the sound.
+    bus.execute_event("point_select", null)
+}
+
+document.getElementById("reset").addEventListener("click", () => applySynthPreset(() => synth_waveform.reset()))
+document.getElementById("sine").addEventListener("click", () => applySynthPreset(() => synth_waveform.sine()))
+document.getElementById("square").addEventListener("click", () => applySynthPreset(() => synth_waveform.square()))
+document.getElementById("saw").addEventListener("click", () => applySynthPreset(() => synth_waveform.saw()))
+document.getElementById("triangle").addEventListener("click", () => applySynthPreset(() => synth_waveform.triangle()))
+
+synthToMidiTrackSelect?.addEventListener("change", () => {
+    setSynthToMidiStatus(null)
+    syncSynthToMidiControls()
+})
+updateSynthGeneUI(null)
 
 // Step sequencer transport
 const playPauseButton = document.getElementById("StepSeqPlayPause")
@@ -96,6 +164,15 @@ document.getElementById("StepSeqReset").addEventListener("click", () => {
 })
 
 // --------------------------------------- MidiPlayer ---------------------------------------
+// Side drawer: sticky within #SynthDiv, toggled via .is-open on #midi_container
+const jukeboxHandle = document.getElementById("midi_handle")
+const jukeboxContainer = document.getElementById("midi_container")
+jukeboxHandle?.addEventListener("click", () => {
+    const open = jukeboxContainer.classList.toggle("is-open")
+    jukeboxHandle.setAttribute("aria-expanded", open ? "true" : "false")
+})
+
+console.log(osc_perGene_meta)
 const MIDI_TRACKS = [
     { id: "vocal", label: "Vocal", trackIndex: 0 },
     { id: "synth1", label: "Synth1", trackIndex: 1 },
@@ -225,15 +302,24 @@ async function ensureMidiReady() {
     await Promise.all([loadMidiData(), initMidiAudio()])
 }
 
-// recieve waveform from synth to midi
-document.getElementById("send_waveform_to_midi").addEventListener("click", () => {
-    const trackIndex = document.getElementById("synth_to_midi_track_select").value
-    const GeneID = document.getElementById("synth_to_midi_gene_id").textContent
-    bus.execute_event("midi_track_gene", {
-        trackIndex: Number(trackIndex),
-        GeneID: GeneID,
-    })
-    document.getElementById("synth_to_midi_success").style.display = "block"
+// Assign the currently selected synth gene to a Jukebox track
+synthToMidiSendBtn?.addEventListener("click", () => {
+    const rawTrack = synthToMidiTrackSelect?.value
+    const trackIndex = Number(rawTrack)
+    const GeneID = currentSynthGeneID
+    // Number("") === 0, so require a non-empty select value before coercing.
+    if (!GeneID || rawTrack === "" || rawTrack == null || !Number.isInteger(trackIndex) || trackIndex < 0) {
+        setSynthToMidiStatus("Select a gene and track first", "error")
+        return
+    }
+    if (!normalized_counts_lookup.has(GeneID)) {
+        setSynthToMidiStatus("Gene not found", "error")
+        return
+    }
+    bus.execute_event("midi_track_gene", { trackIndex, GeneID })
+    const trackLabel =
+        MIDI_TRACKS.find((t) => t.trackIndex === trackIndex)?.label || `track ${trackIndex}`
+    setSynthToMidiStatus(`Assigned to ${trackLabel}`, "success")
 })
 
 document.getElementById("midi_play").addEventListener("click", async () => {
@@ -242,6 +328,8 @@ document.getElementById("midi_play").addEventListener("click", async () => {
         midiTransport.stop()
         document.getElementById("midi_play").textContent = "play"
     } else {
+        // Re-upload any genes assigned before (or while) the worklet was offline.
+        syncMidiTrackWavetables()
         midiTransport.play()
         document.getElementById("midi_play").textContent = "stop"
     }
@@ -350,6 +438,8 @@ async function initMidiAudio() {
                 },
             }, bus)
             if (midiEvents && midiSongTime) midiTransport.setEvents(midiEvents, midiSongTime)
+            // Genes may have been assigned before the worklet existed — push them now.
+            syncMidiTrackWavetables()
         })().catch((err) => {
             midiReady = null
             throw err
@@ -465,8 +555,8 @@ const violinHeight = Math.max(
 const violinOpts = { top: 16, right: 8, bottom: 16, left: 50 }
 plotViolin(
     100, violinHeight, violinOpts,
-    osc_perGene_meta.map((v) => v.log_TPM),
-    d3.select("#violin-TPM"), "log10(mean TPM)", bus, "StepSeqTPMUpdate"
+    osc_perGene_meta.map((v) => v.log_period_sd),
+    d3.select("#violin-logPeriodSD"), "log std of predicted period", bus, "StepSeqPeriodSDUpdate"
 )
 plotViolin(
     100, violinHeight, violinOpts,
@@ -476,7 +566,7 @@ plotViolin(
 plotViolin(
     100, violinHeight, violinOpts,
     osc_perGene_meta.map((v) => v.relative_std),
-    d3.select("#violin-Std"), "relative std", bus, "StepSeqStdUpdate"
+    d3.select("#violin-Std"), "relative std of predicted waveform", bus, "StepSeqStdUpdate"
 )
 
 const plotGP = plotGPWave(600, 400, "#StepSeqGPPlot")
@@ -641,14 +731,5 @@ bus.subscribe_to("stopSlideSound", "main", () => {
 })
 
 bus.subscribe_to("point_select", "main", (GeneID) => {
-    if (!GeneID) {
-        document.getElementById("synth_waveform_name").textContent = "Custom Waveform"
-        document.getElementById("synth_to_midi_gene_id").textContent = ""
-    } else {
-        document.getElementById("synth_waveform_name").textContent = GeneID
-        document.getElementById("synth_to_midi_gene_id").textContent = GeneID
-    }
+    updateSynthGeneUI(GeneID)
 })
-
-
-// TODO: Play Sample becomes playing a midi ; adjust font size and point size ; make dynamic adjustable to screen size ; finalize color ; fix gene name display ; add display for selelcted gene (GeneID or sine/square/custom etc.) avoid allowing play sample to be pressed multiple times; Resqueeze catmullrom data to -1,1 (interpolation can bend it past the extremes); May allow mapping of volume to log expression

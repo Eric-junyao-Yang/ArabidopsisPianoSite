@@ -49,8 +49,8 @@ export function plotGPWave(width, height, div_name = "#StepSeqGPPlot"){
     axisLabel(plotArea.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", -innerHeight/2)
-        .attr("y", -38))
-        .text("VST expression")
+        .attr("y", -40))
+        .text("normalized expression (VST)")
     
     const titleText = plotTitle(plotArea.append("text")
         .attr("transform", `translate(0,-18)`))
