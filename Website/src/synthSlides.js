@@ -1,3 +1,4 @@
+// Kept for posterity — the live Science fold uses /src/synthScienceDiv.js instead.
 import { interpolate_waveform } from "/src/catmullrom.js"
 import { PALETTE, THEME } from "/src/plotTheme.js"
 

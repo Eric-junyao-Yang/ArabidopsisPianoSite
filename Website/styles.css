@@ -214,6 +214,32 @@ li::marker { color: var(--color-ink-muted); }
     color: var(--color-ink-muted);
 }
 
+.sound-wave {
+    display: inline-flex;
+    align-items: baseline;
+    color: var(--cb-indigo);
+    font-weight: 650;
+    font-style: italic;
+}
+
+.sound-wave__letter {
+    display: inline-block;
+    will-change: transform;
+    animation: sound-letter-wave 1.6s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 0.12s);
+}
+
+@keyframes sound-letter-wave {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-0.28em); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sound-wave__letter {
+        animation: none;
+    }
+}
+
 .site-header h3 {
     font-size: 1rem;
 }
@@ -362,6 +388,162 @@ main {
     color: color-mix(in srgb, var(--color-ink) 90%, white);
 }
 
+/* ---------- Foldable Science / Music theory briefs ---------- */
+
+.fold-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    width: 100%;
+    max-width: var(--prose-max);
+}
+
+.fold {
+    margin: 0;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: clip;
+}
+
+.fold--science {
+    border-left: 3px solid var(--cb-teal);
+}
+
+.fold--theory {
+    border-left: 3px solid var(--cb-sand);
+}
+
+.fold__summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    transition: background var(--transition-fast);
+}
+
+.fold__summary::-webkit-details-marker,
+.fold__summary::marker {
+    display: none;
+    content: "";
+}
+
+.fold__summary:hover {
+    background: var(--color-bg-sunken);
+}
+
+.fold__summary:focus-visible {
+    outline: none;
+    box-shadow: inset var(--focus-ring);
+}
+
+.fold__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.fold--science .fold__badge {
+    color: color-mix(in srgb, var(--cb-teal) 75%, black);
+    background: color-mix(in srgb, var(--cb-teal) 16%, white);
+    border: 1px solid color-mix(in srgb, var(--cb-teal) 35%, white);
+}
+
+.fold--theory .fold__badge {
+    color: color-mix(in srgb, var(--cb-sand) 55%, black);
+    background: color-mix(in srgb, var(--cb-sand) 28%, white);
+    border: 1px solid color-mix(in srgb, var(--cb-sand) 55%, white);
+}
+
+.fold__title {
+    min-width: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    line-height: 1.35;
+}
+
+.fold__chevron {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-right: 2px solid var(--color-ink-muted);
+    border-bottom: 2px solid var(--color-ink-muted);
+    transform: rotate(45deg);
+    transition: transform var(--transition-fast);
+    justify-self: end;
+    margin-right: 0.15rem;
+}
+
+.fold[open] > .fold__summary .fold__chevron {
+    transform: rotate(225deg);
+    margin-top: 0.2rem;
+}
+
+.fold[open] > .fold__summary {
+    border-bottom: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-bg-sunken) 70%, white);
+}
+
+.fold__body {
+    padding: var(--space-4) var(--space-5) var(--space-5);
+    max-width: none;
+}
+
+.fold__body.panel {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.fold__body > :first-child {
+    margin-top: 0;
+}
+
+.fold__body > :last-child {
+    margin-bottom: 0;
+}
+
+#SynthDiv > .fold {
+    max-width: none;
+}
+
+@media (max-width: 640px) {
+    .fold__summary {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "badge chevron"
+            "title chevron";
+        gap: var(--space-1) var(--space-3);
+        align-items: start;
+    }
+
+    .fold__badge { grid-area: badge; }
+    .fold__title { grid-area: title; font-size: 0.9rem; }
+    .fold__chevron {
+        grid-area: chevron;
+        align-self: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fold__chevron {
+        transition: none;
+    }
+}
+
 .app-section--methods .methods-grid {
     display: grid;
     gap: var(--space-6);
@@ -496,116 +678,67 @@ main {
     border-color: transparent;
 }
 
-/* ---------- Synth: slides ---------- */
+/* ---------- Synth: science fold ---------- */
 
-.panel--slides {
-    padding: var(--space-4);
-}
-
-.SlidesContainer {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
+.synth-science {
     width: 100%;
+    max-width: var(--prose-max);
 }
 
-.nav-btn {
-    flex: 0 0 auto;
-    display: flex;
-    width: 2.5rem;
-    height: 2.5rem;
-    padding: 0;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border-strong);
-    border-radius: 50%;
-    background: var(--color-bg-elevated);
-    color: var(--cb-indigo);
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
-}
-
-.nav-btn svg {
-    width: 1.15rem;
-    height: 1.15rem;
-    stroke: var(--cb-indigo);
-}
-
-.nav-btn:hover {
-    border-color: var(--cb-indigo);
-    background: var(--color-accent-soft);
-}
-
-.nav-btn:active {
-    transform: scale(0.95);
-}
-
-.nav-btn.disabled,
-.nav-btn:disabled {
-    opacity: 0.3;
-    pointer-events: none;
-}
-
-.slide-and-text {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 650px;
-}
-
-.slides,
-.textbox {
+.synth-science__plot {
     width: 100%;
-    max-width: 650px;
-    padding: var(--space-3);
+    max-width: 40rem;
+    margin: var(--space-3) 0 var(--space-4);
+    padding: var(--space-2);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    background: var(--color-bg-sunken);
-}
-
-.slides {
-    aspect-ratio: 650 / 300; /* matches the slide drawing's viewBox so it scales as a unit */
-    height: auto;
-    overflow: hidden;
     background: var(--color-bg-elevated);
+    box-shadow: var(--shadow-sm);
 }
 
-.textbox {
-    position: relative;
-    min-height: 5rem;
+.synth-science__svg {
+    display: block;
+    width: 100%;
     height: auto;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    background: var(--color-bg-elevated);
 }
 
-.slideCounter {
+.synth-science__waves {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+}
+
+.synth-science__wave {
+    margin: 0;
+    padding: var(--space-3) var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-elevated);
+    box-shadow: var(--shadow-sm);
+}
+
+.synth-science__wave-plot {
+    width: 100%;
+}
+
+.synth-science__wave figcaption {
     margin-top: var(--space-2);
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
+    padding: 0 var(--space-2);
+    font-size: 0.86rem;
+    line-height: 1.45;
     color: var(--color-ink-muted);
+    text-align: center;
 }
 
-.typingCursor {
-    display: inline-block;
-    width: 0.4em;
-    height: 1em;
-    margin-left: 1px;
-    background: var(--cb-indigo);
-    border-radius: 1px;
-    animation: cursor-blink 0.8s steps(1) infinite;
-    vertical-align: -0.12em;
+.synth-science__play:hover rect:first-child {
+    fill: var(--color-accent-soft);
 }
 
-@keyframes cursor-blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
+@media (max-width: 720px) {
+    .synth-science__waves {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* ---------- Synth: waveform + keyboard ---------- */
@@ -729,10 +862,6 @@ main {
 
 .octave-button.pressed polygon {
     fill: #fff;
-}
-
-.slides {
-    padding: 0;
 }
 
 /* ---------- Synth → Jukebox assign strip ---------- */
@@ -1710,11 +1839,175 @@ main {
     color: #fff;
 }
 
+#StepSeqGPPlotandMeta,
+.gp-plot-and-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(11.5rem, 15.5rem);
+    gap: var(--space-3);
+    align-items: stretch;
+    min-width: 0;
+    width: 100%;
+}
+
 #StepSeqGPPlot,
 .plot-frame--seq-wave {
     width: 100%;
     min-height: 240px;
     overflow: auto;
+}
+
+#StepSeqGPMeta,
+.gp-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: var(--space-4) var(--space-3);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.gp-meta__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+}
+
+.gp-meta__row {
+    display: grid;
+    gap: var(--space-1);
+    margin: 0;
+}
+
+.gp-meta__row dt {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+}
+
+.gp-meta__unit {
+    letter-spacing: 0.02em;
+    text-transform: none;
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.gp-meta__value {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink);
+    line-height: 1.3;
+}
+
+.gp-meta__value--mono {
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    color: var(--cb-indigo);
+}
+
+.gp-meta__period {
+    margin: 0;
+}
+
+.period-ci {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: start;
+    justify-items: center;
+    gap: 0;
+    min-height: 3.25rem;
+    padding: 0.15rem 0 0;
+}
+
+.period-ci__rail {
+    position: absolute;
+    left: 16.666%;
+    right: 16.666%;
+    top: 0.7rem;
+    height: 2px;
+    background: color-mix(in srgb, var(--cb-indigo) 45%, var(--color-border-strong));
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+.period-ci__node {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.period-ci__dot {
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 50%;
+    background: var(--color-bg-elevated);
+    border: 2px solid var(--cb-teal);
+    box-shadow: 0 0 0 2px var(--color-bg-elevated);
+}
+
+.period-ci__node--mid .period-ci__dot {
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-top: -0.1rem;
+    background: var(--cb-indigo);
+    border-color: var(--cb-indigo);
+    box-shadow: 0 0 0 2px var(--color-bg-elevated);
+}
+
+.period-ci__val {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+    color: var(--color-ink);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.period-ci__node--mid .period-ci__val {
+    color: var(--cb-indigo);
+    font-size: 0.78rem;
+}
+
+.gp-meta.is-empty .period-ci__dot {
+    border-color: var(--color-border-strong);
+    background: var(--color-bg-sunken);
+}
+
+.gp-meta.is-empty .period-ci__node--mid .period-ci__dot {
+    background: var(--color-border-strong);
+    border-color: var(--color-border-strong);
+}
+
+.gp-meta.is-empty .period-ci__rail {
+    background: var(--color-border);
+}
+
+.gp-meta.is-empty .gp-meta__value,
+.gp-meta.is-empty .period-ci__val {
+    color: var(--color-ink-muted);
+    font-weight: 500;
+}
+
+@media (max-width: 720px) {
+    #StepSeqGPPlotandMeta,
+    .gp-plot-and-meta {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* ---------- D3 axes (all plots) ---------- */
@@ -2098,15 +2391,6 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
 
     .section-nav {
         justify-content: center;
-    }
-
-    .SlidesContainer {
-        gap: var(--space-2);
-    }
-
-    .nav-btn {
-        width: 2.2rem;
-        height: 2.2rem;
     }
 
     #Waveform_Button_div {

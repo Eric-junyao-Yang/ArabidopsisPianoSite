@@ -14,32 +14,33 @@
 </head>
 
 <body>
-    <a class="skip-link" href="#main">Skip to content</a>
-
     <header class="site-header">
         <div class="site-header__inner">
             <p class="site-eyebrow">Sonifying transcription</p>
             <h1 class="site-title">Arabidopsis Piano</h1>
             <p class="site-lede">
-                Transcription measurements reflects gene activity, which can be affected by external or internal stimulus. 
+                Transcription measurements reflects gene activity, which can be affected by external or internal stimuli. 
                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                 measured the effect of day/night cycle on each of the roughly
-                27,000 genes in Arabidopsis thaliana. This web app explores this experimental dataset using *sound*.
+                27,000 genes in Arabidopsis thaliana. This interactive data "sonification" explores this experimental dataset using
+                <span class="sound-wave" aria-label="sound">
+                    <span class="sound-wave__letter" style="--i:0">s</span><span class="sound-wave__letter" style="--i:1">o</span><span class="sound-wave__letter" style="--i:2">u</span><span class="sound-wave__letter" style="--i:3">n</span><span class="sound-wave__letter" style="--i:4">d</span>
+                </span>.
             </p>
 
             <h3>But why? Why would you do such a thing?</h3>
-            <ul>
-                <li>Shushhhh... don't ruin this for me.</li>
-                <li>
-                    Human ears are well trained in identifying freqency relationships, and allows for an unexpected way to explore biological data.
-                </li>
-            </ul>
+            <p>Shushhhh... don't ruin this for me.</p>
 
-            <p>The web app is split into to main sections:</p>
+            <h4>The web app is split into to main sections:</h4>
             <ol class="section-toc">
                 <li><a href="#SynthDiv">Arabidopsis synthesizer</a>: custom "instruments" derived directly from biological data.</li>
                 <li><a href="#SequencerDiv">Arabidopsis step sequencer</a>: explore gene oscillations using harmony.</li>
             </ol>
+            <p>
+                Each section includes a foldable <strong>Science</strong> brief.
+                The step sequencer also has a foldable <strong>Music theory</strong> brief —
+                both start collapsed so you can open them when you want the background.
+            </p>
         </div>
     </header>
 
@@ -57,20 +58,51 @@
                 <h2 id="synth-heading">Arabidopsis Synthesizer</h2>
             </header>
 
-            <div class="panel panel--slides">
-                <div id="Synth_Sides_div" class="SlidesContainer">
-                    <button type="button" class="nav-btn" id="SynthSlides-left-btn" aria-label="Previous slide"></button>
-                    <div class="slide-and-text" id="SynthSlideText">
-                        <div class="slides" id="SynthSlides"></div>
-                        <div class="textbox" id="SynthText">
-                            <span class="textBody"></span>
-                            <span class="typingCursor" aria-hidden="true"></span>
-                            <div class="slideCounter"></div>
+            <details class="fold fold--science">
+                <summary class="fold__summary">
+                    <span class="fold__badge">Science</span>
+                    <span class="fold__title">How gene expression becomes an instrument</span>
+                    <span class="fold__chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="fold__body" id="Synth_Science_div">
+                    <div class="synth-science prose-block">
+                        <p>
+                            Arabidopsis thaliana is a plant that scientists love to study.
+                            It has a small genome and a fast reproduction cycle, but is still a complex flowering plant, which makes it an ideal candidate to research.
+                            Arabidopsis contains around 27,000 genes. Many of these genes can modulate their activities based on stimuli.
+                        </p>
+                        <p>
+                            <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
+                            wanted to study the effect of day/night cycle on gene activities.
+                            They grew Arabidopsis under 16hr light and 8hr dark cycles, and measured activities of each of the 27,000 genes every 3 hours over 2 days: totaling 16 data points per gene.
+                            Here is TOC1 (AT5G61380), a known circadian gene:
+                        </p>
+                        <div id="Synth_Science_data_plot" class="synth-science__plot"></div>
+                        <p>
+                            We can “hear” the data if we treat the resulting plot as an audio waveform.
+                            An audio waveform is a representation of sound — try the demos below:
+                        </p>
+                        <div id="Synth_Science_audio_waveforms" class="synth-science__waves">
+                            <figure id="audio_waveform_amp" class="synth-science__wave">
+                                <div id="amp_plot" class="synth-science__wave-plot"></div>
+                                <figcaption>Amplitude controls volume.</figcaption>
+                            </figure>
+                            <figure id="audio_waveform_freq" class="synth-science__wave">
+                                <div id="freq_plot" class="synth-science__wave-plot"></div>
+                                <figcaption>How fast the waveform repeats (frequency) controls pitch.</figcaption>
+                            </figure>
+                            <figure id="audio_waveform_shape" class="synth-science__wave">
+                                <div id="shape_plot" class="synth-science__wave-plot"></div>
+                                <figcaption>The shape of the waveform controls timbre — each unique shape is its own instrument.</figcaption>
+                            </figure>
                         </div>
+                        <p>
+                            For the synthesizer below, amplitude is locked and frequency is mapped to the keyboard, so you can focus on waveform shape.
+                            That gives about 27,000 “instruments” derived from the Arabidopsis genome — use the synthesizer to explore the soundscape.
+                        </p>
                     </div>
-                    <button type="button" class="nav-btn" id="SynthSlides-right-btn" aria-label="Next slide"></button>
                 </div>
-            </div>
+            </details>
 
             <!-- Sticky range: jukebox sticks from waveform top through UMAP bottoms -->
             <div class="synth-sticky-region">
@@ -356,77 +388,98 @@
                 <h2 id="seq-heading">Arabidopsis Step Sequencer</h2>
             </header>
 
-            <div id="StepSeq_Intro" class="prose-block">
-                <p>
-                    By changing the frequency of the waveform to match the keyboard, the Synthesizer above actually throws away important experimental data.
-                    A subset of genes are naturally oscillating, and each have its own innate frequency.
-                    Here are two genes AT1G13320 (PP2AA3) and AT5G61380 (TOC1):
-                </p>
-                <div id="Gene_Plots" class="plot-frame plot-frame--gene"></div>
-                <p>
-                    TOC1 is a known circadian gene and we can see the red line shows clear oscillating behavior that builds up during light and falls in the dark.
-                    PP2AA3 on the other hand is a housekeeping gene that supports general cellular function. Compared to TOC1, PP2AA3 does not show a prominant inherit rhythm.
-                    It would be more informative to explore the relative frequencies of genes that are naturally oscillating.
-                </p>
-                <p>
-                    We can first identify which genes are naturall oscillating and then extract their oscillating frequency.
-                    The freqencies will be on the scale of a few cycles per day, but we can map them to a keyboard by
-                    scaling everything up into the audible range.
-                    This way, relative pitches between genes are mapped to their natural oscillation frequencies!
-                    Musical harmony turns out to be a surprisingly interesting way to explore relationships between oscillating genes.
-                    Human ears are really good at picking out certain mathmatical relationships between frequencies.
-                    The Pythagoreans supposedly discovered that small whole number ratio relationships between freqencies sounds
-                    pleasant to our ears. For example, arguably the most harmonic note-pairing (other than the note and itself, which is a 1:1 ratio)
-                    is a note and its octave
-                    (something that vibrates twice as fast). This gives a 1:2 ratio and that's as small as it gets!
-                    The idea of whole number ratios is based in physics. For vibrating air columns (vocal cord included) or strings, vibration of a
-                    particular frequency (f) creates a stack of overtones at multiples of the frequency: 2f, 3f, 4f, ... ,  etc.
-                    When two notes are played together, if their overtones overlap, we hear a consonent smooth blend. But if the overtones are slightly
-                    off, we hear "beating", which is called dissonance. To learn more: <a href="https://aatishb.com/dissonance/">Theory of Dissonance</a>
-                    Simpler ratios allow for more overlap of these overtones.
+            <div id="StepSeq_Intro" class="fold-stack">
+                <details class="fold fold--science">
+                    <summary class="fold__summary">
+                        <span class="fold__badge">Science</span>
+                        <span class="fold__title">Why map oscillation frequency to pitch</span>
+                        <span class="fold__chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="fold__body prose-block">
+                        <p>
+                            By changing the frequency of the waveform to match the keyboard, the Synthesizer above actually throws away important experimental data.
+                            A subset of genes are naturally oscillating, and each have its own innate frequency.
+                            Here are two genes AT1G13320 (PP2AA3) and AT5G61380 (TOC1):
+                        </p>
+                        <div id="Gene_Plots" class="plot-frame plot-frame--gene"></div>
+                        <p>
+                            TOC1 is a known circadian gene and we can see the red line shows clear oscillating behavior that builds up during light and falls in the dark.
+                            PP2AA3 on the other hand is a housekeeping gene that supports general cellular function. Compared to TOC1, PP2AA3 does not show a prominant inherit rhythm.
+                            It would be more informative to explore the relative frequencies of genes that are naturally oscillating.
+                        </p>
+                        <p>
+                            We can first identify which genes are naturall oscillating and then extract their oscillating frequency.
+                            The freqencies will be on the scale of a few cycles per day, but we can map them to a keyboard by
+                            scaling everything up into the audible range.
+                            This way, relative pitches between genes are mapped to their natural oscillation frequencies!
+                        </p>
+                        <p>
+                            The original goal of the Step Sequencer is to identify genes with a wide variety of oscillation frequencies
+                            so that they can be translated to a variety of unique musical pitches. Moreover, I was hoping I could identify genes
+                            with frequencies of small number ratios to one another (e.g. one gene completes 2 cycles while another completes 3), as
+                            they have harmonic implications as explained in the music theory section. However, as the results shown here, once we
+                            restrict the q-value for oscillation detection to resonable values of less than 0.05, the vast majority of oscillating genes
+                            does so with a 24hr period, with a much smaller fraction oscillating around 12hr.
 
-                    Just intonnation  attempts to construct musical scales by only using a set of small whole number ratios.
-                    Pythagorean tuning, for example, attempts to traverse the scale with only the two smallest whole number ratios:
-                    perfect fifth (3:2) and the octave (2:1). In tuning classification it is considered a 3-limit scale (largest prime number is 3).
-                    Unfortunately the math doesn't quite work out and results in some ratios that are
-                    far from "small". E.g. the Pythagorean major third (which in modern days is an important harmony) has a
-                    ratio of 81:64 instead of the much more pleasant sounding 5:4.
-                    There are other attempts in just intonnation, for example, if we also allow the use of Perfect Fourth (4:3) and (5:4) Major third in the scale construction, it is considered a 5-limit scale.
-                </p>
-                <p>
-                    However, all just intonnation attempts suffers from the same challenges: No fixed sets of notes can make every pair perfectly simple, fundementally
-                    because ratios built from prime factors (2,3,5) never lines up exactly. So by lining up certain notes just right, the other notes pairings will sound
-                    out of tune. Modern piano uses "12-tone equal temperment" tuning that distributes these compromises equally across all notes, which makes everything note pairing very slightly out of tune,
-                    but allows all pairings to some relatively pleasant, rather than a few pairings sounding perfect at the cost of all others.
-                    You can learn more about <a href="https://www.asa3.org/ASA/education/teach/harmony-cr.htm">Mathmatics of Musical Harmony</a>.
-                </p>
-                <p>
-                    For our purpose, whole number frequency relationships between genes have potentially biological implications.
-                    Two genes a perfect fifth (3:2) apart (example here) suggest whenever one gene completes three cycles, the other one completes exactly two cycles.
-                    While relationships discovered this way may not necessarily be biological (the methods sections discusses the limitations),
-                    they might be worth looking further into.
-                </p>
-                <p>
-                    The visualization below highlights the following simple ratio relationships for each gene:
+                            There are only 3 genes that are potentially interesting from a harmonics perspective: AT4G17680 and AT5G11030 has a period of
+                            ~16hrs which is distinct from 12 and 24 hours given the periodogram detection limit. A 16 hr period is 2/3 ratio to 24hrs.
+                            Both genes also went away with a further tightening of q-value to below 0.02.
+                        </p>
+                    </div>
+                </details>
 
-                    (to do: build table of ratio relationships from 2:1, 3:2 ... and their name Octave, perfect fifth ...)
+                <details class="fold fold--theory">
+                    <summary class="fold__summary">
+                        <span class="fold__badge">Music theory</span>
+                        <span class="fold__title">Harmony as a lens on gene periods</span>
+                        <span class="fold__chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="fold__body prose-block">
+                        <p>
+                            Musical harmony turns out to be a surprisingly interesting way to explore relationships between oscillating genes.
+                            Human ears are really good at picking out certain mathmatical relationships between frequencies.
+                            The Pythagoreans supposedly discovered that small whole number ratio relationships between freqencies sounds
+                            pleasant to our ears. For example, arguably the most harmonic note-pairing (other than the note and itself, which is a 1:1 ratio)
+                            is a note and its octave
+                            (something that vibrates twice as fast). This gives a 1:2 ratio and that's as small as it gets!
+                            The idea of whole number ratios is based in physics. For vibrating air columns (vocal cord included) or strings, vibration of a
+                            particular frequency (f) creates a stack of overtones at multiples of the frequency: 2f, 3f, 4f, ... ,  etc.
+                            When two notes are played together, if their overtones overlap, we hear a consonent smooth blend. But if the overtones are slightly
+                            off, we hear "beating", which is called dissonance. To learn more: <a href="https://aatishb.com/dissonance/">Theory of Dissonance</a>
+                            Simpler ratios allow for more overlap of these overtones.
 
-                    Genes discovered this way reveal mathamtical relationships while also should sound pleasant to our ears when played together.
+                            Just intonnation  attempts to construct musical scales by only using a set of small whole number ratios.
+                            Pythagorean tuning, for example, attempts to traverse the scale with only the two smallest whole number ratios:
+                            perfect fifth (3:2) and the octave (2:1). In tuning classification it is considered a 3-limit scale (largest prime number is 3).
+                            Unfortunately the math doesn't quite work out and results in some ratios that are
+                            far from "small". E.g. the Pythagorean major third (which in modern days is an important harmony) has a
+                            ratio of 81:64 instead of the much more pleasant sounding 5:4.
+                            There are other attempts in just intonnation, for example, if we also allow the use of Perfect Fourth (4:3) and (5:4) Major third in the scale construction, it is considered a 5-limit scale.
+                        </p>
+                        <p>
+                            However, all just intonnation attempts suffers from the same challenges: No fixed sets of notes can make every pair perfectly simple, fundementally
+                            because ratios built from prime factors (2,3,5) never lines up exactly. So by lining up certain notes just right, the other notes pairings will sound
+                            out of tune. Modern piano uses "12-tone equal temperment" tuning that distributes these compromises equally across all notes, which makes everything note pairing very slightly out of tune,
+                            but allows all pairings to some relatively pleasant, rather than a few pairings sounding perfect at the cost of all others.
+                            You can learn more about <a href="https://www.asa3.org/ASA/education/teach/harmony-cr.htm">Mathmatics of Musical Harmony</a>.
+                        </p>
+                        <p>
+                            For our purpose, whole number frequency relationships between genes have potentially biological implications.
+                            Two genes a perfect fifth (3:2) apart (example here) suggest whenever one gene completes three cycles, the other one completes exactly two cycles.
+                            While relationships discovered this way may not necessarily be biological (the methods sections discusses the limitations),
+                            they might be worth looking further into.
+                        </p>
+                        <p>
+                            The visualization below highlights the following simple ratio relationships for each gene:
 
-                    At the very least, it is a fun way to explore this dataset and you can also use it to make some music!
-                </p>
-                <p>
-                    The original goal of the Step Sequencer is to identify genes with a wide variety of oscillation frequencies 
-                    so that they can be translated to a variety of unique musical pitches. Moreover, I was hoping I could identify genes 
-                    with frequencies of small number ratios to one another (e.g. one gene completes 2 cycles while another completes 3), as 
-                    they have harmonic implications as explained in the music theory section. However, as the results shown here, once we 
-                    restrict the q-value for oscillation detection to resonable values of less than 0.05, the vast majority of oscillating genes 
-                    does so with a 24hr period, with a much smaller fraction oscillating around 12hr.
-                    
-                    There are only 3 genes that are potentially interesting from a harmonics perspective: AT4G17680 and AT5G11030 has a period of 
-                    ~16hrs which is distinct from 12 and 24 hours given the periodogram detection limit. A 16 hr period is 2/3 ratio to 24hrs.
-                    Both genes also went away with a further tightening of q-value to below 0.02.
-                </p>                
+                            (to do: build table of ratio relationships from 2:1, 3:2 ... and their name Octave, perfect fifth ...)
+
+                            Genes discovered this way reveal mathamtical relationships while also should sound pleasant to our ears when played together.
+
+                            At the very least, it is a fun way to explore this dataset and you can also use it to make some music!
+                        </p>
+                    </div>
+                </details>
             </div>
 
             <div id="StepSequencerContainer" class="seq-workspace">
@@ -506,13 +559,58 @@
                             aria-pressed="false" title="Full 48-hour experimental period">48 h</button>
                     </div>
 
-                    <div id="StepSeqGPPlotandMeta">
+                    <div id="StepSeqGPPlotandMeta" class="gp-plot-and-meta">
                         <div id="StepSeqGPPlot" class="help-panel plot-frame plot-frame--seq-wave"
                         data-help-text="Here is the waveform modeled using Gaussian Process. 10 samples drawn
                         from the model are displayed here. These will be the collection of waveforms you hear.
                         Use the Phase / 48 h toggle to switch between one period (phase-wrapped) and the full
                         experimental window."></div>
-                        <div id="StepSeqGPMeta" data-help-text="Here is the metadata for the genes.">
+                        <div id="StepSeqGPMeta" class="help-panel gp-meta"
+                            data-help-text="Detected period (with 95% CI), phase, q-value, and relative std for the focused gene.">
+                            <dl class="gp-meta__list">
+                                <div class="gp-meta__row">
+                                    <dt>Gene ID</dt>
+                                    <dd id="StepSeqGPMeta-gene" class="gp-meta__value gp-meta__value--mono">—</dd>
+                                </div>
+                                <div class="gp-meta__row gp-meta__row--period">
+                                    <dt>Period <span class="gp-meta__unit">(h)</span></dt>
+                                    <dd class="gp-meta__period">
+                                        <div id="StepSeqGPMeta-period-ci" class="period-ci"
+                                            role="img"
+                                            aria-label="Period 95% confidence interval">
+                                            <div class="period-ci__rail"></div>
+                                            <div class="period-ci__node" data-role="low">
+                                                <span class="period-ci__dot"></span>
+                                                <span id="StepSeqGPMeta-period-low" class="period-ci__val">—</span>
+                                            </div>
+                                            <div class="period-ci__node period-ci__node--mid" data-role="period">
+                                                <span class="period-ci__dot"></span>
+                                                <span id="StepSeqGPMeta-period" class="period-ci__val">—</span>
+                                            </div>
+                                            <div class="period-ci__node" data-role="high">
+                                                <span class="period-ci__dot"></span>
+                                                <span id="StepSeqGPMeta-period-high" class="period-ci__val">—</span>
+                                            </div>
+                                        </div>
+                                    </dd>
+                                </div>
+                                <div class="gp-meta__row">
+                                    <dt>Log of period std </dt>
+                                    <dd id="StepSeqGPMeta-logPeriodSD" class="gp-meta__value">—</dd>
+                                </div>
+                                <div class="gp-meta__row">
+                                    <dt>Phase <span class="gp-meta__unit">(h)</span></dt>
+                                    <dd id="StepSeqGPMeta-phase" class="gp-meta__value">—</dd>
+                                </div>
+                                <div class="gp-meta__row">
+                                    <dt>qval</dt>
+                                    <dd id="StepSeqGPMeta-qval" class="gp-meta__value">—</dd>
+                                </div>
+                                <div class="gp-meta__row">
+                                    <dt>relative std</dt>
+                                    <dd id="StepSeqGPMeta-relstd" class="gp-meta__value">—</dd>
+                                </div>
+                            </dl>
                         </div>
                     </div>
 

@@ -4,8 +4,7 @@ import { load_waveforms, bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plotViolin.js"
 import { plotStepSeqMain } from "/src/step_sequencer.js"
 import { plotGPWave } from "/src/GPplot.js"
-import { SlidesTemplate } from "/src/slideTemplate.js"
-import { synthSlides } from "/src/synthSlides.js"
+import { mountSynthScienceDiv } from "/src/synthScienceDiv.js"
 import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
@@ -391,12 +390,12 @@ async function initStepSeqAudio() {
     await globalAudio.resume()
 }
 
-// SynthSlides
+// Synth science fold demos (same worklet as the old slides)
 let synthSlidesAudioContext = null
 let synthSlides_node = null
 let synthSlideDestinationConnection = false
 let synthSlidesReady = null
-async function initSynthSlidesAudio() {
+async function initSynthScienceAudio() {
     if (!synthSlidesReady) {
         synthSlidesReady = (async () => {
             synthSlidesAudioContext = await sharedContext()
@@ -520,6 +519,55 @@ export function renderSelectionPanel(selected_genes) {
     }
 }
 
+function fmtMetaNum(v, digits = 2) {
+    if (v == null || Number.isNaN(Number(v))) return "—"
+    return Number(v).toFixed(digits)
+}
+
+function renderGPMeta(item) {
+    const panel = document.getElementById("StepSeqGPMeta")
+    const setText = (id, text) => {
+        const el = document.getElementById(id)
+        if (el) el.textContent = text
+    }
+
+    if (!item) {
+        panel?.classList.add("is-empty")
+        setText("StepSeqGPMeta-gene", "—")
+        setText("StepSeqGPMeta-period-low", "—")
+        setText("StepSeqGPMeta-period", "—")
+        setText("StepSeqGPMeta-period-high", "—")
+        setText("StepSeqGPMeta-phase", "—")
+        setText("StepSeqGPMeta-qval", "—")
+        setText("StepSeqGPMeta-relstd", "—")
+        const ci = document.getElementById("StepSeqGPMeta-period-ci")
+        if (ci) ci.setAttribute("aria-label", "Period 95% confidence interval unavailable")
+        return
+    }
+
+    panel?.classList.remove("is-empty")
+    const low = fmtMetaNum(item.period_low95)
+    const period = fmtMetaNum(item.period)
+    const high = fmtMetaNum(item.period_high95)
+    setText("StepSeqGPMeta-gene", item.GeneID)
+    setText("StepSeqGPMeta-period-low", low)
+    setText("StepSeqGPMeta-period", period)
+    setText("StepSeqGPMeta-period-high", high)
+    setText("StepSeqGPMeta-logPeriodSD", fmtMetaNum(item.log_period_sd))
+    setText("StepSeqGPMeta-phase", fmtMetaNum(item.phase))
+    setText("StepSeqGPMeta-qval", fmtMetaNum(item.qval, 3))
+    setText("StepSeqGPMeta-relstd", fmtMetaNum(item.relative_std, 3))
+    const ci = document.getElementById("StepSeqGPMeta-period-ci")
+    if (ci) {
+        ci.setAttribute(
+            "aria-label",
+            `Period ${period} hours, 95% CI ${low} to ${high}`
+        )
+    }
+}
+
+renderGPMeta(null)
+
 // --------------------------------------- Plots ---------------------------------------
 plotUMAP(600, 500, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
 plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
@@ -573,21 +621,13 @@ const plotGP = plotGPWave(600, 400, "#StepSeqGPPlot")
 
 setupHelpPopUps(document, window)
 
-// --------------------------------------- Slides ---------------------------------------
-const synthSlides_div = document.getElementById("SynthSlides")
-const synthSlides_leftBtn = document.getElementById("SynthSlides-left-btn")
-const synthSlides_rightBtn = document.getElementById("SynthSlides-right-btn")
-const synthSlides_text = document.getElementById("SynthText")
-synthSlides.updateData(normalized_counts_lookup.get("AT5G61380"))
-synthSlides.connectBus(bus)
-synthSlides.setInternalInitAudio(initSynthSlidesAudio)
-new SlidesTemplate(
-    synthSlides_div,
-    synthSlides_text,
-    synthSlides_leftBtn,
-    synthSlides_rightBtn,
-    synthSlides
-)
+// --------------------------------------- Synth science fold ---------------------------------------
+mountSynthScienceDiv({
+    root: document.getElementById("Synth_Science_div"),
+    geneRow: normalized_counts_lookup.get("AT5G61380"),
+    bus,
+    initAudio: initSynthScienceAudio,
+})
 
 const step_seq_plot_div = document.getElementById("Gene_Plots")
 // viewBox keeps the 800x300 layout but lets the figure scale down on narrow screens
@@ -691,6 +731,7 @@ bus.subscribe_to("selection_modified", "main", (selection) => {
 bus.subscribe_to("gene_label_select", "main", (item) => {
     if (!item) {
         plotGP.renderEmpty()
+        renderGPMeta(null)
         return
     }
     const VST_dat = VST_lookup.get(item.GeneID)
@@ -703,10 +744,12 @@ bus.subscribe_to("gene_label_select", "main", (item) => {
         meta_item: item,
         VST_dat,
     })
+    renderGPMeta(item)
 })
 
 bus.subscribe_to("resetSelection", "main", () => {
     plotGP.renderEmpty()
+    renderGPMeta(null)
 })
 
 bus.subscribe_to("updateParams", "main", (params) => {
