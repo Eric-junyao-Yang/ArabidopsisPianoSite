@@ -601,10 +601,11 @@ const violinHeight = Math.max(
 )
 
 const violinOpts = { top: 16, right: 8, bottom: 16, left: 50 }
+console.log(osc_perGene_meta)
 plotViolin(
     100, violinHeight, violinOpts,
-    osc_perGene_meta.map((v) => v.log_period_sd),
-    d3.select("#violin-logPeriodSD"), "log std of predicted period", bus, "StepSeqPeriodSDUpdate"
+    osc_perGene_meta.map((v) => v.period_high95 - v.period_low95),
+    d3.select("#violin-logPeriodSD"), "95% CI range (hrs)", bus, "StepSeqPeriodSDUpdate"
 )
 plotViolin(
     100, violinHeight, violinOpts,
@@ -614,7 +615,7 @@ plotViolin(
 plotViolin(
     100, violinHeight, violinOpts,
     osc_perGene_meta.map((v) => v.relative_std),
-    d3.select("#violin-Std"), "relative std of predicted waveform", bus, "StepSeqStdUpdate"
+    d3.select("#violin-Std"), "mean(posterior std) / std(posterior mean)", bus, "StepSeqStdUpdate"
 )
 
 const plotGP = plotGPWave(600, 400, "#StepSeqGPPlot")

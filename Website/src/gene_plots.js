@@ -4,7 +4,7 @@ import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plotTheme.js"
 export function plotGene(g, gene_dats, gene_names, opts = {
     width: 800,
     height: 300,
-    margin: { top: 20, right: 200, bottom: 40, left: 50 },
+    margin: { top: 20, right: 20, bottom: 40, left: 50 },
 }) {
     const gene_dat_norms = gene_dats.map(extractDatAndNorm)
     const width = opts.width
@@ -137,7 +137,7 @@ export function plotGene(g, gene_dats, gene_names, opts = {
         .attr("fill", THEME.ink)
         .text(d => d.gene_name != null ? `${d.id} (${d.gene_name})` : d.id)
     legendEach.merge(legend)
-        .attr("transform", (d, i) => `translate(${innerWidth + 30}, ${innerHeight/2 - (5*gene_dats.length) + i * 20})`)
+        .attr("transform", (d, i) => `translate(${innerWidth - 155}, ${innerHeight/1.15 - (5*gene_dats.length) + i * 20})`)
 }
 
 

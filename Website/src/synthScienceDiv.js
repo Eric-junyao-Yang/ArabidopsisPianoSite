@@ -1,5 +1,5 @@
 import { interpolate_waveform } from "/src/catmullrom.js"
-import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plotTheme.js"
+import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plotTheme.js"
 
 function extractLdSeries(geneRow) {
     if (!geneRow) return null
@@ -21,7 +21,7 @@ function drawWave({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
 function plotExpressionSeries(host, series, {
     width = 650,
     height = 280,
-    margin = { top: 20, right: 20, bottom: 40, left: 50 },
+    margin = { top: 20, right: 20, bottom: 40, left: 60 },
 } = {}) {
     host.replaceChildren()
     if (!series?.length) return
@@ -62,7 +62,7 @@ function plotExpressionSeries(host, series, {
     axisLabel(chart.append("text")
         .attr("transform", "rotate(-90)")
         .attr("x", -innerHeight / 2)
-        .attr("y", -36))
+        .attr("y", -45))
         .text("normalized expression")
 
     chart.selectAll("circle.toc")
@@ -108,8 +108,8 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
     host.replaceChildren()
 
     const width = 220
-    const height = playSoundBtn ? 250 : 210
-    const margin = { top: 36, right: 12, bottom: playSoundBtn ? 52 : 28, left: 32 }
+    const height = playSoundBtn ? 280 : 210
+    const margin = { top: 32, right: 12, bottom: playSoundBtn ? 78 : 28, left: 40 }
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
 
@@ -128,14 +128,22 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
     )
     drawAxis(chart.append("g"), d3.axisLeft(yScale).ticks(4).tickSizeOuter(0))
 
+    axisLabel(chart.append("text")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 35))
+        .text("time")
+
+    axisLabel(chart.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -30))
+        .text("amplitude")
+
     if (title) {
-        chart.append("text")
+        plotTitle(chart.append("text")
             .attr("x", innerWidth / 2)
-            .attr("y", -14)
+            .attr("y", -14))
             .attr("text-anchor", "middle")
-            .attr("font-size", 13)
-            .attr("font-weight", 600)
-            .attr("fill", THEME.ink)
             .text(title)
     }
 
@@ -143,7 +151,7 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
     if (playSoundBtn) {
         const button = chart.append("g")
             .attr("class", "synth-science__play")
-            .attr("transform", `translate(${innerWidth / 2}, ${innerHeight + 34})`)
+            .attr("transform", `translate(${innerWidth / 2}, ${innerHeight + 62})`)
             .style("cursor", "pointer")
 
         button.append("rect")

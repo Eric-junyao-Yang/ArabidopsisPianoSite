@@ -48,6 +48,7 @@
 
     --content-max: 84rem;
     --prose-max: 46rem;
+    --fold-max: 58rem;
     --plot-umap-w: 600px;
     --plot-umap-h: 500px;
     --plot-violin-w: 130px;
@@ -395,7 +396,7 @@ main {
     flex-direction: column;
     gap: var(--space-3);
     width: 100%;
-    max-width: var(--prose-max);
+    max-width: var(--fold-max);
 }
 
 .fold {
@@ -497,6 +498,10 @@ main {
 }
 
 .fold__body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     padding: var(--space-4) var(--space-5) var(--space-5);
     max-width: none;
 }
@@ -682,7 +687,7 @@ main {
 
 .synth-science {
     width: 100%;
-    max-width: var(--prose-max);
+    padding: var(--space-1);
 }
 
 .synth-science__plot {
@@ -710,6 +715,8 @@ main {
 }
 
 .synth-science__wave {
+    display: flex;
+    flex-direction: column;
     margin: 0;
     padding: var(--space-3) var(--space-2) var(--space-3);
     border: 1px solid var(--color-border);
@@ -718,13 +725,28 @@ main {
     box-shadow: var(--shadow-sm);
 }
 
+.synth-science__plotCaption {
+    margin: 0;
+    padding: var(--space-3) var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-elevated);
+    box-shadow: var(--shadow-sm);    
+}
+
 .synth-science__wave-plot {
     width: 100%;
+    flex: 0 0 auto;
 }
 
 .synth-science__wave figcaption {
-    margin-top: var(--space-2);
-    padding: 0 var(--space-2);
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: var(--space-4);
+    padding: var(--space-1) var(--space-1) var(--space-2);
+    min-height: 3.25rem;
     font-size: 0.86rem;
     line-height: 1.45;
     color: var(--color-ink-muted);
@@ -2237,6 +2259,7 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
     line-height: 1.5;
     box-shadow: var(--shadow-md);
     z-index: 1000;
+    white-space: pre-line;
 }
 
 #help-popup.open {
