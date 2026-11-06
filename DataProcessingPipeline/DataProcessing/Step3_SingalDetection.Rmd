@@ -1,0 +1,44 @@
+```{r}
+library(MetaCycle)
+library(tidyverse)
+```
+
+
+
+```{r}
+dat <- read.csv("../Processed_Data/VST.csv")
+timepoints <- seq(2, 47, 3)
+out <- meta2d(infile = "../Processed_Data/VST.csv",
+              outdir = "../Processed_Data/metacycle",
+              filestyle = "csv",
+              timepoints = timepoints)
+```
+
+```{r}
+ls_dat <- read.csv("../Processed_Data/full_ls.csv")[, -1]
+meta_dat <- read.csv("../Processed_Data/metacycle/meta2d_VST.csv")
+```
+
+Q1: overlap of oscillating in ls_dat vs circadian in meta_dat
+```{r}
+osc <- ls_dat %>% filter(fap <= 0.05)
+meta_cir <- meta_dat %>% filter(meta2d_BH.Q <= 0.05)
+meta_cir_ls <- meta_dat %>% filter(LS_pvalue <= 0.05)
+
+sum(osc$GeneID %in% meta_cir$CycID) #shared
+sum(!(osc$GeneID %in% meta_cir$CycID)) #OSC only
+sum(!(meta_cir$CycID %in% osc$GeneID)) #meta only
+
+osc_only <- osc[!(osc$GeneID %in% meta_cir$CycID),]
+hist(osc_only$best_period)
+
+sum(osc$GeneID %in% meta_cir_ls$CycID) #shared
+sum(!(osc$GeneID %in% meta_cir_ls$CycID)) #OSC only
+sum(!(meta_cir_ls$CycID %in% osc$GeneID)) #meta only
+
+meta_only <- ls_dat %>% filter(ls_dat$GeneID %in% meta_cir[!(meta_cir$CycID %in% osc$GeneID),]$CycID)
+```
+
+So my ls found more than meta_dat's ls (maybe due to pval vs qval?)
+metacycle found more than my ls.
+All the 24hr found by my ls is found by meta, but my ls included other oscillation periods while metacycle is locked to 20~28
