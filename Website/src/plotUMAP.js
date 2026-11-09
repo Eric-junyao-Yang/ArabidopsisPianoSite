@@ -4,18 +4,103 @@
 //     return originalGetContext.call(this, type, ...args)
 // }
 
-import { THEME, hexToRgb01, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "/src/plotTheme.js"
+import { PALETTE, THEME, hexToRgb01, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "/src/plotTheme.js"
+import { energyPctAtPeriod } from "/src/plotHarmonics.js"
 
-const ACTIVE_RGB = hexToRgb01(THEME.pointActive).map((v) => v.toFixed(4)).join(", ")
+// Point RGB is set by color mode; selected/inactive = TPM filter (orthogonal).
 const INACTIVE_RGB = hexToRgb01(THEME.pointInactive).map((v) => v.toFixed(4)).join(", ")
-// Semi-transparent so dense regions read as darker (density) instead of a flat blob.
+const OUTLINE_RGB = hexToRgb01(THEME.ink).map((v) => v.toFixed(4)).join(", ")
 const ACTIVE_ALPHA = 0.55
 const INACTIVE_ALPHA = 0.4
-const POINT_RADIUS_PX = 2.5
+const OUTLINE_ALPHA = 0.7
+const POINT_RADIUS_PX = 4
+const POINT_OUTLINE_PX = 1
+// Fill disk as a fraction of the drawn quad (outline sits in the outer ring).
+const FILL_RADIUS_FRAC = POINT_RADIUS_PX / (POINT_RADIUS_PX + POINT_OUTLINE_PX)
+const QVAL_CUTOFF = 0.05
+const PHASE_PERIOD_H = 24
+const DEFAULT_ENERGY_PERIOD_H = 24
+
+// Cyclic hue wheel for peak phase (0h ≡ 24h). Standard for circular quantities.
+const PHASE_INTERPOLATOR = d3.interpolateHslLong(
+    d3.hsl(0, 0.75, 0.5),
+    d3.hsl(360, 0.75, 0.5),
+)
+// Sequential Inferno: low → high significance (−log10 LS_qval). Hotter = more significant.
+const QVAL_INTERPOLATOR = d3.interpolateInferno
+const QVAL_NEGLOG10_MAX = 5
+// Sequential Viridis: low → high energy share at the selected period.
+const ENERGY_INTERPOLATOR = d3.interpolateViridis
+
+function rgb01ToCss([r, g, b], a = 1) {
+    return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
+}
+
+function interpToRgb01(interpolator, t) {
+    const c = d3.rgb(interpolator(Math.max(0, Math.min(1, t))))
+    return [c.r / 255, c.g / 255, c.b / 255]
+}
+
+function phaseToRgb01(phaseHours) {
+    const t = (((phaseHours % PHASE_PERIOD_H) + PHASE_PERIOD_H) % PHASE_PERIOD_H) / PHASE_PERIOD_H
+    return interpToRgb01(PHASE_INTERPOLATOR, t)
+}
+
+function qvalToRgb01(q) {
+    const negLog = -Math.log10(Math.max(q, 1e-300))
+    return interpToRgb01(QVAL_INTERPOLATOR, negLog / QVAL_NEGLOG10_MAX)
+}
+
+/** Map energy share in [0, 1] → RGB. */
+function energyShareToRgb01(energyShare) {
+    return interpToRgb01(ENERGY_INTERPOLATOR, energyShare)
+}
+
+/** Currently selected harmonic period (hours) from the oscillation-energy radios. */
+export function selectedEnergyPeriodHours() {
+    const el = document.querySelector('input[name="oscillation_energy"]:checked')
+    const period = el ? Number(el.value) : DEFAULT_ENERGY_PERIOD_H
+    return Number.isFinite(period) ? period : DEFAULT_ENERGY_PERIOD_H
+}
+
+/** Build per-point RGB (length n*3) for a color mode. Filter is applied separately via selected. */
+function buildColorRgbArr(mode, umap_arr, metaByGene, specsLookup) {
+    const n = umap_arr.length
+    const rgb = new Float32Array(n * 3)
+    const defaultRgb = hexToRgb01(THEME.pointActive)
+    const sigRgb = hexToRgb01(PALETTE.teal)
+    const nsigRgb = hexToRgb01(THEME.pointActive)
+    const periodHours = mode === "energyPct" ? selectedEnergyPeriodHours() : null
+
+    for (let i = 0; i < n; i++) {
+        const meta = metaByGene.get(umap_arr[i].GeneID)
+        let col = defaultRgb
+        if (mode === "circadian") {
+            const q = meta?.metacycle_qval
+            col = (q != null && q <= QVAL_CUTOFF) ? sigRgb : nsigRgb
+        } else if (mode === "phase") {
+            const phase = meta?.phase
+            col = (phase != null && Number.isFinite(phase)) ? phaseToRgb01(phase) : defaultRgb
+        } else if (mode === "qval") {
+            const q = meta?.LS_qval
+            col = (q != null && Number.isFinite(q)) ? qvalToRgb01(q) : defaultRgb
+        } else if (mode === "energyPct") {
+            const energyPct = energyPctAtPeriod(umap_arr[i].GeneID, specsLookup, periodHours)
+            col = (energyPct != null && Number.isFinite(energyPct))
+                ? energyShareToRgb01(energyPct / 100)
+                : defaultRgb
+        }
+        rgb[i * 3] = col[0]
+        rgb[i * 3 + 1] = col[1]
+        rgb[i * 3 + 2] = col[2]
+    }
+    return rgb
+}
 
 class ScatterGL {
-    constructor(canvas, data, xScale, yScale, innerWidth, innerHeight, dpr) {
+    constructor(canvas, data, colorRgbArr, xScale, yScale, innerWidth, innerHeight, dpr) {
         this.data = data
+        this.colorRgbArr = colorRgbArr
         this.innerWidth = innerWidth
         this.innerHeight = innerHeight
         this.dpr = dpr
@@ -47,16 +132,19 @@ class ScatterGL {
 
             in vec2 quadVertex;          //input: corners per isntance  
             in vec2 instancePos;         //input: position in data space (0~1)
-            in float selected;           //0.0 or 1.0 ; talks to outside
+            in float selected;           //0.0 or 1.0 ; TPM filter
+            in vec3 instanceColor;       // per-point RGB from color mode
             
             out vec2 vUV;                // corner position doubles as UV bounds
             out float vSelected;         // talks between the two shaders
+            out vec3 vColor;
 
             uniform vec2 pointRadius;   // size of point
             uniform mat3 transform;      // transformation matrix
 
             void main() {
                 vSelected = selected;
+                vColor = instanceColor;
                 vUV = quadVertex;
 
                 vec3 transformed = transform * vec3(instancePos, 1.0);
@@ -74,6 +162,7 @@ class ScatterGL {
 
             in vec2 vUV;
             in float vSelected;
+            in vec3 vColor;
             out vec4 fragColor;
 
             uniform float renderPass;    // plot selected & unselected separately for overlap fixing
@@ -82,16 +171,25 @@ class ScatterGL {
                 if (renderPass > 0.5 && vSelected < 0.5) discard; // Pass0, keep selected
                 if (renderPass < 0.5 && vSelected > 0.5) discard; // Pass1, keep unselected
 
-                float dist = dot(vUV, vUV);
-                if (dist > 1.0) discard;
+                float r = length(vUV);
+                if (r > 1.0) discard;
 
-                float alpha = smoothstep(1.0, 0.8, dist);
+                // Inner fill + thin dark ring so bright colormap colors stay readable on white.
+                float fillR = ${FILL_RADIUS_FRAC.toFixed(4)};
+                float aa = 0.08;
+                float fillMask = 1.0 - smoothstep(fillR - aa, fillR + aa, r);
+                float strokeMask = smoothstep(fillR - aa, fillR + aa, r)
+                    * (1.0 - smoothstep(1.0 - aa, 1.0, r));
 
-                if (vSelected > 0.5) {
-                        fragColor = vec4(${ACTIVE_RGB}, alpha * ${ACTIVE_ALPHA.toFixed(2)});
-                    } else {
-                        fragColor = vec4(${INACTIVE_RGB}, alpha * ${INACTIVE_ALPHA.toFixed(2)});
-                    }
+                vec3 fillRgb = vSelected > 0.5 ? vColor : vec3(${INACTIVE_RGB});
+                float fillA = (vSelected > 0.5 ? ${ACTIVE_ALPHA.toFixed(2)} : ${INACTIVE_ALPHA.toFixed(2)}) * fillMask;
+                float strokeA = ${OUTLINE_ALPHA.toFixed(2)} * strokeMask;
+
+                // Premultiplied composite: fill over outline ring
+                float outA = fillA + strokeA * (1.0 - fillA);
+                vec3 outRgb = (fillRgb * fillA + vec3(${OUTLINE_RGB}) * strokeA * (1.0 - fillA))
+                    / max(outA, 1e-5);
+                fragColor = vec4(outRgb, outA);
             }
         `
 
@@ -147,6 +245,7 @@ class ScatterGL {
         const quadVertexLoc = gl.getAttribLocation(this.program, 'quadVertex')
         const instancePosLoc = gl.getAttribLocation(this.program, 'instancePos') // Get which slot the position attribute is stored (int number)
         const selectedLoc = gl.getAttribLocation(this.program, 'selected')
+        const colorLoc = gl.getAttribLocation(this.program, 'instanceColor')
 
         // ----- create VAO -----
         this.vao = gl.createVertexArray()
@@ -177,7 +276,7 @@ class ScatterGL {
         )
         gl.vertexAttribDivisor(instancePosLoc, 1) // advance once per instance (i.e. repeat 6x as defined in drawArraysInstanced)
 
-        // Color by Scrubber
+        // TPM scrubber → selected / inactive (dynamic)
         this.selectedBuffer = gl.createBuffer()
         gl.bindBuffer(gl.ARRAY_BUFFER, this.selectedBuffer)
         gl.bufferData(gl.ARRAY_BUFFER, this.selectedArr, gl.DYNAMIC_DRAW)
@@ -191,7 +290,14 @@ class ScatterGL {
             0
         )
         gl.vertexAttribDivisor(selectedLoc, 1) // advance once per instance
-        
+
+        // Per-point RGB from color mode (updated when mode changes; filter stays separate)
+        this.colorBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer) //set active buffer
+        gl.bufferData(gl.ARRAY_BUFFER, this.colorRgbArr, gl.DYNAMIC_DRAW) //upload data to GPU
+        gl.enableVertexAttribArray(colorLoc)
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0) // read 3 consecutive floats (RGB) from ARRAY_BUFFER
+        gl.vertexAttribDivisor(colorLoc, 1) // advance once per instance (gene)
         gl.bindVertexArray(null)
         // ---- end create VAO ---- 
     }
@@ -206,8 +312,8 @@ class ScatterGL {
     _setInitialUniforms() {
         const gl = this.gl
 
-        // point size
-        const radiusPx = POINT_RADIUS_PX
+        // point size includes outline ring outside the fill disk
+        const radiusPx = POINT_RADIUS_PX + POINT_OUTLINE_PX
         const rx = (radiusPx * this.dpr) / (this.physicalWidth / 2)
         const ry = (radiusPx * this.dpr) / (this.physicalHeight / 2)
         gl.uniform2f(this.pointRadiusLoc, rx, ry)
@@ -278,6 +384,14 @@ class ScatterGL {
         this.render()
     }
 
+    updateColors(colorRgbArr){
+        this.colorRgbArr = colorRgbArr
+        const gl = this.gl
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer)
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.colorRgbArr)
+        this.render()
+    }
+
     destroy() {
         // Free the GPU context so repeated resizes don't exhaust the browser's WebGL context limit
         this.gl?.getExtension('WEBGL_lose_context')?.loseContext()
@@ -292,10 +406,10 @@ class ScatterGL {
 
 // width/height are fallbacks: the plot fills its container and redraws (keeping filter + selection)
 // when the container is resized.
-export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
+export function plotUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name, plot_title, displayGeneID = false, bus){
     const container = document.getElementById(div_name)
     // State that must survive a redraw
-    const state = { low: null, high: null, selected: null }
+    const state = { low: null, high: null, selected: null, colorMode: "none" }
     let current = null
 
     function redraw() {
@@ -303,14 +417,14 @@ export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayG
         // keep non-plot children (e.g. the help button added by helpPopup.js)
         container.querySelectorAll(':scope > svg, :scope > canvas').forEach((n) => n.remove())
         const [w, h] = containerSize(container, width, height)
-        current = buildUMAP(w, h, umap_arr, div_name, plot_title, displayGeneID, bus, state)
+        current = buildUMAP(w, h, umap_arr, per_gene_meta, specsLookup, div_name, plot_title, displayGeneID, bus, state)
     }
     redraw()
     onResize(container, redraw)
     return current.node
 }
 
-function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID, bus, state){
+function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name, plot_title, displayGeneID, bus, state){
 
     const margin = { top: 34, right: 16, bottom: 40, left: 46 }
     const dpr = window.devicePixelRatio || 1 //1 css coordinate = typically 2x2 physical pixel
@@ -359,10 +473,14 @@ function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID,
         .style('left', margin.left + 'px')
         // .style('outline', '2px solid orange')
 
+    const metaByGene = new Map(per_gene_meta.map((d) => [d.GeneID, d]))
+    let colorRgbArr = buildColorRgbArr(state.colorMode, umap_arr, metaByGene, specsLookup)
+
     // ---- WebGL ----
     const scatter = new ScatterGL(
         mainCanvas.node(),
         umap_arr,
+        colorRgbArr,
         xScale,
         yScale,
         innerWidth,
@@ -373,32 +491,43 @@ function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID,
     let [internal_low_val, internal_high_val] = yScale.domain()
     if (state.low !== null) { internal_low_val = state.low; internal_high_val = state.high }
 
-    //CPU fallback
+    // CPU fallback — inactive batch, then per-point active colors
     function drawPointsCanvas(mainCtx, xSc, ySc, high_val = internal_high_val, low_val = internal_low_val) {
-        //Clear canvas
-        mainCtx.clearRect(0,0,innerWidth, innerHeight)
+        mainCtx.clearRect(0, 0, innerWidth, innerHeight)
+        mainCtx.lineWidth = POINT_OUTLINE_PX
+        mainCtx.strokeStyle = withAlpha(THEME.ink, OUTLINE_ALPHA)
 
         mainCtx.fillStyle = withAlpha(THEME.pointInactive, INACTIVE_ALPHA)
         mainCtx.beginPath()
-        for (let i=0; i< umap_arr.length; i++){
+        for (let i = 0; i < umap_arr.length; i++) {
             const d = umap_arr[i]
-            if (d.log_TPM < low_val || d.log_TPM > high_val){
-                mainCtx.moveTo(xSc(d.x) + POINT_RADIUS_PX, ySc(d.y))
-                mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
-            }
+            if (d.log_TPM >= low_val && d.log_TPM <= high_val) continue
+            mainCtx.moveTo(xSc(d.x) + POINT_RADIUS_PX, ySc(d.y))
+            mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
         }
         mainCtx.fill()
+        mainCtx.stroke()
 
-        mainCtx.fillStyle = withAlpha(THEME.pointActive, ACTIVE_ALPHA)
-        mainCtx.beginPath()
-        for (let i=0; i< umap_arr.length; i++){
+        for (let i = 0; i < umap_arr.length; i++) {
             const d = umap_arr[i]
-            if (d.log_TPM >= low_val && d.log_TPM <= high_val){
-                mainCtx.moveTo(xSc(d.x) + POINT_RADIUS_PX, ySc(d.y))
-                mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
-            }
+            if (d.log_TPM < low_val || d.log_TPM > high_val) continue
+            mainCtx.fillStyle = rgb01ToCss(
+                [colorRgbArr[i * 3], colorRgbArr[i * 3 + 1], colorRgbArr[i * 3 + 2]],
+                ACTIVE_ALPHA,
+            )
+            mainCtx.beginPath()
+            mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
+            mainCtx.fill()
+            mainCtx.stroke()
         }
-        mainCtx.fill()
+    }
+
+    function applyColorMode(mode) {
+        state.colorMode = mode
+        colorRgbArr = buildColorRgbArr(mode, umap_arr, metaByGene, specsLookup)
+        if (scatter.isSupported) scatter.updateColors(colorRgbArr)
+        else if (mainCtx) drawPointsCanvas(mainCtx, currentXScale, currentYScale)
+        renderColorLegend(mode)
     }
 
     if (state.low !== null && scatter.isSupported) scatter.updateSelected(state.low, state.high)
@@ -502,6 +631,103 @@ function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID,
         .attr("x", 0)
         .attr("y", -16))
         .text(plot_title)
+
+    const legend = plotArea.append("g").attr("class", "umap-color-legend")
+        .attr("transform", `translate(${innerWidth - 4}, 8)`)
+
+    function drawContinuousLegend(gradId, interpolator, leftLabel, rightLabel, title) {
+        const barW = 88
+        const barH = 10
+        let defs = svg.select(":scope > defs")
+        if (defs.empty()) defs = svg.insert("defs", ":first-child")
+        defs.select(`#${gradId}`).remove()
+        const grad = defs.append("linearGradient").attr("id", gradId)
+            .attr("x1", "0%").attr("x2", "100%")
+        const stops = 12
+        for (let i = 0; i <= stops; i++) {
+            const t = i / stops
+            grad.append("stop")
+                .attr("offset", `${t * 100}%`)
+                .attr("stop-color", interpolator(t))
+        }
+        legend.append("rect")
+            .attr("x", -barW - 8).attr("y", 0)
+            .attr("width", barW).attr("height", barH)
+            .attr("rx", 2)
+            .attr("fill", `url(#${gradId})`)
+        legend.append("text")
+            .attr("x", -barW - 8).attr("y", barH + 11)
+            .attr("fill", THEME.muted).attr("font-size", 9)
+            .style("font-family", THEME.fontMono)
+            .text(leftLabel)
+        legend.append("text")
+            .attr("x", -8).attr("y", barH + 11)
+            .attr("text-anchor", "end")
+            .attr("fill", THEME.muted).attr("font-size", 9)
+            .style("font-family", THEME.fontMono)
+            .text(rightLabel)
+        legend.append("text")
+            .attr("x", -8).attr("y", barH + 24)
+            .attr("text-anchor", "end")
+            .attr("fill", THEME.muted).attr("font-size", 9)
+            .style("font-family", THEME.fontMono)
+            .text(title)
+        const filt = legend.append("g").attr("transform", `translate(0, ${barH + 38})`)
+        filt.append("circle").attr("cx", -8).attr("cy", 0).attr("r", 4).attr("fill", THEME.pointInactive)
+        filt.append("text")
+            .attr("x", -16).attr("y", 0).attr("dy", "0.35em")
+            .attr("text-anchor", "end")
+            .attr("fill", THEME.muted).attr("font-size", 10)
+            .style("font-family", THEME.fontMono)
+            .text("filtered out")
+    }
+
+    function renderColorLegend(mode) {
+        legend.selectAll("*").remove()
+        if (mode === "none") return
+
+        if (mode === "circadian") {
+            const items = [
+                { label: `q ≤ ${QVAL_CUTOFF}`, color: PALETTE.teal },
+                { label: `q > ${QVAL_CUTOFF}`, color: THEME.pointActive },
+                { label: "filtered out", color: THEME.pointInactive },
+            ]
+            items.forEach((item, i) => {
+                const row = legend.append("g").attr("transform", `translate(0, ${i * 14})`)
+                row.append("circle").attr("cx", -8).attr("cy", 0).attr("r", 4).attr("fill", item.color)
+                row.append("text")
+                    .attr("x", -16).attr("y", 0).attr("dy", "0.35em")
+                    .attr("text-anchor", "end")
+                    .attr("fill", THEME.muted)
+                    .attr("font-size", 10)
+                    .style("font-family", THEME.fontMono)
+                    .text(item.label)
+            })
+            return
+        }
+
+        if (mode === "phase") {
+            drawContinuousLegend(`umap-phase-grad-${div_name}`, PHASE_INTERPOLATOR, "0h", "24h", "peak time")
+        } else if (mode === "qval") {
+            drawContinuousLegend(
+                `umap-qval-grad-${div_name}`,
+                QVAL_INTERPOLATOR,
+                "1",
+                `1e-${QVAL_NEGLOG10_MAX}`,
+                "−log₁₀ LS q",
+            )
+        } else if (mode === "energyPct") {
+            const periodHours = selectedEnergyPeriodHours()
+            drawContinuousLegend(
+                `umap-energy-grad-${div_name}`,
+                ENERGY_INTERPOLATOR,
+                "0%",
+                "100%",
+                `% ${periodHours}h energy`,
+            )
+        }
+    }
+    renderColorLegend(state.colorMode)
 
     const hoverLabel = plotArea.append("text")
         .attr("id", `hover-label-${div_name}`)
@@ -653,6 +879,10 @@ function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID,
             state.low = low_val; state.high = high_val
             rebuildQuadtree(currentXScale, currentYScale)
         }
+    })
+
+    bus.subscribe_to("umap_color_mode", div_name, (mode) => {
+        applyColorMode(mode || "none")
     })
 
     bus.subscribe_to("point_select", div_name, (GeneID) => {

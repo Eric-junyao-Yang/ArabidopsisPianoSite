@@ -118,6 +118,19 @@
                             </p>
                         </div>
                     </div>
+
+                </details>
+                <details class="fold fold--science">
+                    <summary class="fold__summary">
+                        <span class="fold__badge">How To</span>
+                        <span class="fold__title">Quick guide and orientation</span>
+                        <span class="fold__chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="fold__body" id="Synth_Howto_div">
+                        <div class="synth-science prose-block">
+                            <p>HIHI</p>
+                        </div>
+                    </div>
                 </details>
             </div>
 
@@ -299,8 +312,108 @@
                         </div>
                     </div>
                 </aside>
+            </div>
+            <div id="Synth_Waveform_container" class="panel panel--waveform">
+                
+                <div id="Synth_Plots_div" class="plot-row">
+                    <div id="Synth_Plots_inner">
+                        <div id="Synth_Plots_toggles" class="umap-color-toggles">
+                            <p class="umap-color-toggles__label">Color UMAP by:</p>
+                            <div class="umap-color-toggles__controls">
+                                <div class="capsule-toggle umap-color-mode" role="group" aria-label="UMAP color mode">
+                                    <button type="button" class="btn umap-color-choice"
+                                        id="UMAP_oscillation"
+                                        aria-pressed="false"
+                                        aria-expanded="false"
+                                        aria-controls="UMAP_oscillation_menu">
+                                        oscillating genes
+                                    </button>
+                                    <button type="button" class="btn" id="UMAP_phase" aria-pressed="false">peak-time (phase)</button>
+                                    <button type="button" class="btn umap-color-choice"
+                                        id="UMAP_energy"
+                                        aria-pressed="false"
+                                        aria-expanded="false"
+                                        aria-controls="UMAP_energy_menu">
+                                        oscillation energy
+                                    </button>
+                                </div>
+                                <div class="umap-color-suboptions" id="UMAP_color_suboptions" hidden>
+                                    <div id="UMAP_oscillation_menu" class="umap-color-menu" role="group"
+                                        aria-label="Oscillating gene metric" hidden>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillating_type" value="qval">
+                                            <span>q-val</span>
+                                        </label>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillating_type" value="circadian" checked>
+                                            <span>circadian</span>
+                                        </label>
+                                    </div>
+                                    <div id="UMAP_energy_menu" class="umap-color-menu" role="group"
+                                        aria-label="Oscillation energy period" hidden>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillation_energy" value="48">
+                                            <span>48hr</span>
+                                        </label>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillation_energy" value="24" checked>
+                                            <span>24hr</span>
+                                        </label>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillation_energy" value="16">
+                                            <span>16hr</span>
+                                        </label>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillation_energy" value="12">
+                                            <span>12hr</span>
+                                        </label>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillation_energy" value="8">
+                                            <span>8hr</span>
+                                        </label>
+                                        <label class="umap-color-menu__option">
+                                            <input type="radio" name="oscillation_energy" value="6">
+                                            <span>6hr</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="UMAP_hover_info">
+                            <span> Gene ID:</span> <span id="UMAP_hover_gene_id"></span>
+                            <span id="UMAP_hover_info_additional_type"></span>
+                            <span id="UMAP_hover_info_additional_text"></span>
+                        </div>
+                        <div id="UMAP_selected_info">
+                            <span> Gene ID:</span> <span id="UMAP_selected_gene_id"></span>
+                            <span id="UMAP_selected_info_additional_type"></span>
+                            <span id="UMAP_selected_info_additional_text"></span>                            
+                        </div>
+                        <div id="Synth_Plots_plots">
+                            <div id="read_counts"
+                                class="help-panel plot-frame"
+                                data-help-text="UMAP representation of experimental data: 
+                                Points closer together are similar in experimental data (biology). 
+                                Waveform should have similar shape + phase (peak time).
+                                
+                                Each point is a gene. You can zoom, pan, and select genes to update the waveform above. Gene highlighted is synced between the two plots. Double click to reset graph."></div>
+                            <div id="filter_slider"
+                                class="help-panel plot-frame plot-frame--narrow"
+                                data-help-text="This slider controls cutoffs for average gene expression.
+
+                                You can adjust the top and bottom slider to set thresholds, and drag the threshold regions around. Blue lines represents the quantiles. Double click to reset."></div>
+                            <div id="fft"
+                                class="help-panel plot-frame"
+                                data-help-text="UMAP representation of Fast Fourier fransformed
+                                waveform: Points closer together have similar sound.
+                                phase (peak time) infomration is discarded.
+                                
+                                Each point is a gene. You can zoom, pan, and select genes to update the waveform above. Gene highlighted is synced between the two plots. Double click to reset graph."></div>                        
+                        </div>
+                        <div id="Harmonic_div"></div>
+                    </div>
                 </div>
-                <div id="Synth_Waveform_container" class="panel panel--waveform">
+                
                 <div id="Synth_Waveform_div"
                     class="help-panel toolbar"
                     data-help-text="The waveform you see will be the waveform played when you click on the virtual keyboard or play with your actual keyboard (it supports polyphony!).
@@ -340,7 +453,7 @@
                         <canvas id="Synth_Waveform" width="1000" height="200"></canvas>
                     </div>
                 </div>
-
+                
                 <div id="Synth_Keyboard_div" class="keyboard-shell" aria-label="Virtual keyboard"></div>
 
                 <div
@@ -370,27 +483,9 @@
                         <button id="send_waveform_to_midi" type="button" class="btn btn--primary" disabled>Assign</button>
                     </div>
                 </div>
-                </div>
+                
 
-                <div id="Synth_Plots_div" class="plot-row">
-                    <div id="read_counts"
-                         class="help-panel plot-frame"
-                         data-help-text="UMAP representation of experimental data: 
-                         Points closer together have similar expression pattern over the experimental period.
-                         
-                         Each point is a gene. You can zoom, pan, and select genes to update the waveform above. Gene highlighted is synced between the two plots. Double click to reset graph."></div>
-                    <div id="filter_slider"
-                         class="help-panel plot-frame plot-frame--narrow"
-                         data-help-text="This slider controls cutoffs for average gene expression.
 
-                         You can adjust the top and bottom slider to set thresholds, and drag the threshold regions around. Blue lines represents the quantiles. Double click to reset."></div>
-                    <div id="fft"
-                         class="help-panel plot-frame"
-                         data-help-text="UMAP representation of Fast Fourier fransformed
-                         'waveform': Points closer together are similar in sound quality.
-                         
-                         Each point is a gene. You can zoom, pan, and select genes to update the waveform above. Gene highlighted is synced between the two plots. Double click to reset graph."></div>
-                </div>
             </div>
         </section>
 

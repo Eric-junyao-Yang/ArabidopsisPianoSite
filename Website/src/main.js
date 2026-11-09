@@ -19,6 +19,8 @@ import {
 } from "/src/midiplayer.js"
 import { stepSeqTutorial } from "/src/StepSeqTutorial.js"
 import { midiTrackPlots } from "/src/midiTrackPlot.js"
+import { plotHarmonics, energyPctAtPeriod } from "/src/plotHarmonics.js"
+
 // ---- add a bus for communication between modules ----
 const bus = {
     _listeners: {},
@@ -41,6 +43,7 @@ const count_arr = await bin_to_array("/dat/Normalized_counts.bin", "/dat/bin_met
 const VST_arr = await bin_to_array("/dat/VST.bin", "/dat/bin_meta.json")
 const count_umap_arr = await bin_to_array("/dat/count_umap.bin", "/dat/bin_meta.json")
 const fft_umap_arr = await bin_to_array("/dat/fft_umap.bin", "/dat/bin_meta.json")
+const per_gene_meta = await d3.csv("/dat/per_gene_meta.csv", d3.autoType) // decide if convert to bin later
 
 if (
     count_arr.length !== count_umap_arr.length ||
@@ -65,7 +68,16 @@ for (let i = 0; i < count_arr.length; i++) {
 //     await load_waveforms("/dat/waveforms.bin", "/dat/bin_meta.json")
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
-
+const per_gene_meta_lookup = new Map(per_gene_meta.map((val) => [val.GeneID, val]))
+// Amplitude spectrum per gene (period hours → FFT amplitude). Energy % is derived on read.
+const HARMONIC_PERIODS_H = [48, 24, 16, 12, 9.6, 8, 6.8, 6]
+const specs_lookup = new Map(per_gene_meta.map((v) => [
+    v.GeneID,
+    HARMONIC_PERIODS_H.map((period, i) => ({
+        period,
+        amplitude: v[`spec${i + 1}`],
+    })),
+]))
 // --------------------------------------- Synth waveform ---------------------------------------
 const synth_waveform_canvas = document.getElementById("Synth_Waveform")
 const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, count_arr)
@@ -143,6 +155,17 @@ synthToMidiTrackSelect?.addEventListener("change", () => {
     syncSynthToMidiControls()
 })
 updateSynthGeneUI(null)
+
+// UMAP hover info
+const UMAP_hover_GeneID = document.getElementById("UMAP_hover_gene_id")
+const UMAP_hover_Info_Additional_Type = document.getElementById("UMAP_hover_info_additional_type")
+const UMAP_hover_Info_Additional_Text = document.getElementById("UMAP_hover_info_additional_text")
+
+// UMAP selected info
+const UMAP_selected_GeneID = document.getElementById("UMAP_selected_gene_id")
+const UMAP_selected_Info_Additional_Type = document.getElementById("UMAP_selected_info_additional_type")
+const UMAP_selected_Info_Additional_Text = document.getElementById("UMAP_selected_info_additional_text")
+
 
 // // Step sequencer transport
 // const playPauseButton = document.getElementById("StepSeqPlayPause")
@@ -568,8 +591,88 @@ async function initMidiAudio() {
 // renderGPMeta(null)
 
 // --------------------------------------- Plots ---------------------------------------
-plotUMAP(600, 500, count_umap_arr, "read_counts", "UMAP of read counts over 48hrs", true, bus)
-plotUMAP(600, 500, fft_umap_arr, "fft", "UMAP of FFT of waveforms", false, bus)
+plotUMAP(600, 500, count_umap_arr, per_gene_meta, specs_lookup, "read_counts", "UMAP of read counts over 48hrs", false, bus)
+plotUMAP(600, 500, fft_umap_arr, per_gene_meta, specs_lookup, "fft", "UMAP of FFT of waveforms", false, bus)
+console.log(specs_lookup)
+plotHarmonics(specs_lookup, bus)
+
+// UMAP color-mode toggles (TPM filter stays independent)
+// Oscillating genes + oscillation energy share one sub-options row beneath the capsule.
+const OSCILLATING_MODES = new Set(["qval", "circadian"])
+const umapColorChoices = [
+    {
+        id: "UMAP_oscillation",
+        menuId: "UMAP_oscillation_menu",
+        isActive: (m) => OSCILLATING_MODES.has(m),
+    },
+    { id: "UMAP_phase", isActive: (m) => m === "phase" },
+    {
+        id: "UMAP_energy",
+        menuId: "UMAP_energy_menu",
+        isActive: (m) => m === "energyPct",
+    },
+]
+const umapSuboptionsRow = document.getElementById("UMAP_color_suboptions")
+let umapColorMode = "none"
+
+function selectedOscillatingType() {
+    const el = document.querySelector('input[name="oscillating_type"]:checked')
+    return OSCILLATING_MODES.has(el?.value) ? el.value : "circadian"
+}
+
+function syncUmapColorSuboptions() {
+    let openMenuId = null
+    for (const { id, menuId, isActive } of umapColorChoices) {
+        const open = Boolean(menuId) && isActive(umapColorMode)
+        document.getElementById(id)?.setAttribute("aria-expanded", String(open))
+        const menu = menuId ? document.getElementById(menuId) : null
+        if (menu) menu.hidden = !open
+        if (open) openMenuId = menuId
+    }
+    if (umapSuboptionsRow) umapSuboptionsRow.hidden = !openMenuId
+}
+
+function setUmapColorMode(mode) {
+    umapColorMode = mode
+    for (const { id, isActive } of umapColorChoices) {
+        document.getElementById(id)?.setAttribute("aria-pressed", String(isActive(umapColorMode)))
+    }
+    syncUmapColorSuboptions()
+    bus.execute_event("umap_color_mode", umapColorMode)
+}
+
+const umapOscillationChoice = umapColorChoices.find((c) => c.id === "UMAP_oscillation")
+const umapEnergyChoice = umapColorChoices.find((c) => c.id === "UMAP_energy")
+
+document.getElementById("UMAP_oscillation")?.addEventListener("click", () => {
+    setUmapColorMode(
+        umapOscillationChoice.isActive(umapColorMode) ? "none" : selectedOscillatingType()
+    )
+})
+document.getElementById("UMAP_phase")?.addEventListener("click", () => {
+    setUmapColorMode(umapColorMode === "phase" ? "none" : "phase")
+})
+document.getElementById("UMAP_energy")?.addEventListener("click", () => {
+    setUmapColorMode(umapEnergyChoice.isActive(umapColorMode) ? "none" : "energyPct")
+})
+
+document.querySelectorAll('input[name="oscillating_type"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+        if (!radio.checked || !OSCILLATING_MODES.has(radio.value)) return
+        if (umapColorMode !== radio.value) setUmapColorMode(radio.value)
+        else bus.execute_event("umap_color_mode", radio.value)
+    })
+})
+
+let oscillation_energy = "24"
+document.querySelectorAll('input[name="oscillation_energy"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+        if (!radio.checked) return
+        oscillation_energy = radio.value
+        if (umapColorMode !== "energyPct") setUmapColorMode("energyPct")
+        else bus.execute_event("umap_color_mode", "energyPct")
+    })
+})
 
 plotViolin(
     130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
@@ -775,4 +878,41 @@ bus.subscribe_to("stopSlideSound", "main", () => {
 
 bus.subscribe_to("point_select", "main", (GeneID) => {
     updateSynthGeneUI(GeneID)
+    UMAP_selected_GeneID.textContent = GeneID
+    const cur_meta = per_gene_meta_lookup.get(GeneID)
+    if (OSCILLATING_MODES.has(umapColorMode)) {
+        UMAP_selected_Info_Additional_Text.textContent = cur_meta? cur_meta.LS_qval : "—"
+    } else if (umapColorMode === "phase") {
+        UMAP_selected_Info_Additional_Text.textContent = cur_meta? cur_meta.phase : "—"
+    } else if (umapColorMode === "energyPct") {
+        UMAP_selected_Info_Additional_Text.textContent = cur_meta? energyPctAtPeriod(GeneID, specs_lookup, oscillation_energy) : "—"
+    }
 })
+
+
+bus.subscribe_to("umap_color_mode", "main", (mode) => {
+    if (OSCILLATING_MODES.has(mode)) {
+        UMAP_hover_Info_Additional_Type.textContent = "q-value: "
+        UMAP_selected_Info_Additional_Type.textContent = "q-value: "
+    } else if (mode === "phase") {
+        UMAP_hover_Info_Additional_Type.textContent = "peak-time: "
+        UMAP_selected_Info_Additional_Type.textContent = "peak-time: "
+    } else if (mode === "energyPct") {
+        UMAP_hover_Info_Additional_Type.textContent = "energy percentage: "
+        UMAP_selected_Info_Additional_Type.textContent = "energy percentage: "
+    }
+})
+
+bus.subscribe_to("point_hover", "main", (GeneID) => {
+    UMAP_hover_GeneID.textContent = GeneID
+    const cur_meta = per_gene_meta_lookup.get(GeneID)
+    if (OSCILLATING_MODES.has(umapColorMode)) {
+        UMAP_hover_Info_Additional_Text.textContent = cur_meta? cur_meta.LS_qval : "—"
+    } else if (umapColorMode === "phase") {
+        UMAP_hover_Info_Additional_Text.textContent = cur_meta? cur_meta.phase : "—"
+    } else if (umapColorMode === "energyPct") {
+        UMAP_hover_Info_Additional_Text.textContent = cur_meta? energyPctAtPeriod(GeneID, specs_lookup, oscillation_energy) : "—"
+    }
+})
+
+console.log(per_gene_meta)
