@@ -768,13 +768,10 @@ main {
 #Synth_Waveform_div {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 0 0 0;
     width: 100%;
-}
-
-#Harmonic_div {
-    width: 100%;
-    height: 300px;
 }
 
 #Synth_interaction_bar {
@@ -784,17 +781,18 @@ main {
     align-items: flex-end;
     gap: var(--space-3);
     width: 100%;
+    max-width: var(--waveform-max);
 }
 
 .synth-waveform-label,
 #synth_waveform_name {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.15rem;
-    width: 100%;
     margin: 0;
-    text-align: center;
+    min-width: 0;
+    text-align: left;
 }
 
 .synth-waveform-label__eyebrow {
@@ -834,23 +832,17 @@ main {
 #Waveform_Button_div {
     display: flex;
     flex-wrap: wrap;
-    flex: 1 1 auto;
     justify-content: flex-end;
     align-items: center;
     gap: var(--space-3);
+    margin-left: auto;
     min-width: 0;
-}
-
-#Synth_Searchbar {
-    flex: 1 1 16rem;
-    width: auto;
-    max-width: 24rem;
 }
 
 .canvas-shell {
     width: 100%;
     max-width: var(--waveform-max);
-    margin-inline: auto;
+    margin-inline: 0;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-bg-sunken);
@@ -1037,6 +1029,17 @@ main {
     width: 100%;
 }
 
+.synth-umap-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    width: 100%;
+    max-width: calc(
+        (2 * var(--plot-umap-w)) + (var(--plot-violin-w) + 40px) + (2 * var(--space-4))
+    );
+    margin-inline: auto;
+}
+
 #Synth_Plots_plots {
     display: flex;
     flex-wrap: wrap;
@@ -1046,33 +1049,67 @@ main {
     width: 100%;
 }
 
+#Harmonic_div,
+.plot-frame--harmonics {
+    position: relative;
+    width: 100%;
+    height: 5.25rem;
+    min-height: 4.5rem;
+    overflow: hidden;
+}
+
+#Harmonic_div svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
 .umap-color-toggles {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: flex-end;
+    justify-content: space-between;
     gap: var(--space-3);
     width: 100%;
 }
 
-.umap-color-toggles__label {
-    margin: 0;
-    padding-top: 0.55rem;
-    color: var(--color-ink-muted);
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.umap-color-toggles__controls {
+.umap-color-toggles__main {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--space-2);
+    gap: var(--space-1);
     min-width: 0;
-    flex: 1 1 16rem;
+    flex: 1 1 18rem;
+}
+
+.umap-color-toggles__label {
+    margin: 0;
+    color: var(--color-ink-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.umap-color-toggles__search {
+    flex: 0 1 16rem;
+    width: min(100%, 16rem);
+    margin-left: auto;
 }
 
 .umap-color-toggles .capsule-toggle {
-    flex-wrap: wrap;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    min-height: 2.5rem;
+    width: max-content;
+    max-width: 100%;
+}
+
+.umap-color-toggles .capsule-toggle .btn {
+    min-height: calc(2.5rem - 8px);
+    align-self: stretch;
+    flex: 0 0 auto;
 }
 
 .umap-color-toggles .btn:disabled {
@@ -1080,46 +1117,89 @@ main {
     cursor: not-allowed;
 }
 
+.umap-color-choice-wrap {
+    --umap-menu-expand-duration: 260ms;
+    --umap-menu-expand-ease: cubic-bezier(0.22, 0.9, 0.28, 1);
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-width: 0;
+    border-radius: 999px;
+    padding-right: 0;
+    background: transparent;
+    transition:
+        background var(--umap-menu-expand-duration) var(--umap-menu-expand-ease),
+        padding-right var(--umap-menu-expand-duration) var(--umap-menu-expand-ease);
+}
+
+.umap-color-choice-wrap[data-expanded="true"] {
+    background: color-mix(in srgb, var(--color-bg-elevated) 70%, transparent);
+    padding-right: 0.45rem;
+}
+
 .umap-color-choice::after {
     content: "";
-    width: 0.45rem;
-    height: 0.45rem;
+    width: 0.4rem;
+    height: 0.4rem;
     margin-left: 0.15rem;
     border-right: 1.5px solid currentColor;
     border-bottom: 1.5px solid currentColor;
-    transform: translateY(-15%) rotate(45deg);
-    transition: transform var(--transition-fast);
+    transform: translateX(-10%) rotate(-45deg);
+    transition: transform var(--umap-menu-expand-duration) var(--umap-menu-expand-ease);
     opacity: 0.75;
 }
 
 .umap-color-choice[aria-expanded="true"]::after {
-    transform: translateY(20%) rotate(225deg);
+    transform: translateX(10%) rotate(135deg);
 }
 
-.umap-color-suboptions {
+/* 0fr → 1fr width reveal: overflow must live on the grid child, not the content. */
+.umap-color-menu-clip {
+    display: grid;
+    grid-template-columns: 0fr;
+    transition: grid-template-columns var(--umap-menu-expand-duration) var(--umap-menu-expand-ease);
+}
+
+.umap-color-choice-wrap[data-expanded="true"] .umap-color-menu-clip {
+    grid-template-columns: 1fr;
+}
+
+.umap-color-menu-inner {
     display: flex;
     align-items: center;
-    width: 100%;
-    max-width: 36rem;
-    padding: 0.35rem;
-    background: var(--color-bg-sunken);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-}
-
-.umap-color-suboptions[hidden] {
-    display: none;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
 .umap-color-menu {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    width: 100%;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    width: max-content;
+    padding-left: 0.45rem;
+    opacity: 0;
+    transform: translateX(-0.35rem);
+    pointer-events: none;
+    transition:
+        opacity calc(var(--umap-menu-expand-duration) * 0.75) ease,
+        transform var(--umap-menu-expand-duration) var(--umap-menu-expand-ease);
 }
 
-.umap-color-menu[hidden] {
-    display: none;
+.umap-color-choice-wrap[data-expanded="true"] .umap-color-menu {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .umap-color-choice-wrap,
+    .umap-color-choice::after,
+    .umap-color-menu-clip,
+    .umap-color-menu {
+        transition: none;
+    }
 }
 
 .umap-color-menu__option {
@@ -1140,12 +1220,12 @@ main {
     align-items: center;
     justify-content: center;
     min-height: 1.7rem;
-    padding: 0.2rem 0.65rem;
+    padding: 0.2rem 0.55rem;
     border: 1px solid transparent;
     border-radius: 999px;
     background: var(--color-bg-elevated);
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -1170,6 +1250,126 @@ main {
     border-color: color-mix(in srgb, var(--cb-teal) 45%, white);
     color: color-mix(in srgb, var(--cb-teal) 55%, black);
     box-shadow: none;
+}
+
+.umap-gene-status {
+    /* Hover slot reserved for gene ID + longest metric (e.g. peak-time 12.34 h). */
+    --umap-hover-width: 19rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--umap-hover-width);
+    gap: var(--space-2);
+    width: 100%;
+    align-items: stretch;
+}
+
+.umap-gene-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 2.75rem;
+    padding: 0.55rem 0.85rem;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    border-left-width: 3px;
+    text-align: center;
+}
+
+.umap-gene-card--hover {
+    border-left-color: var(--cb-teal);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.umap-gene-card--selected {
+    border-left-color: var(--cb-sand);
+    min-width: 0;
+}
+
+.umap-gene-card__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.umap-gene-card--hover .umap-gene-card__badge {
+    color: color-mix(in srgb, var(--cb-teal) 55%, black);
+    background: color-mix(in srgb, var(--cb-teal) 16%, white);
+    border: 1px solid color-mix(in srgb, var(--cb-teal) 35%, white);
+}
+
+.umap-gene-card--selected .umap-gene-card__badge {
+    color: color-mix(in srgb, var(--cb-sand) 45%, black);
+    background: color-mix(in srgb, var(--cb-sand) 28%, white);
+    border: 1px solid color-mix(in srgb, var(--cb-sand) 55%, white);
+}
+
+.umap-gene-card__body {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.35rem 0.85rem;
+    white-space: nowrap;
+}
+
+.umap-gene-card--selected .umap-gene-card__body {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.umap-gene-card__id {
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+    font-weight: 650;
+    color: var(--color-ink);
+    letter-spacing: 0.01em;
+}
+
+.umap-gene-card.is-empty .umap-gene-card__id {
+    color: var(--color-ink-muted);
+    font-weight: 500;
+}
+
+.umap-gene-card__metric {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: baseline;
+    gap: 0.35rem;
+    color: var(--color-ink-muted);
+    font-size: 0.78rem;
+}
+
+.umap-gene-card__metric[hidden] {
+    display: none;
+}
+
+.umap-gene-card__metric-label {
+    font-weight: 600;
+}
+
+.umap-gene-card__metric-value {
+    font-family: var(--font-mono);
+    font-weight: 650;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+    .umap-gene-status {
+        grid-template-columns: 1fr;
+    }
 }
 
 .plot-frame {
@@ -1270,6 +1470,10 @@ main {
 }
 
 #midi_handle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 var(--jukebox-handle-w);
     width: var(--jukebox-handle-w);
     margin: 0;
@@ -1291,6 +1495,24 @@ main {
 #midi_handle:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring), var(--shadow-sm);
+}
+
+
+.midi-handle__chevron {
+    position: absolute;
+    top: 0.85rem;
+    left: 50%;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateX(-50%) rotate(135deg); /* closed → points left */
+    transition: transform var(--transition-fast);
+    opacity: 0.75;
+}
+
+#midi_handle[aria-expanded="true"] .midi-handle__chevron {
+    transform: translateX(-50%) rotate(-45deg); /* open → points right */
 }
 
 #midi_handle_text {
@@ -2192,6 +2414,7 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    line-height: 1.2;
     color: var(--color-ink-muted);
 }
 
@@ -2558,6 +2781,7 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
     #Waveform_Button_div {
         justify-content: stretch;
         width: 100%;
+        margin-left: 0;
     }
 
     .btn-group {
@@ -2568,9 +2792,10 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
         flex: 1 1 auto;
     }
 
-    #Synth_Searchbar {
-        max-width: none;
+    .umap-color-toggles__search {
         flex-basis: 100%;
+        width: 100%;
+        margin-left: 0;
     }
 
     .synth-to-jukebox,

@@ -21,7 +21,7 @@ function drawPiano(synth_node, div){
     const containerHeight = div.clientHeight
     if (!containerWidth || !containerHeight) return
     const compact = containerWidth < 520
-    const margin = {top: 10, left: 10, bottom: 10, right: 10}
+    const margin = {top: 10, left: 10, bottom: 10, right: 15}
     const innerWidth = containerWidth - (margin.left + margin.right)
     const innerHeight = containerHeight - (margin.top + margin.bottom)
 
@@ -95,21 +95,27 @@ function drawPiano(synth_node, div){
             .attr("stroke-width", 1.5)
     )
 
+    function styleKeyHint(selection) {
+        return selection
+            .attr("class", "key-hint")
+            .attr("font-size", compact ? 10 : 11)
+            .attr("fill", THEME.muted)
+            .style("font-family", THEME.fontMono)
+            .attr("pointer-events", "none")
+    }
+
     // computer-keyboard hints at the bottom of each white key
-    wKeys.selectAll("text.key-hint")
-        .data(wKeys_list)
-        .enter()
-        .append("text")
-        .attr("class", "key-hint")
-        .attr("x", d => d.index * wKeyWidth + wKeyWidth / 2)
+    styleKeyHint(
+        wKeys.selectAll("text.key-hint")
+            .data(wKeys_list)
+            .enter()
+            .append("text")
+    )
+        .attr("x", (d) => d.index * wKeyWidth + wKeyWidth / 2)
         .attr("y", innerHeight - 10)
         .attr("text-anchor", "middle")
-        .attr("font-size", 11)
-        .attr("fill", THEME.muted)
-        .style("font-family", THEME.fontMono)
         .style("text-transform", "uppercase")
-        .attr("pointer-events", "none")
-        .text(d => d.key)
+        .text((d) => d.key)
 
     bindKeyPointer(
         bKeys.selectAll(".piano-key")
@@ -141,14 +147,16 @@ function drawPiano(synth_node, div){
             })
     }
 
-    // Set up Octaves control buttons
-    const octUp = octControls.append('g')
-        .attr("transform", `translate(0, ${octaveWidth/2})`)
+    // Octave shift buttons — arrow + corner keyboard cue (same style as key hints)
+    const octHintInset = compact ? 7 : 8
+
+    const octUp = octControls.append("g")
+        .attr("transform", `translate(0, ${octaveWidth / 2})`)
         .attr("class", "octave-button")
         .attr("id", "octave-up")
     bindOctavePointer(octUp, "]")
-    
-    octUp.append('rect')
+
+    octUp.append("rect")
         .attr("width", octaveWidth)
         .attr("height", octaveWidth)
         .attr("x", 0)
@@ -158,19 +166,27 @@ function drawPiano(synth_node, div){
         .attr("stroke", THEME.axis)
         .attr("stroke-width", 1.5)
     octUp.append("polygon")
-        .attr("points", 
+        .attr("points",
             `${octaveWidth / 2}, 8
             10, ${octaveWidth - 10}
             ${octaveWidth - 10}, ${octaveWidth - 10}`)
         .attr("fill", PALETTE.indigo)
         .attr("pointer-events", "none")
+    styleKeyHint(octUp.append("text"))
+        .attr("x", octaveWidth - octHintInset)
+        .attr("y", octHintInset + 2)
+        .attr("text-anchor", "end")
+        .attr("dominant-baseline", "hanging")
+        .attr("font-weight", "bold")
+        .text("]")
 
     const octDown = octControls.append("g")
-        .attr("transform", `translate(0, ${(innerHeight - octaveWidth) - octaveWidth/2})`)
+        .attr("transform", `translate(0, ${(innerHeight - octaveWidth) - octaveWidth / 2})`)
         .attr("class", "octave-button")
         .attr("id", "octave-down")
     bindOctavePointer(octDown, "[")
-    octDown.append('rect')
+
+    octDown.append("rect")
         .attr("width", octaveWidth)
         .attr("height", octaveWidth)
         .attr("x", 0)
@@ -180,12 +196,19 @@ function drawPiano(synth_node, div){
         .attr("stroke", THEME.axis)
         .attr("stroke-width", 1.5)
     octDown.append("polygon")
-        .attr("points", 
+        .attr("points",
             `10, 10
             ${octaveWidth - 10}, 10
             ${octaveWidth / 2}, ${octaveWidth - 8}`)
         .attr("fill", PALETTE.indigo)
         .attr("pointer-events", "none")
+    styleKeyHint(octDown.append("text"))
+        .attr("x", octaveWidth - octHintInset)
+        .attr("y", octaveWidth - octHintInset)
+        .attr("text-anchor", "end")
+        .attr("dominant-baseline", "auto")
+        .attr("font-weight", "bold")
+        .text("[")
 }
 
 
