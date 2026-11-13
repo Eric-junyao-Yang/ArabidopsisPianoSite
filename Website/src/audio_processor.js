@@ -10,7 +10,12 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         this.octave = 0
         this.attackInc = 1 / (sampleRate * 0.005)
         this.releaseInc = 1 / (sampleRate * 0.03)
+        this.sweepInc = 1 / (sampleRate * .5) //.5s
         this.invSampleRate = 1 / sampleRate
+
+        // Circadian vs All-genes
+        this.displayMode = "All"
+        this.drawnSamples = []
 
         this.port.onmessage = (event) => {
             if (event.data.type === "updatePoints") {
@@ -24,7 +29,8 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                     this.voices.set(event.data.freq, {
                         phase: 0,
                         lvl: 0,
-                        state: "attack"
+                        state: "attack",
+                        sweep: 0
                     })
                 }
             }
@@ -39,6 +45,13 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                 if (event.data.dir === "up"){
                     this.octave = Math.min(3, this.octave + 1)
                 }
+            }
+
+            if (event.data.type === "DisplayModeSet") {
+                this.displayMode = event.data.mode
+            }
+            if (event.data.type === "drawnSamples") {
+                this.drawnSamples = event.data.samples.map((v) => toUnipolarWavetable(v, TABLE_SIZE))
             }
         }
     }
@@ -82,6 +95,52 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         }
     }
 
+    generateGPSound(freq, channels, gain, data){
+        const internal_freq = freq * Math.pow(2, this.octave)
+        const outputLength = channels[0].length
+        const increment = internal_freq * TABLE_SIZE * this.invSampleRate
+        const N_GRID = this.drawnSamples[0].length
+        for (let i=0; i < outputLength; i ++){
+            if (data.state === "attack"){
+                data.lvl += this.attackInc
+                if (data.lvl >= 1){
+                    data.lvl = 1
+                    data.state = "sustain"
+                }
+            }
+
+            if (data.state === "release"){
+                data.lvl -= this.releaseInc
+                if (data.lvl <= 0){
+                    data.lvl = 0
+                    data.state = "finished"
+                }
+            }
+
+            // Morph across posterior samples over the note duration
+            const sampleV0 = gatherCatmullrom(this.drawnSamples[0], data.phase, N_GRID)
+            const sampleV1 = gatherCatmullrom(this.drawnSamples[1], data.phase, N_GRID)
+            let sample = sampleV0 * (1 - data.sweep) + sampleV1 * data.sweep
+
+            const amp = sample * gain * data.lvl
+            for (let c = 0; c < channels.length; c++) {
+                channels[c][i] += amp
+            }
+            data.phase += increment
+            data.sweep += this.sweepInc
+
+            if (data.phase >= TABLE_SIZE){
+                data.phase %= TABLE_SIZE
+            }
+
+            if (data.sweep >= 1) {
+                this.drawnSamples.shift()
+                this.port.postMessage({ type: "drawnSamples", samples: this.drawnSamples })
+                data.sweep = 0
+            }
+        }
+    }
+
     process(inputs, outputs) {
         const channels = outputs[0]
         const totalKeys = this.voices.size
@@ -98,7 +157,12 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         const finished = []
 
         for (const [freq, data] of this.voices){
-            this.generateSound(freq, channels, gain, data)
+            if (this.displayMode === "All") {
+                this.generateSound(freq, channels, gain, data)
+            } else if (this.displayMode === "Circadian" && this.drawnSamples.length > 2) {
+                this.generateGPSound(freq, channels, gain, data)
+            }
+            
             if (data.state === "finished") finished.push(freq)
         }
         for (let i = 0; i < finished.length; i++) {

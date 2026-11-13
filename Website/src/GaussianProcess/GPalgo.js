@@ -203,6 +203,6 @@ export class gpSamplerClass{
 
     drawPosterior(){
         const z = this.standardNormals(this.grid.length)
-        return draw = this.drawCurve(this.mu, this.Sigma, z)
+        return this.drawCurve(this.mu, this.Sigma, z)
     }
 }

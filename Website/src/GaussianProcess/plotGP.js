@@ -35,10 +35,14 @@ export class plotGPClass{
         // Persistent layers so updates replace paths instead of stacking
         this.confIntGroup = this.plotArea.append('g').attr("class", "conf-int")
         this.muLineGroup = this.plotArea.append('g').attr("class", "mu-line")
+        this.sampleLineGroup = this.plotArea.append('g').attr("class", "sample-line")
 
         this.muLine = d3.line()
             .x((d) => this.xScale(d.x))
             .y((d) => this.yScale(d.mu))
+        this.sampleLine = d3.line()
+            .x((d) => this.xScale(d.x))
+            .y((d) => this.yScale(d.y))
         this.confArea = d3.area()
             .x((d) => this.xScale(d.x))
             .y0((d) => this.yScale(d.mu + 2 * d.std))
@@ -59,12 +63,21 @@ export class plotGPClass{
         return pts
     }
 
-    updateGeneID(GeneID, mu, std){
-        if (GeneID === this.current_display_GeneID) return
-        this.current_display_GeneID = GeneID
+    tileSample(sample, period = this.PERIOD, hours = this.EXPERIMENT_HOURS) {
+        const n = sample.length
+        const pts = []
+        const maxCycles = Math.ceil(hours / period) + 1
+        for (let c = 0; c < maxCycles; c++) {
+            for (let i = 0; i < n; i++) {
+                const x = c * period + (i * period) / n
+                if (x > hours) return pts
+                pts.push({ x, y: sample[i]})
+            }
+        }
+        return pts        
+    }
 
-        const dat = this.tileSeries(mu, std)
-
+    renderData(dat){
         const bandLo = dat.map((d) => d.mu - 2 * d.std)
         const bandHi = dat.map((d) => d.mu + 2 * d.std)
         this.yScale.domain([d3.min(bandLo), d3.max(bandHi)]).nice()
@@ -88,5 +101,37 @@ export class plotGPClass{
             .attr("d", this.muLine)
     }
 
-    drawSample()
+    updateGeneID(GeneID, mu, std){
+        if (GeneID === this.current_display_GeneID) return
+        this.current_display_GeneID = GeneID
+        const dat = this.tileSeries(mu, std)
+        this.renderData(dat)
+    }
+
+    drawSample(sample){
+        const dat = this.tileSample(sample)
+        this.sampleLineGroup.selectAll("path")
+            .data([dat])
+            .join("path")
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 1.75)
+            .attr("opacity", 0.95)
+            .attr("d", this.sampleLine)
+    }
+
+    renderEmpty(){
+        this.current_display_GeneID = null
+        // this.muLineGroup.selectAll("path").remove()
+        // this.sampleLineGroup.selectAll("path").remove()
+        // this.confIntGroup.selectAll("path").remove()
+
+        const dat = this.xScale.domain().map((x) => ({
+            x,
+            mu: 0,
+            std: 1
+        }))
+
+        this.renderData(dat)
+    }
 }

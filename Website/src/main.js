@@ -390,8 +390,14 @@ const synthReady = (async () => {
     compressor.release.value = 0.05
     synth_node.connect(compressor).connect(globalAudio.input)
     synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
+    // after morph time is hit, first entry dropped in audioworklet, update main's drawnSamples:
+    synth_node.port.onmessage = (event) => {
+        if (event.data.type === "drawnSamples") {
+            drawnSamples = event.data.samples
+        }
+    }
     assign_keyboard_keys(synth_node)
-    setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"))
+    setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"), bus)
 })().catch((err) => {
     console.error("Synth audio setup failed", err)
 })
@@ -461,15 +467,28 @@ plotHarmonics(specs_lookup, bus)
 
 // GP sampling
 const gpSampler = new gpSamplerClass(gp_params_arr, VST_lookup)
-//prototyping
-const GeneID = "AT5G61380"
-gpSampler.updateMuStdSigma(GeneID) 
-const mu = gpSampler.mu
-const std = gpSampler.std
-const draw1 = gpSampler.drawPosterior()
 const plotGP = new plotGPClass()
-plotGP.updateGeneID(GeneID, mu, std)
-plotGP.drawSample(draw1)
+
+//prototyping
+let isNotePlaying = false
+let playNoteIntervalID = null
+let drawnSamples = []
+
+function drawSamples(){
+    playNoteIntervalID = setInterval(() => {
+        if (drawnSamples.length < 3) {
+            const draw = gpSampler.drawPosterior()
+            plotGP.drawSample(draw)
+            drawnSamples.push(draw)
+            synth_node.port.postMessage({ type: "drawnSamples", samples: drawnSamples })
+        }
+    }, drawnSamples.length < 2 ? 0 : 300)
+}
+
+function stopDrawingSamples(){
+    clearInterval(playNoteIntervalID)
+}
+
 
 
 // UMAP color-mode toggles (TPM filter stays independent)
@@ -629,67 +648,67 @@ bus.subscribe_to("synth_waveform_changed", "main", (points) => {
     }
 })
 
-bus.subscribe_to("playNote", "main", ([mv, GeneID, Index, freq, sweep]) => {
-    const node = createVoice(mv, shared)
-    if (!node) return
-    node.port.postMessage({
-        type: "geneSpecifics",
-        GeneID,
-        Index,
-        freq,
-        sweep,
-        duration: 1,
-    })
-})
+// bus.subscribe_to("playNote", "main", ([mv, GeneID, Index, freq, sweep]) => {
+//     const node = createVoice(mv, shared)
+//     if (!node) return
+//     node.port.postMessage({
+//         type: "geneSpecifics",
+//         GeneID,
+//         Index,
+//         freq,
+//         sweep,
+//         duration: 1,
+//     })
+// })
 
-bus.subscribe_to("selection_modified", "main", (selection) => {
-    renderSelectionPanel(selection)
-})
+// bus.subscribe_to("selection_modified", "main", (selection) => {
+//     renderSelectionPanel(selection)
+// })
 
-bus.subscribe_to("gene_label_select", "main", (item) => {
-    if (!item) {
-        plotGP.renderEmpty()
-        renderGPMeta(null)
-        return
-    }
-    const VST_dat = VST_lookup.get(item.GeneID)
-    if (!VST_dat) return
-    plotGP.updatePlot({
-        metaValues,
-        shared,
-        cur_mu: osc_perGene_mu[item.index],
-        cur_std: osc_perGene_std[item.index],
-        meta_item: item,
-        VST_dat,
-    })
-    renderGPMeta(item)
-})
+// bus.subscribe_to("gene_label_select", "main", (item) => {
+//     if (!item) {
+//         plotGP.renderEmpty()
+//         renderGPMeta(null)
+//         return
+//     }
+//     const VST_dat = VST_lookup.get(item.GeneID)
+//     if (!VST_dat) return
+//     plotGP.updatePlot({
+//         metaValues,
+//         shared,
+//         cur_mu: osc_perGene_mu[item.index],
+//         cur_std: osc_perGene_std[item.index],
+//         meta_item: item,
+//         VST_dat,
+//     })
+//     renderGPMeta(item)
+// })
 
-bus.subscribe_to("resetSelection", "main", () => {
-    plotGP.renderEmpty()
-    renderGPMeta(null)
-})
+// bus.subscribe_to("resetSelection", "main", () => {
+//     plotGP.renderEmpty()
+//     renderGPMeta(null)
+// })
 
-bus.subscribe_to("updateParams", "main", (params) => {
-    if (!synthSlides_node) return
-    if (!synthSlideDestinationConnection) {
-        synthSlides_node.connect(globalAudio.input)
-        synthSlideDestinationConnection = true
-    }
-    synthSlides_node.port.postMessage({
-        type: "updateWave",
-        amplitude: params.amplitude,
-        shape: params.shape,
-        cycles: params.cycles,
-    })
-})
+// bus.subscribe_to("updateParams", "main", (params) => {
+//     if (!synthSlides_node) return
+//     if (!synthSlideDestinationConnection) {
+//         synthSlides_node.connect(globalAudio.input)
+//         synthSlideDestinationConnection = true
+//     }
+//     synthSlides_node.port.postMessage({
+//         type: "updateWave",
+//         amplitude: params.amplitude,
+//         shape: params.shape,
+//         cycles: params.cycles,
+//     })
+// })
 
-bus.subscribe_to("stopSlideSound", "main", () => {
-    if (synthSlides_node && synthSlideDestinationConnection) {
-        synthSlides_node.disconnect(globalAudio.input)
-        synthSlideDestinationConnection = false
-    }
-})
+// bus.subscribe_to("stopSlideSound", "main", () => {
+//     if (synthSlides_node && synthSlideDestinationConnection) {
+//         synthSlides_node.disconnect(globalAudio.input)
+//         synthSlideDestinationConnection = false
+//     }
+// })
 
 const umapGenePanels = {
     hover: {
@@ -765,10 +784,23 @@ function refreshUmapGenePanels() {
     updateUmapGenePanel(umapGenePanels.selected, umapSelectedGeneId)
 }
 
+function GPPointChanged(GeneID){
+    if (!GeneID) {
+        plotGP.renderEmpty()
+        return
+    }
+    gpSampler.updateMuStdSigma(GeneID) 
+    plotGP.updateGeneID(GeneID, gpSampler.mu, gpSampler.std)
+}
+
 bus.subscribe_to("point_select", "main", (GeneID) => {
     updateSynthGeneUI(GeneID)
     umapSelectedGeneId = GeneID || null
     updateUmapGenePanel(umapGenePanels.selected, umapSelectedGeneId)
+    // Sampling set up
+    if (displayMode === "Circadian") {
+        GPPointChanged(GeneID)
+    }
 })
 
 bus.subscribe_to("umap_color_mode", "main", () => {
@@ -784,9 +816,17 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
     if (mode === "All") {
         umapReadCounts.setData(allgenes_VST_arr, "All")
         umapFft.setData(allgenes_fft_arr, "All")
+        synth_node.port.postMessage({ type: "DisplayModeSet", mode: "All" })
     } else if (mode === "Circadian") {
         umapReadCounts.setData(circadian_VST_arr, "Circadian")
         umapFft.setData(circadian_fft_arr, "Circadian")
+        synth_node.port.postMessage({ type: "DisplayModeSet", mode: "Circadian" })
     }
     refreshUmapGenePanels()
+})
+
+bus.subscribe_to("notes_playing", "main", (msg) => {
+    isNotePlaying = msg
+    if (isNotePlaying) drawSamples()
+        else stopDrawingSamples()
 })

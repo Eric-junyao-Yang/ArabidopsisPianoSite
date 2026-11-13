@@ -2,7 +2,8 @@ import { PALETTE, THEME } from "/src/plotTheme.js"
 
 // Builds the piano and keeps it fitted to its container (rebuilds on resize; keys are
 // stateless, so a rebuild is cheap and safe).
-export function setupVirtualPiano(synth_node, div){
+export function setupVirtualPiano(synth_node, div, eventBus){
+    bus = eventBus
     let last = ""
     const build = () => drawPiano(synth_node, div)
     build()
@@ -239,14 +240,27 @@ export function assign_keyboard_keys(synth_node){
 const keys = ["a","w","s","e","d","f","t","g","y","h","u","j","k","o","l","p",";"] //' is skipped as it is reserved
 const middle_c = 261.6256
 const key_freq_map = new Map()
+let bus = null
+
+
 keys.forEach((v, i) => {
     key_freq_map.set(v, middle_c*Math.pow(Math.pow(2, 1/12), i))
 })
+const notes_playing = new Set()
+let isNotePlaying = false
+function notes_playing_message(){
+    bus.execute_event("notes_playing", isNotePlaying? true:false)
+}
 
 function updateDownKeys(key){
     const pianoKey = document.getElementById(`key-${key}`)
     if (pianoKey) {
         pianoKey.classList.add("pressed")
+        notes_playing.add(key)
+        if (!isNotePlaying){
+            isNotePlaying = true
+            notes_playing_message()
+        }
         return
     }
     if (key === "[") {
@@ -261,6 +275,11 @@ function updateUpKeys(key){
     const pianoKey = document.getElementById(`key-${key}`)
     if (pianoKey) {
         pianoKey.classList.remove("pressed")
+        notes_playing.delete(key)
+        if (notes_playing.size === 0) {
+            isNotePlaying = false
+            notes_playing_message()
+        }
         return
     }
     if (key === "[") {
