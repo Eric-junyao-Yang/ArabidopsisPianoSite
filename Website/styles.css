@@ -850,6 +850,7 @@ main {
 }
 
 #Synth_Waveform {
+    display: none; /* For prototyping! */
     width: 100%;
     height: auto;
     aspect-ratio: 5 / 1;

@@ -336,7 +336,7 @@
                                                     aria-label="Oscillating gene metric" aria-hidden="true" inert>
                                                     <label class="umap-color-menu__option">
                                                         <input type="radio" name="oscillating_type" value="qval">
-                                                        <span>q-val</span>
+                                                        <span>oscillating</span>
                                                     </label>
                                                     <label class="umap-color-menu__option">
                                                         <input type="radio" name="oscillating_type" value="circadian" checked>
@@ -389,18 +389,15 @@
                                     </div>
                                 </div>
                             </div>
-                            <div id="Synth_Searchbar" class="gene-search umap-color-toggles__search">
-                                <label class="gene-search-label" for="synth-search">Find gene</label>
-                                <div class="gene-search-field">
-                                    <input
-                                        id="synth-search"
-                                        type="search"
-                                        placeholder="e.g. AT5G61380"
-                                        autocomplete="off"
-                                        spellcheck="false"
-                                    >
-                                    <ul id="synth-results" class="gene-search-results" hidden></ul>
-                                </div>
+                            <div>
+                                <label>
+                                    <input type="radio" name="CircadianToggle" value="Circadian">
+                                    <span>Circadian Only</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="CircadianToggle" value="All" checked>
+                                    <span>All Genes</span>
+                                </label>
                             </div>
                         </div>
                         <div class="umap-gene-status" aria-live="polite">
@@ -461,6 +458,19 @@
                     You can modify the waveforms by clicking and dragging through the waveform, or load in experimental data by searching for a Gene ID or clicking one of the points from the UMAPs below."
                     >
                     <div id="Synth_interaction_bar">
+                        <div id="Synth_Searchbar" class="gene-search umap-color-toggles__search">
+                            <label class="gene-search-label" for="synth-search">Find gene</label>
+                            <div class="gene-search-field">
+                                <input
+                                    id="synth-search"
+                                    type="search"
+                                    placeholder="e.g. AT5G61380"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+                                <ul id="synth-results" class="gene-search-results" hidden></ul>
+                            </div>
+                        </div>                       
                         <div id="synth_waveform_name" class="synth-waveform-label" aria-live="polite">
                             <span class="synth-waveform-label__eyebrow">Waveform</span>
                             <span class="synth-waveform-label__text">Custom Waveform</span>
@@ -477,6 +487,7 @@
                     </div>
                     <div class="canvas-shell">
                         <canvas id="Synth_Waveform" width="1000" height="200"></canvas>
+                        <div id="GP_Waveform" width="1000" height="200"></div>
                     </div>
                 </div>
                 

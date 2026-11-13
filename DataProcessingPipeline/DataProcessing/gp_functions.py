@@ -7,21 +7,23 @@ import gpflow
 import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
+from astropy.timeseries import LombScargle
 
 tfd = tfp.distributions
 
 # Prior centre for length scale (dimensionless; acts on phase).
-# Empirically determined as ~0.4–0.5 from free fits on q≤0.05 genes. See Step4_GP_testing.ipynb for details.
+# Empirically determined as ~0.4–0.5 from free fits on q≤0.005 genes. See Step4_GP_testing.ipynb for details.
 DEFAULT_LENGTH_SCALE = 0.4
+PERIOD = 24
 
-
-def fit_gp_gpflow(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_SCALE):
+def fit_gp_gpflow(x, y, length_scale_initial=DEFAULT_LENGTH_SCALE):
     x = x.reshape(-1, 1).astype(np.float64)
     y = y.reshape(-1, 1).astype(np.float64)
     y_mean = float(np.mean(y))
     mean_fn = gpflow.mean_functions.Constant(c=y_mean)
     y_std = float(np.std(y)) + 1e-9
     var_y = float(np.var(y))
+    period = PERIOD
 
     kernel = gpflow.kernels.Periodic(
         gpflow.kernels.SquaredExponential(
@@ -30,7 +32,7 @@ def fit_gp_gpflow(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_
         ),
         period=period,
     )
-    gpflow.utilities.set_trainable(kernel.period, False)  # Trust Lomb–Scargle period
+    gpflow.utilities.set_trainable(kernel.period, False)  # Trust metacycle
 
     kernel.base_kernel.lengthscales.prior = tfd.LogNormal(
         loc=tf.cast(tf.math.log(length_scale_initial), tf.float64),
@@ -48,6 +50,7 @@ def fit_gp_gpflow(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_
     )
 
     # Noise prior centred on LS residual variance
+    best_power = LombScargle(x.ravel(), y.ravel()).power(1/period)
     resid_var = max((1.0 - float(best_power)) * var_y, 1e-3 * var_y)
 
     model.likelihood.variance.assign(resid_var)
@@ -64,18 +67,18 @@ def fit_gp_gpflow(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_
     return model
 
 
-def fit_gp_with_qc(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH_SCALE):
+def fit_gp_with_qc(x, y, length_scale_initial=DEFAULT_LENGTH_SCALE):
     """
     Fit GP with detected period from Lomb-Scargle. Also fits with length-scale prior centre
     doubled & halved to measure prior sensitivity of length scale and of the curve shape.
 
     Note: x/y are NOT phase-folded; the Periodic kernel handles periodicity.
     """
-    grid = np.linspace(0, period, 256, endpoint=False).reshape(-1, 1)
+    grid = np.linspace(0, PERIOD, 256, endpoint=False).reshape(-1, 1)
 
-    model = fit_gp_gpflow(x, y, period, best_power, length_scale_initial=length_scale_initial)
-    model_up = fit_gp_gpflow(x, y, period, best_power, length_scale_initial=length_scale_initial * 2)
-    model_down = fit_gp_gpflow(x, y, period, best_power, length_scale_initial=length_scale_initial / 2)
+    model = fit_gp_gpflow(x, y, length_scale_initial=length_scale_initial)
+    model_up = fit_gp_gpflow(x, y, length_scale_initial=length_scale_initial * 2)
+    model_down = fit_gp_gpflow(x, y, length_scale_initial=length_scale_initial / 2)
 
     ls_fit = float(model.kernel.base_kernel.lengthscales.numpy())
     ls_up = float(model_up.kernel.base_kernel.lengthscales.numpy())
@@ -89,7 +92,7 @@ def fit_gp_with_qc(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH
     )
 
     # DC-corrected oscillation amplitude of the periodic kernel
-    d = np.linspace(0, period, 1000, endpoint=False).reshape(-1, 1)
+    d = np.linspace(0, PERIOD, 1000, endpoint=False).reshape(-1, 1)
     k = model.kernel.K(d, np.zeros((1, 1))).numpy().ravel()
     amp_osc = amp - np.mean(k) #Remove the constant DC component
 
@@ -126,8 +129,8 @@ def fit_gp_with_qc(x, y, period, best_power, length_scale_initial=DEFAULT_LENGTH
     return model, qc
 
 
-def sample_waveforms_gpflow(model, period, n_samples=20, n_grid=256, seed=123):
-    grid = np.linspace(0, period, n_grid, endpoint=False).reshape(-1, 1)
+def sample_waveforms_gpflow(model, n_samples=20, n_grid=256, seed=123):
+    grid = np.linspace(0, PERIOD, n_grid, endpoint=False).reshape(-1, 1)
 
     mu, cov = model.predict_f(grid, full_cov=True)
     mu = mu.numpy().ravel()

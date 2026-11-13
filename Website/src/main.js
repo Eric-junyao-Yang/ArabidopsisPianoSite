@@ -1,9 +1,8 @@
 import { Synth_Waveform } from "/src/synth_waveform.js"
 import { plotUMAP } from "/src/plotUMAP.js"
-import { load_waveforms, bin_to_array } from "/src/binHelper.js"
+import { bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plotViolin.js"
-import { plotStepSeqMain } from "/src/step_sequencer.js"
-import { plotGPWave } from "/src/GPplot.js"
+import { plotGPClass } from "/src/GaussianProcess/plotGP.js"
 import { mountSynthScienceDiv } from "/src/synthScienceDiv.js"
 import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
@@ -17,9 +16,9 @@ import {
     setTrackWavetable,
     clearTrackWavetable,
 } from "/src/midiplayer.js"
-import { stepSeqTutorial } from "/src/StepSeqTutorial.js"
 import { midiTrackPlots } from "/src/midiTrackPlot.js"
 import { plotHarmonics, energyPctAtPeriod } from "/src/plotHarmonics.js"
+import { gpSamplerClass } from "/src/GaussianProcess/GPalgo.js"
 
 // ---- add a bus for communication between modules ----
 const bus = {
@@ -41,34 +40,57 @@ const globalAudio = initGlobalAudio({ workletUrl: "/src/audio_processor.js" })
 // UMAP bins are x/y only (same gene order as Normalized_counts / VST).
 const count_arr = await bin_to_array("/dat/Normalized_counts.bin", "/dat/bin_meta.json")
 const VST_arr = await bin_to_array("/dat/VST.bin", "/dat/bin_meta.json")
-const count_umap_arr = await bin_to_array("/dat/count_umap.bin", "/dat/bin_meta.json")
-const fft_umap_arr = await bin_to_array("/dat/fft_umap.bin", "/dat/bin_meta.json")
-const per_gene_meta = await d3.csv("/dat/per_gene_meta.csv", d3.autoType) // decide if convert to bin later
+const allgenes_VST_arr = await bin_to_array("/dat/allgenes_VST_umap.bin", "/dat/bin_meta.json")
+const allgenes_fft_arr = await bin_to_array("/dat/allgenes_fft_umap.bin", "/dat/bin_meta.json")
+const per_gene_meta = await bin_to_array("/dat/per_gene_meta.bin", "/dat/bin_meta.json")
+
+const gp_params_arr = await bin_to_array("/dat/gp_params.bin", "/dat/bin_meta.json")
+const circadian_VST_arr = await bin_to_array("/dat/circadian_VST_umap.bin", "/dat/bin_meta.json")
+const circadian_fft_arr = await bin_to_array("/dat/circadian_fft_umap.bin", "/dat/bin_meta.json")
+if (
+    count_arr.length !== allgenes_VST_arr.length ||
+    count_arr.length !== allgenes_fft_arr.length ||
+    count_arr.length !== VST_arr.length ||
+    count_arr.length !== per_gene_meta.length
+) {
+    throw new Error("Row-count mismatch among Normalized_counts / VST / VST umaps / per_gene_meta")
+}
 
 if (
-    count_arr.length !== count_umap_arr.length ||
-    count_arr.length !== fft_umap_arr.length ||
-    count_arr.length !== VST_arr.length
+    gp_params_arr.length !== circadian_VST_arr.length ||
+    gp_params_arr.length !== circadian_fft_arr.length
 ) {
-    throw new Error("Row-count mismatch among Normalized_counts / VST / UMAP bins")
+    throw new Error("Row-count mismatch among gp_params / circadian UMAPs")
 }
 
 for (let i = 0; i < count_arr.length; i++) {
     const GeneID = count_arr[i].GeneID
     const log_TPM = count_arr[i].log_TPM
-    count_umap_arr[i].GeneID = GeneID
-    count_umap_arr[i].id = GeneID
-    count_umap_arr[i].log_TPM = log_TPM
-    fft_umap_arr[i].GeneID = GeneID
-    fft_umap_arr[i].id = GeneID
-    fft_umap_arr[i].log_TPM = log_TPM
+    allgenes_VST_arr[i].GeneID = GeneID
+    allgenes_VST_arr[i].id = GeneID
+    allgenes_VST_arr[i].log_TPM = log_TPM
+    allgenes_fft_arr[i].GeneID = GeneID
+    allgenes_fft_arr[i].id = GeneID
+    allgenes_fft_arr[i].log_TPM = log_TPM
+    per_gene_meta[i].GeneID = GeneID
 }
-
 // const [metaValues, osc_perGene_meta, shared, osc_perGene_mu, osc_perGene_std] =
 //     await load_waveforms("/dat/waveforms.bin", "/dat/bin_meta.json")
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 const per_gene_meta_lookup = new Map(per_gene_meta.map((val) => [val.GeneID, val]))
+
+// Circadian UMAP bins share row order with gp_params (GeneIDs) but have no rownames / TPM.
+for (let i = 0; i < gp_params_arr.length; i++) {
+    const GeneID = gp_params_arr[i].GeneID
+    const log_TPM = normalized_counts_lookup.get(GeneID)?.log_TPM
+    circadian_VST_arr[i].GeneID = GeneID
+    circadian_VST_arr[i].id = GeneID
+    circadian_VST_arr[i].log_TPM = log_TPM
+    circadian_fft_arr[i].GeneID = GeneID
+    circadian_fft_arr[i].id = GeneID
+    circadian_fft_arr[i].log_TPM = log_TPM
+}
 // Amplitude spectrum per gene (period hours → FFT amplitude). Energy % is derived on read.
 const HARMONIC_PERIODS_H = [48, 24, 16, 12, 9.6, 8, 6.8, 6]
 const specs_lookup = new Map(per_gene_meta.map((v) => [
@@ -80,7 +102,7 @@ const specs_lookup = new Map(per_gene_meta.map((v) => [
 ]))
 // --------------------------------------- Synth waveform ---------------------------------------
 const synth_waveform_canvas = document.getElementById("Synth_Waveform")
-const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, count_arr)
+const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, VST_arr)
 
 /** Current gene driving the synth waveform (null = custom / preset). */
 let currentSynthGeneID = null
@@ -155,24 +177,6 @@ synthToMidiTrackSelect?.addEventListener("change", () => {
     syncSynthToMidiControls()
 })
 updateSynthGeneUI(null)
-
-// // Step sequencer transport
-// const playPauseButton = document.getElementById("StepSeqPlayPause")
-// let isPlay = false
-// playPauseButton.addEventListener("click", async () => {
-//     await initStepSeqAudio()
-//     isPlay = !isPlay
-//     playPauseButton.textContent = isPlay ? "Pause" : "Play"
-//     bus.execute_event("seqPlayPause", isPlay)
-// })
-// document.getElementById("StepSeqStop").addEventListener("click", () => {
-//     isPlay = false
-//     playPauseButton.textContent = "Play"
-//     bus.execute_event("seqStop", null)
-// })
-// document.getElementById("StepSeqReset").addEventListener("click", () => {
-//     bus.execute_event("resetSelection", null)
-// })
 
 // --------------------------------------- MidiPlayer ---------------------------------------
 // Side drawer: sticky within #SynthDiv, toggled via .is-open on #midi_container
@@ -345,6 +349,22 @@ document.getElementById("midi_play").addEventListener("click", async () => {
     }
 })
 
+// ------------------------------- Display Mode Switching -------------------------------
+let displayMode = "All"
+
+function updateDisplayMode() {
+    const el = document.querySelector('input[name="CircadianToggle"]:checked')
+    if (el?.value === "All" || el?.value === "Circadian") displayMode = el.value
+    return displayMode
+}
+document.querySelectorAll('input[name="CircadianToggle"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+        if (!radio.checked) return
+        updateDisplayMode()
+        bus.execute_event("DisplayModeSet", radio.value)
+    })
+})
+
 // --------------------------------------- Audio ---------------------------------------
 // All sources share globalAudio.ctx and feed globalAudio.input (master volume lives there).
 // Each init* is idempotent and awaits the shared worklet module; autoplay unlock is handled
@@ -375,31 +395,6 @@ const synthReady = (async () => {
 })().catch((err) => {
     console.error("Synth audio setup failed", err)
 })
-
-// // Step Seq
-// const activeVoices = new Map()
-// let stepSeqAudioContext = null
-// let masterCompressor = null
-// let stepSeqReady = null
-// async function initStepSeqAudio() {
-//     if (!stepSeqReady) {
-//         stepSeqReady = (async () => {
-//             stepSeqAudioContext = await sharedContext()
-//             masterCompressor = stepSeqAudioContext.createDynamicsCompressor()
-//             masterCompressor.threshold.value = -6
-//             masterCompressor.knee.value = 3
-//             masterCompressor.ratio.value = 4
-//             masterCompressor.attack.value = 0.003
-//             masterCompressor.release.value = 0.15
-//             masterCompressor.connect(globalAudio.input)
-//         })().catch((err) => {
-//             stepSeqReady = null
-//             throw err
-//         })
-//     }
-//     await stepSeqReady
-//     await globalAudio.resume()
-// }
 
 // Synth science fold demos (same worklet as the old slides)
 let synthSlidesAudioContext = null
@@ -459,131 +454,23 @@ async function initMidiAudio() {
     await globalAudio.resume()
 }
 
-// // --------------------------------------- Spawn voices ---------------------------------------
-// function createVoice(metaValues, sharedBuffer) {
-//     if (!stepSeqAudioContext || !masterCompressor) return null
-//     const node = new AudioWorkletNode(stepSeqAudioContext, "stepseq-audio-processor", {
-//         processorOptions: { metaValues, shared: sharedBuffer },
-//     })
-//     const gain = stepSeqAudioContext.createGain()
-//     gain.gain.value = 0
-//     node.connect(gain)
-//     gain.connect(masterCompressor)
-//     activeVoices.set(node, gain)
-//     rescaleGains()
-
-//     node.port.onmessage = (e) => {
-//         if (e.data.type === "ended") {
-//             node.disconnect()
-//             gain.disconnect()
-//             activeVoices.delete(node)
-//             rescaleGains()
-//         }
-//     }
-//     return node
-// }
-
-// // --------------------------------------- StepSquencer ---------------------------------------
-// // min-max scale qval. Map qval to sweep_frequency.
-// const qvals = osc_perGene_meta.map((d) => d.qval)
-// const qval_min = Math.min(...qvals)
-// const qval_max = Math.max(...qvals)
-// const qval_span = qval_max - qval_min || 1
-// const sweep_max = 5
-// const sweep_min = 1
-// for (let i = 0; i < osc_perGene_meta.length; i++) {
-//     // Higher qval (less confident period) → faster morph across posterior samples
-//     osc_perGene_meta[i].sweep_frequency =
-//         sweep_min + ((qvals[i] - qval_min) * (sweep_max - sweep_min)) / qval_span
-//     osc_perGene_meta[i].index = i
-// }
-
-// const osc_perGene_meta_lookup = new Map(osc_perGene_meta.map((v) => [v.GeneID, v]))
-
-// export function renderSelectionPanel(selected_genes) {
-//     const panel = document.getElementById("StepSeqGPSelectedGenes")
-//     panel.innerHTML = ""
-
-//     for (const item of selected_genes) {
-//         const GeneID = item.GeneID
-//         const tag = document.createElement("div")
-//         tag.className = "gene-tag"
-
-//         const label = document.createElement("span")
-//         label.className = "gene-tag-label"
-//         label.textContent = GeneID
-//         label.addEventListener("click", () => {
-//             bus.execute_event("gene_label_select", item)
-//         })
-
-//         const remove = document.createElement("button")
-//         remove.className = "gene-tag-remove"
-//         remove.textContent = "×"
-//         remove.addEventListener("click", (event) => {
-//             bus.execute_event("selection_del", item)
-//             event.stopPropagation()
-//         })
-
-//         tag.appendChild(label)
-//         tag.appendChild(remove)
-//         panel.appendChild(tag)
-//     }
-// }
-
-// function fmtMetaNum(v, digits = 2) {
-//     if (v == null || Number.isNaN(Number(v))) return "—"
-//     return Number(v).toFixed(digits)
-// }
-
-// function renderGPMeta(item) {
-//     const panel = document.getElementById("StepSeqGPMeta")
-//     const setText = (id, text) => {
-//         const el = document.getElementById(id)
-//         if (el) el.textContent = text
-//     }
-
-//     if (!item) {
-//         panel?.classList.add("is-empty")
-//         setText("StepSeqGPMeta-gene", "—")
-//         setText("StepSeqGPMeta-period-low", "—")
-//         setText("StepSeqGPMeta-period", "—")
-//         setText("StepSeqGPMeta-period-high", "—")
-//         setText("StepSeqGPMeta-phase", "—")
-//         setText("StepSeqGPMeta-qval", "—")
-//         setText("StepSeqGPMeta-relstd", "—")
-//         const ci = document.getElementById("StepSeqGPMeta-period-ci")
-//         if (ci) ci.setAttribute("aria-label", "Period 95% confidence interval unavailable")
-//         return
-//     }
-
-//     panel?.classList.remove("is-empty")
-//     const low = fmtMetaNum(item.period_low95)
-//     const period = fmtMetaNum(item.period)
-//     const high = fmtMetaNum(item.period_high95)
-//     setText("StepSeqGPMeta-gene", item.GeneID)
-//     setText("StepSeqGPMeta-period-low", low)
-//     setText("StepSeqGPMeta-period", period)
-//     setText("StepSeqGPMeta-period-high", high)
-//     setText("StepSeqGPMeta-logPeriodSD", fmtMetaNum(item.log_period_sd))
-//     setText("StepSeqGPMeta-phase", fmtMetaNum(item.phase))
-//     setText("StepSeqGPMeta-qval", fmtMetaNum(item.qval, 3))
-//     setText("StepSeqGPMeta-relstd", fmtMetaNum(item.relative_std, 3))
-//     const ci = document.getElementById("StepSeqGPMeta-period-ci")
-//     if (ci) {
-//         ci.setAttribute(
-//             "aria-label",
-//             `Period ${period} hours, 95% CI ${low} to ${high}`
-//         )
-//     }
-// }
-
-// renderGPMeta(null)
-
 // --------------------------------------- Plots ---------------------------------------
-plotUMAP(600, 500, count_umap_arr, per_gene_meta, specs_lookup, "read_counts", "UMAP of read counts over 48hrs", false, bus)
-plotUMAP(600, 500, fft_umap_arr, per_gene_meta, specs_lookup, "fft", "UMAP of FFT of waveforms", false, bus)
-console.log(specs_lookup)
+const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, per_gene_meta, specs_lookup, "read_counts", "UMAP of read counts over 48hrs", false, bus)
+const umapFft = plotUMAP(600, 500, allgenes_fft_arr, per_gene_meta, specs_lookup, "fft", "UMAP of FFT of waveforms", false, bus)
 plotHarmonics(specs_lookup, bus)
+
+// GP sampling
+const gpSampler = new gpSamplerClass(gp_params_arr, VST_lookup)
+//prototyping
+const GeneID = "AT5G61380"
+gpSampler.updateMuStdSigma(GeneID) 
+const mu = gpSampler.mu
+const std = gpSampler.std
+const draw1 = gpSampler.drawPosterior()
+const plotGP = new plotGPClass()
+plotGP.updateGeneID(GeneID, mu, std)
+plotGP.drawSample(draw1)
+
 
 // UMAP color-mode toggles (TPM filter stays independent)
 // Oscillating genes / oscillation energy each expand their own options to the right.
@@ -671,48 +558,6 @@ plotViolin(
     d3.select("#filter_slider"), "log10(mean TPM)", bus, "synth_TPM_filter"
 )
 
-// // Main plot first (violin column width is reserved in CSS). Then size violins to the
-// // combined height of #StepSeqMain + #StepSeqControls so they share one visual column.
-// plotStepSeqMain(1800, 1200, "#StepSeqMain", osc_perGene_meta, osc_perGene_meta_lookup, metaValues, bus)
-
-// const stepSeqContainer = document.getElementById("StepSequencerContainer")
-// const stepSeqMainEl = document.getElementById("StepSeqMain")
-// const stepSeqControlsEl = document.getElementById("StepSeqControls")
-// const stepSeqViolinEl = document.getElementById("StepSeqViolin")
-// const stepSeqViolinStyles = getComputedStyle(stepSeqViolinEl)
-// const stepSeqRowGap = parseFloat(getComputedStyle(stepSeqContainer).rowGap) || 0
-// const violinChromeY =
-//     (parseFloat(stepSeqViolinStyles.paddingTop) || 0) +
-//     (parseFloat(stepSeqViolinStyles.paddingBottom) || 0) +
-//     (parseFloat(stepSeqViolinStyles.borderTopWidth) || 0) +
-//     (parseFloat(stepSeqViolinStyles.borderBottomWidth) || 0)
-// const violinHeight = Math.max(
-//     320,
-//     Math.round(
-//         stepSeqMainEl.offsetHeight + stepSeqControlsEl.offsetHeight + stepSeqRowGap - violinChromeY
-//     )
-// )
-
-// const violinOpts = { top: 16, right: 8, bottom: 16, left: 50 }
-// console.log(osc_perGene_meta)
-// plotViolin(
-//     100, violinHeight, violinOpts,
-//     osc_perGene_meta.map((v) => v.period_high95 - v.period_low95),
-//     d3.select("#violin-logPeriodSD"), "95% CI range (hrs)", bus, "StepSeqPeriodSDUpdate"
-// )
-// plotViolin(
-//     100, violinHeight, violinOpts,
-//     osc_perGene_meta.map((v) => v.qval),
-//     d3.select("#violin-qVal"), "q-value", bus, "StepSeqqValUpdate", 0.05, 0.00
-// )
-// plotViolin(
-//     100, violinHeight, violinOpts,
-//     osc_perGene_meta.map((v) => v.relative_std),
-//     d3.select("#violin-Std"), "mean(posterior std) / std(posterior mean)", bus, "StepSeqStdUpdate"
-// )
-
-// const plotGP = plotGPWave(600, 400, "#StepSeqGPPlot")
-
 setupHelpPopUps(document, window)
 
 // --------------------------------------- Synth science fold ---------------------------------------
@@ -737,15 +582,6 @@ if (TOC1 && PP2AA3) {
 }
 
 // --------------------------------------- Search Bars ---------------------------------------
-// searchbar(
-//     document.querySelector("#StepSeqGPSearch"),
-//     document.querySelector("#StepSeqGPResults"),
-//     osc_perGene_meta,
-//     (item) => {
-//         bus.execute_event("selection_add", item)
-//         bus.execute_event("gene_label_select", item)
-//     }
-// )
 searchbar(
     document.querySelector("#synth-search"),
     document.querySelector("#synth-results"),
@@ -770,18 +606,6 @@ for (const track of MIDI_TRACKS) {
         }
     )
 }
-
-// // --------------------------------------- Tutorial ---------------------------------------
-// const tutorial = new stepSeqTutorial(bus, osc_perGene_meta_lookup)
-// document.getElementById("StepSeqTooltipPrev").addEventListener("click", () => {
-//     tutorial.prevStep()
-// })
-// document.getElementById("StepSeqTooltipNext").addEventListener("click", () => {
-//     tutorial.nextStep()
-// })
-// document.getElementById("StepSeqTooltipClose").addEventListener("click", () => {
-//     tutorial.close()
-// })
 
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {
@@ -896,11 +720,21 @@ function formatUmapNumber(value, digits = 2) {
 function umapMetricForMode(mode, geneId) {
     if (!OSCILLATING_MODES.has(mode) && mode !== "phase" && mode !== "energyPct") return null
     const meta = geneId ? per_gene_meta_lookup.get(geneId) : null
-    if (OSCILLATING_MODES.has(mode)) {
-        return { label: "q-value", value: formatUmapNumber(meta?.LS_qval, 3) }
+    const useMetaCycle = displayMode === "Circadian"
+    // Categorical circadian coloring is always MetaCycle; continuous qval follows display mode.
+    if (mode === "circadian") {
+        return { label: "MetaCycle q", value: formatUmapNumber(meta?.metacycle_qval, 3) }
+    }
+    if (mode === "qval") {
+        const q = useMetaCycle ? meta?.metacycle_qval : meta?.LS_qval
+        return {
+            label: useMetaCycle ? "MetaCycle q" : "LS q",
+            value: formatUmapNumber(q, 3),
+        }
     }
     if (mode === "phase") {
-        const phase = formatUmapNumber(meta?.phase, 2)
+        const raw = useMetaCycle ? meta?.metacycle_phase : meta?.LS_phase
+        const phase = formatUmapNumber(raw, 2)
         return { label: "peak-time", value: phase === "—" ? phase : `${phase} h` }
     }
     const energy = geneId ? energyPctAtPeriod(geneId, specs_lookup, oscillation_energy) : null
@@ -946,4 +780,13 @@ bus.subscribe_to("point_hover", "main", (GeneID) => {
     updateUmapGenePanel(umapGenePanels.hover, umapHoverGeneId)
 })
 
-console.log(per_gene_meta)
+bus.subscribe_to("DisplayModeSet", "main", (mode) => {
+    if (mode === "All") {
+        umapReadCounts.setData(allgenes_VST_arr, "All")
+        umapFft.setData(allgenes_fft_arr, "All")
+    } else if (mode === "Circadian") {
+        umapReadCounts.setData(circadian_VST_arr, "Circadian")
+        umapFft.setData(circadian_fft_arr, "Circadian")
+    }
+    refreshUmapGenePanels()
+})
