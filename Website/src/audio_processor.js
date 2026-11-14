@@ -15,7 +15,16 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
 
         // Circadian vs All-genes
         this.displayMode = "All"
-        this.drawnSamples = []
+        // GP posterior draws, owned here: [{ id, table }]. Sound morphs gpQueue[0] -> gpQueue[1].
+        this.gpQueue = []
+        this.GP_QUEUE_TARGET = 3
+        this.gpPending = 0 // needDraw requests sent but not yet answered
+        this.gpTargetId = null
+        // One sweep clock shared by all voices, so they all crossfade between the same two draws
+        this.gpSweep = 0
+        this.gpA = []
+        this.gpB = []
+        this.gpW = new Float32Array(0)
 
         this.port.onmessage = (event) => {
             if (event.data.type === "updatePoints") {
@@ -29,8 +38,7 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                     this.voices.set(event.data.freq, {
                         phase: 0,
                         lvl: 0,
-                        state: "attack",
-                        sweep: 0
+                        state: "attack"
                     })
                 }
             }
@@ -49,9 +57,21 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
 
             if (event.data.type === "DisplayModeSet") {
                 this.displayMode = event.data.mode
+                if (this.displayMode === "Circadian") this.requestDraws()
             }
-            if (event.data.type === "drawnSamples") {
-                this.drawnSamples = event.data.samples.map((v) => toUnipolarWavetable(v, TABLE_SIZE))
+            if (event.data.type === "newDraw") {
+                this.gpPending = Math.max(0, this.gpPending - 1) // recieved draw, reduce pending
+                this.gpQueue.push({ id: event.data.id, table: toUnipolarWavetable(event.data.draw, TABLE_SIZE) })
+                this.notifyTarget()
+            }
+            if (event.data.type === "clearDraws") {
+                // New gene. While notes sound, keep the two draws being crossfaded so the
+                // sound morphs into the new gene instead of jumping.
+                this.gpQueue = []
+                if (this.gpQueue.length === 0) this.gpSweep = 0
+                this.gpPending = 0
+                this.gpTargetId = null
+                this.requestDraws()
             }
         }
     }
@@ -95,11 +115,56 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
         }
     }
 
+    requestDraws(){
+        while (this.gpQueue.length + this.gpPending < this.GP_QUEUE_TARGET) {
+            this.gpPending++
+            this.port.postMessage({ type: "needDraw" })
+        }
+    }
+
+    // Tell main which draw the sound is heading to, so the plot follows the audio
+    notifyTarget(){
+        const q = this.gpQueue
+        const id = q.length >= 2 ? q[1].id : q.length ? q[0].id : null
+        if (id !== null && id !== this.gpTargetId) {
+            this.gpTargetId = id
+            this.port.postMessage({ type: "gpTarget", id })
+        }
+    }
+
+    // Run the shared sweep clock for one block: per frame, which two tables to blend and by how much.
+    // With a single draw left, hold on it (weight 0) rather than going silent until the next arrives.
+    advanceGPSweep(n){
+        if (this.gpW.length !== n) {
+            this.gpA = new Array(n)
+            this.gpB = new Array(n)
+            this.gpW = new Float32Array(n)
+        }
+        const q = this.gpQueue
+        for (let i = 0; i < n; i++) {
+            this.gpA[i] = q[0].table
+            if (q.length < 2) {
+                this.gpB[i] = q[0].table
+                this.gpW[i] = 0
+                continue
+            }
+            this.gpB[i] = q[1].table
+            this.gpW[i] = this.gpSweep
+            this.gpSweep += this.sweepInc
+            if (this.gpSweep >= 1) {
+                // note that q shift happens within the i loop, so gpA and B contains various pairings from q
+                q.shift()
+                this.gpSweep = 0
+                this.requestDraws()
+                this.notifyTarget()
+            }
+        }
+    }
+
     generateGPSound(freq, channels, gain, data){
         const internal_freq = freq * Math.pow(2, this.octave)
         const outputLength = channels[0].length
         const increment = internal_freq * TABLE_SIZE * this.invSampleRate
-        const N_GRID = this.drawnSamples[0].length
         for (let i=0; i < outputLength; i ++){
             if (data.state === "attack"){
                 data.lvl += this.attackInc
@@ -117,26 +182,20 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
                 }
             }
 
-            // Morph across posterior samples over the note duration
-            const sampleV0 = gatherCatmullrom(this.drawnSamples[0], data.phase, N_GRID)
-            const sampleV1 = gatherCatmullrom(this.drawnSamples[1], data.phase, N_GRID)
-            let sample = sampleV0 * (1 - data.sweep) + sampleV1 * data.sweep
+            // Morph across posterior draws, weights from the shared sweep clock
+            const w = this.gpW[i]
+            const sampleV0 = gatherCatmullrom(this.gpA[i], data.phase, TABLE_SIZE)
+            const sampleV1 = gatherCatmullrom(this.gpB[i], data.phase, TABLE_SIZE)
+            const sample = (sampleV0 * (1 - w) + sampleV1 * w) * 2 - 1 // unipolar table -> bipolar
 
             const amp = sample * gain * data.lvl
             for (let c = 0; c < channels.length; c++) {
                 channels[c][i] += amp
             }
             data.phase += increment
-            data.sweep += this.sweepInc
 
             if (data.phase >= TABLE_SIZE){
                 data.phase %= TABLE_SIZE
-            }
-
-            if (data.sweep >= 1) {
-                this.drawnSamples.shift()
-                this.port.postMessage({ type: "drawnSamples", samples: this.drawnSamples })
-                data.sweep = 0
             }
         }
     }
@@ -155,12 +214,17 @@ class SynthAudioProcessor extends AudioWorkletProcessor {
 
         const gain = 0.2
         const finished = []
+        const gpReady = this.displayMode === "Circadian" && this.gpQueue.length > 0
+        if (gpReady) this.advanceGPSweep(channels[0].length)
 
         for (const [freq, data] of this.voices){
             if (this.displayMode === "All") {
                 this.generateSound(freq, channels, gain, data)
-            } else if (this.displayMode === "Circadian" && this.drawnSamples.length > 2) {
+            } else if (gpReady) {
                 this.generateGPSound(freq, channels, gain, data)
+            } else if (data.state === "release") {
+                // No draw has arrived yet, so this voice never sounded: drop it instead of leaking it
+                data.state = "finished"
             }
             
             if (data.state === "finished") finished.push(freq)

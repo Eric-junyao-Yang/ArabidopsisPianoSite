@@ -2,7 +2,7 @@ import { Synth_Waveform } from "/src/synth_waveform.js"
 import { plotUMAP } from "/src/plotUMAP.js"
 import { bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plotViolin.js"
-import { plotGPClass } from "/src/GaussianProcess/plotGP.js"
+import { plotWaveformsClass } from "/src/GaussianProcess/plotWaveforms.js"
 import { mountSynthScienceDiv } from "/src/synthScienceDiv.js"
 import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
@@ -101,8 +101,8 @@ const specs_lookup = new Map(per_gene_meta.map((v) => [
     })),
 ]))
 // --------------------------------------- Synth waveform ---------------------------------------
-const synth_waveform_canvas = document.getElementById("Synth_Waveform")
-const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, VST_arr)
+// const synth_waveform_canvas = document.getElementById("Synth_Waveform")
+// const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, VST_arr)
 
 /** Current gene driving the synth waveform (null = custom / preset). */
 let currentSynthGeneID = null
@@ -166,11 +166,11 @@ function applySynthPreset(fn) {
     bus.execute_event("point_select", null)
 }
 
-document.getElementById("reset").addEventListener("click", () => applySynthPreset(() => synth_waveform.reset()))
-document.getElementById("sine").addEventListener("click", () => applySynthPreset(() => synth_waveform.sine()))
-document.getElementById("square").addEventListener("click", () => applySynthPreset(() => synth_waveform.square()))
-document.getElementById("saw").addEventListener("click", () => applySynthPreset(() => synth_waveform.saw()))
-document.getElementById("triangle").addEventListener("click", () => applySynthPreset(() => synth_waveform.triangle()))
+// document.getElementById("reset").addEventListener("click", () => applySynthPreset(() => synth_waveform.reset()))
+// document.getElementById("sine").addEventListener("click", () => applySynthPreset(() => synth_waveform.sine()))
+// document.getElementById("square").addEventListener("click", () => applySynthPreset(() => synth_waveform.square()))
+// document.getElementById("saw").addEventListener("click", () => applySynthPreset(() => synth_waveform.saw()))
+// document.getElementById("triangle").addEventListener("click", () => applySynthPreset(() => synth_waveform.triangle()))
 
 synthToMidiTrackSelect?.addEventListener("change", () => {
     setSynthToMidiStatus(null)
@@ -389,11 +389,15 @@ const synthReady = (async () => {
     compressor.attack.value = 0.003
     compressor.release.value = 0.05
     synth_node.connect(compressor).connect(globalAudio.input)
-    synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
-    // after morph time is hit, first entry dropped in audioworklet, update main's drawnSamples:
+    // synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
+    // The worklet owns the GP draw queue: it asks for draws as it uses them up,
+    // and says which draw it is morphing towards so the plot follows the sound
     synth_node.port.onmessage = (event) => {
-        if (event.data.type === "drawnSamples") {
-            drawnSamples = event.data.samples
+        if (event.data.type === "needDraw") {
+            sendGPDraw()
+        }
+        if (event.data.type === "gpTarget") {
+            plotGPDraw(event.data.id)
         }
     }
     assign_keyboard_keys(synth_node)
@@ -464,29 +468,33 @@ async function initMidiAudio() {
 const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, per_gene_meta, specs_lookup, "read_counts", "UMAP of read counts over 48hrs", false, bus)
 const umapFft = plotUMAP(600, 500, allgenes_fft_arr, per_gene_meta, specs_lookup, "fft", "UMAP of FFT of waveforms", false, bus)
 plotHarmonics(specs_lookup, bus)
+const plotWaveforms = new plotWaveformsClass()
+// Allgenes plot
+plotWaveforms.renderEmpty_All()
+
+
 
 // GP sampling
 const gpSampler = new gpSamplerClass(gp_params_arr, VST_lookup)
-const plotGP = new plotGPClass()
+let gpGeneId = null // gene gpSampler's posterior is set to; null = no draws to give
+let nextDrawId = 0
+const sentDraws = new Map() // id -> draw, kept until the worklet has morphed past it
 
-//prototyping
-let isNotePlaying = false
-let playNoteIntervalID = null
-let drawnSamples = []
-
-function drawSamples(){
-    playNoteIntervalID = setInterval(() => {
-        if (drawnSamples.length < 3) {
-            const draw = gpSampler.drawPosterior()
-            plotGP.drawSample(draw)
-            drawnSamples.push(draw)
-            synth_node.port.postMessage({ type: "drawnSamples", samples: drawnSamples })
-        }
-    }, drawnSamples.length < 2 ? 0 : 300)
+function sendGPDraw(){
+    if (!gpGeneId) return
+    const id = nextDrawId++
+    const draw = gpSampler.drawPosterior()
+    sentDraws.set(id, draw)
+    synth_node.port.postMessage({ type: "newDraw", id, draw })
 }
 
-function stopDrawingSamples(){
-    clearInterval(playNoteIntervalID)
+function plotGPDraw(id){
+    const draw = sentDraws.get(id)
+    if (!draw) return // draw from a previous gene
+    plotWaveforms.drawSample(draw)
+    for (const key of sentDraws.keys()) {
+        if (key < id - 1) sentDraws.delete(key) // remove prev draws
+    }
 }
 
 
@@ -667,13 +675,13 @@ bus.subscribe_to("synth_waveform_changed", "main", (points) => {
 
 // bus.subscribe_to("gene_label_select", "main", (item) => {
 //     if (!item) {
-//         plotGP.renderEmpty()
+//         plotWaveforms.renderEmpty()
 //         renderGPMeta(null)
 //         return
 //     }
 //     const VST_dat = VST_lookup.get(item.GeneID)
 //     if (!VST_dat) return
-//     plotGP.updatePlot({
+//     plotWaveforms.updatePlot({
 //         metaValues,
 //         shared,
 //         cur_mu: osc_perGene_mu[item.index],
@@ -685,7 +693,7 @@ bus.subscribe_to("synth_waveform_changed", "main", (points) => {
 // })
 
 // bus.subscribe_to("resetSelection", "main", () => {
-//     plotGP.renderEmpty()
+//     plotWaveforms.renderEmpty()
 //     renderGPMeta(null)
 // })
 
@@ -785,12 +793,26 @@ function refreshUmapGenePanels() {
 }
 
 function GPPointChanged(GeneID){
+    gpGeneId = null
+    sentDraws.clear()
     if (!GeneID) {
-        plotGP.renderEmpty()
+        plotWaveforms.renderEmpty_GP()
+        synth_node?.port.postMessage({ type: "clearDraws" })
         return
     }
-    gpSampler.updateMuStdSigma(GeneID) 
-    plotGP.updateGeneID(GeneID, gpSampler.mu, gpSampler.std)
+    gpSampler.updateMuStdSigma(GeneID)
+    plotWaveforms.updateGeneID(GeneID, gpSampler.mu, gpSampler.std)
+    gpGeneId = GeneID
+    // Worklet answers with needDraw requests for the new gene
+    synth_node?.port.postMessage({ type: "clearDraws" })
+}
+
+function CatmullPointChanged(GeneID){
+    if (!GeneID){
+        plotWaveforms.renderEmpty_All()
+        return
+    }
+    plotWaveforms.updateGeneID(GeneID, VST_lookup.get(GeneID), null, null)
 }
 
 bus.subscribe_to("point_select", "main", (GeneID) => {
@@ -800,6 +822,8 @@ bus.subscribe_to("point_select", "main", (GeneID) => {
     // Sampling set up
     if (displayMode === "Circadian") {
         GPPointChanged(GeneID)
+    } else if (displayMode === "All") {
+        CatmullPointChanged(GeneID)
     }
 })
 
@@ -823,10 +847,4 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
         synth_node.port.postMessage({ type: "DisplayModeSet", mode: "Circadian" })
     }
     refreshUmapGenePanels()
-})
-
-bus.subscribe_to("notes_playing", "main", (msg) => {
-    isNotePlaying = msg
-    if (isNotePlaying) drawSamples()
-        else stopDrawingSamples()
 })

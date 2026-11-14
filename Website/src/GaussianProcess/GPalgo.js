@@ -1,9 +1,11 @@
+const EXP_HOURS = Array.from({ length: 16 }, (_, i) => 2 + 3 * i)
+
 export class gpSamplerClass{
     constructor(gp_params_arr, VST_lookup){
         this.gp_params_lookup = new Map(gp_params_arr.map((v) => [v.GeneID, v]))
         this.VST_lookup = VST_lookup
         this.PERIOD = 24
-        this.EXP_HOURS = Array.from({ length: 16 }, (_, i) => 2 + 3 * i)
+        this.EXP_HOURS = EXP_HOURS
         this.grid = this.predictionGrid(256, this.PERIOD)
         this.mu = 0
         this.std = 0
@@ -178,7 +180,6 @@ export class gpSamplerClass{
     }
 
     updateMuStdSigma(GeneID){
-        const row = this.VST_lookup.get(GeneID)
         const param = this.gp_params_lookup.get(GeneID)
         const lengthscale = param.lengthscale
         const mean = param.mean
@@ -186,10 +187,7 @@ export class gpSamplerClass{
         const noise = param.noise
 
         // VST rows are objects {GeneID, LD_ZT02, ...}; take numeric cols in EXP_HOURS order.
-        const y = Float64Array.from(this.EXP_HOURS, (_, i) => {
-            const zt = String(this.EXP_HOURS[i]).padStart(2, "0")
-            return row[`LD_ZT${zt}`]
-        })
+        const y = VSTlookup_to_arr(this.VST_lookup.get(GeneID))
         
         const beta = Float64Array.from(y, (v) => v - mean)
         const Kyy = this.noisyCovariance(this.EXP_HOURS, variance, lengthscale, noise, this.PERIOD)
@@ -205,4 +203,11 @@ export class gpSamplerClass{
         const z = this.standardNormals(this.grid.length)
         return this.drawCurve(this.mu, this.Sigma, z)
     }
+}
+
+export function VSTlookup_to_arr(VST_result){
+    return Float64Array.from(EXP_HOURS, (_, i) => {
+        const zt = String(EXP_HOURS[i]).padStart(2, "0")
+        return VST_result[`LD_ZT${zt}`]
+    })
 }

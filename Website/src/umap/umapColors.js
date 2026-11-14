@@ -103,18 +103,31 @@ export function continuousColorScale(mode, umap_arr, metaByGene, specsLookup, di
         }
     }
     if (mode === "energyPct") {
-        // Fixed 0–100%: energy share is already a percentile of the spectrum.
+        // All genes: fixed 0–100%, energy share is already a percentile of the spectrum.
+        // Circadian: shares bunch up (e.g. 24h mostly high), so stretch the colors over the data range.
         const periodHours = selectedEnergyPeriodHours()
+        let lo = 0
+        let hi = 100
+        if (displayMode === "Circadian") {
+            const vals = []
+            for (const d of umap_arr) {
+                const energyPct = energyPctAtPeriod(d.GeneID, specsLookup, periodHours)
+                if (energyPct != null && Number.isFinite(energyPct)) vals.push(energyPct)
+            }
+            [lo, hi] = extentOrFallback(vals, 0, 100)
+            lo = 0 // still set floor
+            
+        }
         return {
             interpolator: ENERGY_INTERPOLATOR,
-            leftLabel: "0%",
-            rightLabel: "100%",
+            leftLabel: `${formatLegendNum(lo, 1)}%`,
+            rightLabel: `${formatLegendNum(hi, 1)}%`,
             title: `% ${periodHours}h energy`,
             gradIdSuffix: "energy",
             color01(_meta, geneId) {
                 const energyPct = energyPctAtPeriod(geneId, specsLookup, periodHours)
                 if (energyPct == null || !Number.isFinite(energyPct)) return null
-                return normalizeToDomain(energyPct, 0, 100)
+                return normalizeToDomain(energyPct, lo, hi)
             },
         }
     }
