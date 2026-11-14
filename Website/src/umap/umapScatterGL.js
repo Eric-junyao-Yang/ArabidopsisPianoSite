@@ -1,6 +1,6 @@
 import { THEME, hexToRgb01 } from "/src/plotTheme.js"
 
-// Point RGB is set by color mode; selected/inactive = TPM filter (orthogonal).
+// Point RGB is set by color mode; selected/inactive = violin value filter (orthogonal).
 const INACTIVE_RGB = hexToRgb01(THEME.pointInactive).map((v) => v.toFixed(4)).join(", ")
 const OUTLINE_RGB = hexToRgb01(THEME.ink).map((v) => v.toFixed(4)).join(", ")
 export const ACTIVE_ALPHA = 0.55
@@ -10,6 +10,14 @@ export const POINT_RADIUS_PX = 4
 export const POINT_OUTLINE_PX = 1
 // Fill disk as a fraction of the drawn quad (outline sits in the outer ring).
 const FILL_RADIUS_FRAC = POINT_RADIUS_PX / (POINT_RADIUS_PX + POINT_OUTLINE_PX)
+
+/**
+ * Violin scrubber filter on d.filterVal (whatever metric the violin shows, inclusive bounds).
+ * Genes without a value (NaN) always pass: they can't be filtered on this metric.
+ */
+export function passesFilter(d, low_val, high_val) {
+    return !(d.filterVal < low_val || d.filterVal > high_val)
+}
 
 export class ScatterGL {
     constructor(canvas, data, colorRgbArr, xScale, yScale, innerWidth, innerHeight, dpr) {
@@ -290,10 +298,7 @@ export class ScatterGL {
     updateSelected(low_val, high_val){
         const data = this.data
         for (let i=0; i < data.length; i++){
-            this.selectedArr[i] = (
-                data[i].log_TPM >= low_val &&
-                data[i].log_TPM <= high_val
-            ) ? 1.0 : 0.0
+            this.selectedArr[i] = passesFilter(data[i], low_val, high_val) ? 1.0 : 0.0
         }
         const gl = this.gl
         gl.bindBuffer(gl.ARRAY_BUFFER, this.selectedBuffer)

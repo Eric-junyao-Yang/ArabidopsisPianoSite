@@ -1,5 +1,6 @@
 import { Synth_Waveform } from "/src/synth_waveform.js"
-import { plotUMAP } from "/src/plotUMAP.js"
+import { plotUMAP, selectedEnergyPeriodHours } from "/src/plotUMAP.js"
+import { phaseField, qvalField } from "/src/umap/umapColors.js"
 import { bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plotViolin.js"
 import { plotWaveformsClass } from "/src/GaussianProcess/plotWaveforms.js"
@@ -18,7 +19,7 @@ import {
 } from "/src/midiplayer.js"
 import { midiTrackPlots } from "/src/midiTrackPlot.js"
 import { plotHarmonics, energyPctAtPeriod } from "/src/plotHarmonics.js"
-import { gpSamplerClass } from "/src/GaussianProcess/GPalgo.js"
+import { gpSamplerClass, VSTlookup_to_arr } from "/src/GaussianProcess/GPalgo.js"
 
 // ---- add a bus for communication between modules ----
 const bus = {
@@ -469,8 +470,7 @@ const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, per_gene_meta, specs
 const umapFft = plotUMAP(600, 500, allgenes_fft_arr, per_gene_meta, specs_lookup, "fft", "UMAP of FFT of waveforms", false, bus)
 plotHarmonics(specs_lookup, bus)
 const plotWaveforms = new plotWaveformsClass()
-// Allgenes plot
-plotWaveforms.renderEmpty_All()
+plotWaveforms.showAll(null)
 
 
 
@@ -546,6 +546,63 @@ function setUmapColorMode(mode) {
     bus.execute_event("umap_color_mode", umapColorMode)
 }
 
+// ---- Violin / filter: shows (and filters on) whatever the UMAPs are colored by ----
+// "none" and "circadian" (binary) fall back to mean expression.
+function violinMetric(mode){
+    if (mode === "qval") {
+        const field = qvalField(displayMode)
+        return {
+            label: `−log10 q (${displayMode === "Circadian" ? "MetaCycle" : "LS"})`,
+            valueOf: (GeneID) => {
+                const q = per_gene_meta_lookup.get(GeneID)?.[field]
+                return Number.isFinite(q) ? -Math.log10(Math.max(q, 1e-300)) : NaN
+            },
+        }
+    }
+    if (mode === "phase") {
+        const field = phaseField(displayMode)
+        return {
+            label: "peak time (h)",
+            valueOf: (GeneID) => per_gene_meta_lookup.get(GeneID)?.[field] ?? NaN,
+        }
+    }
+    if (mode === "energyPct") {
+        const period = selectedEnergyPeriodHours()
+        return {
+            label: `% ${period}h energy`,
+            valueOf: (GeneID) => energyPctAtPeriod(GeneID, specs_lookup, period) ?? NaN,
+        }
+    }
+    return {
+        label: "log10(mean TPM)",
+        valueOf: (GeneID) => normalized_counts_lookup.get(GeneID)?.log_TPM ?? NaN,
+    }
+}
+
+const violinDiv = d3.select("#filter_slider")
+
+function swapViolin(mode){
+    const { label, valueOf } = violinMetric(mode)
+
+    // UMAP points filter on filterVal; set it on every embedding so a later mode switch stays in sync
+    for (const arr of [allgenes_VST_arr, allgenes_fft_arr, circadian_VST_arr, circadian_fft_arr]) {
+        for (const d of arr) d.filterVal = valueOf(d.GeneID)
+    }
+
+    // Distribution of the genes currently on the map
+    const shownArr = displayMode === "Circadian" ? circadian_VST_arr : allgenes_VST_arr
+    const values = shownArr.map((d) => d.filterVal).filter(Number.isFinite)
+
+    // keep non-plot children (e.g. the help button)
+    violinDiv.selectAll(":scope > svg").remove()
+    plotViolin(
+        130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
+        values, violinDiv, label, bus, "umap_value_filter"
+    )
+    // New metric, new units: the old scrubber range is meaningless, so clear the filter
+    bus.execute_event("umap_value_filter", [Infinity, -Infinity])
+}
+
 const umapOscillationChoice = umapColorChoices.find((c) => c.id === "UMAP_oscillation")
 const umapEnergyChoice = umapColorChoices.find((c) => c.id === "UMAP_energy")
 
@@ -579,11 +636,9 @@ document.querySelectorAll('input[name="oscillation_energy"]').forEach((radio) =>
     })
 })
 
-plotViolin(
-    130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
-    count_arr.map((v) => v.log_TPM),
-    d3.select("#filter_slider"), "log10(mean TPM)", bus, "synth_TPM_filter"
-)
+// umap_color_mode also fires when the energy period or oscillating type changes within a mode
+bus.subscribe_to("umap_color_mode", "violin", swapViolin)
+swapViolin(umapColorMode)
 
 setupHelpPopUps(document, window)
 
@@ -650,11 +705,11 @@ bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {
     if (midiNode) setTrackWavetable(midiNode, trackIndex, waveform)
 })
 
-bus.subscribe_to("synth_waveform_changed", "main", (points) => {
-    if (synth_node) {
-        synth_node.port.postMessage({ type: "updatePoints", points })
-    }
-})
+// bus.subscribe_to("synth_waveform_changed", "main", (points) => {
+//     if (synth_node) {
+//         synth_node.port.postMessage({ type: "updatePoints", points })
+//     }
+// })
 
 // bus.subscribe_to("playNote", "main", ([mv, GeneID, Index, freq, sweep]) => {
 //     const node = createVoice(mv, shared)
@@ -792,39 +847,46 @@ function refreshUmapGenePanels() {
     updateUmapGenePanel(umapGenePanels.selected, umapSelectedGeneId)
 }
 
-function GPPointChanged(GeneID){
+// Circadian mode: GP posterior for the gene, and posterior draws feed the synth.
+// Genes without GP params (not circadian) show an empty band.
+function showGPWaveform(GeneID){
     gpGeneId = null
     sentDraws.clear()
-    if (!GeneID) {
-        plotWaveforms.renderEmpty_GP()
-        synth_node?.port.postMessage({ type: "clearDraws" })
-        return
+    if (GeneID && gpSampler.hasGene(GeneID)) {
+        gpSampler.updateMuStdSigma(GeneID)
+        plotWaveforms.showGP(gpSampler.mu, gpSampler.std)
+        gpGeneId = GeneID
+    } else {
+        plotWaveforms.showGP(null)
     }
-    gpSampler.updateMuStdSigma(GeneID)
-    plotWaveforms.updateGeneID(GeneID, gpSampler.mu, gpSampler.std)
-    gpGeneId = GeneID
-    // Worklet answers with needDraw requests for the new gene
+    // Worklet answers with needDraw requests while gpGeneId is set
     synth_node?.port.postMessage({ type: "clearDraws" })
 }
 
-function CatmullPointChanged(GeneID){
-    if (!GeneID){
-        plotWaveforms.renderEmpty_All()
+// All genes mode: experimental points and the interpolated wavetable the synth plays
+function showAllWaveform(GeneID){
+    gpGeneId = null
+    sentDraws.clear()
+    const VSTrow = GeneID ? VST_lookup.get(GeneID) : null
+    if (!VSTrow) {
+        plotWaveforms.showAll(null)
         return
     }
-    plotWaveforms.updateGeneID(GeneID, VST_lookup.get(GeneID), null, null)
+    const values = VSTlookup_to_arr(VSTrow)
+    plotWaveforms.showAll(values)
+    synth_node?.port.postMessage({ type: "updatePoints", points: values })
+}
+
+function updateWaveformDisplay(){
+    if (displayMode === "Circadian") showGPWaveform(umapSelectedGeneId)
+    else showAllWaveform(umapSelectedGeneId)
 }
 
 bus.subscribe_to("point_select", "main", (GeneID) => {
     updateSynthGeneUI(GeneID)
     umapSelectedGeneId = GeneID || null
     updateUmapGenePanel(umapGenePanels.selected, umapSelectedGeneId)
-    // Sampling set up
-    if (displayMode === "Circadian") {
-        GPPointChanged(GeneID)
-    } else if (displayMode === "All") {
-        CatmullPointChanged(GeneID)
-    }
+    updateWaveformDisplay()
 })
 
 bus.subscribe_to("umap_color_mode", "main", () => {
@@ -840,11 +902,12 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
     if (mode === "All") {
         umapReadCounts.setData(allgenes_VST_arr, "All")
         umapFft.setData(allgenes_fft_arr, "All")
-        synth_node.port.postMessage({ type: "DisplayModeSet", mode: "All" })
     } else if (mode === "Circadian") {
         umapReadCounts.setData(circadian_VST_arr, "Circadian")
         umapFft.setData(circadian_fft_arr, "Circadian")
-        synth_node.port.postMessage({ type: "DisplayModeSet", mode: "Circadian" })
     }
+    synth_node?.port.postMessage({ type: "DisplayModeSet", mode })
     refreshUmapGenePanels()
+    updateWaveformDisplay()
+    swapViolin(umapColorMode) // gene set and LS vs MetaCycle fields changed
 })

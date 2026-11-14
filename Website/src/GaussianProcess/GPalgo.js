@@ -1,4 +1,4 @@
-const EXP_HOURS = Array.from({ length: 16 }, (_, i) => 2 + 3 * i)
+export const EXP_HOURS = Array.from({ length: 16 }, (_, i) => 2 + 3 * i)
 
 export class gpSamplerClass{
     constructor(gp_params_arr, VST_lookup){
@@ -177,6 +177,11 @@ export class gpSamplerClass{
             if (i + 1 < n) z[i + 1] = r * Math.sin(theta)
         }
         return z
+    }
+
+    /** Only genes with fitted GP params (circadian set) can be sampled. */
+    hasGene(GeneID){
+        return this.gp_params_lookup.has(GeneID)
     }
 
     updateMuStdSigma(GeneID){

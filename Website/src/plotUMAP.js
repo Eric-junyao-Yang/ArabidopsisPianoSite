@@ -11,6 +11,7 @@ import {
     OUTLINE_ALPHA,
     POINT_RADIUS_PX,
     POINT_OUTLINE_PX,
+    passesFilter,
 } from "/src/umap/umapScatterGL.js"
 import { renderColorLegend } from "/src/umap/umapLegend.js"
 
@@ -129,7 +130,7 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
         mainCtx.beginPath()
         for (let i = 0; i < umap_arr.length; i++) {
             const d = umap_arr[i]
-            if (d.log_TPM >= low_val && d.log_TPM <= high_val) continue
+            if (passesFilter(d, low_val, high_val)) continue
             mainCtx.moveTo(xSc(d.x) + POINT_RADIUS_PX, ySc(d.y))
             mainCtx.arc(xSc(d.x), ySc(d.y), POINT_RADIUS_PX, 0, 2 * Math.PI)
         }
@@ -137,7 +138,7 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
 
         for (let i = 0; i < umap_arr.length; i++) {
             const d = umap_arr[i]
-            if (d.log_TPM < low_val || d.log_TPM > high_val) continue
+            if (!passesFilter(d, low_val, high_val)) continue
             mainCtx.fillStyle = rgb01ToCss(
                 [colorRgbArr[i * 3], colorRgbArr[i * 3 + 1], colorRgbArr[i * 3 + 2]],
                 ACTIVE_ALPHA,
@@ -195,9 +196,7 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
 
     function rebuildQuadtree(xSc, ySc) {
         // Inclusive bounds — must match drawPointsCanvas / updateSelected
-        const passed = umap_arr.filter(
-            (d) => d.log_TPM >= internal_low_val && d.log_TPM <= internal_high_val
-        )
+        const passed = umap_arr.filter((d) => passesFilter(d, internal_low_val, internal_high_val))
         quadtree = d3.quadtree()
             .x(d => xSc(d.x))
             .y(d => ySc(d.y))
@@ -410,7 +409,7 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
         if (displayGeneID) hoverLabel.text(GeneID ?? '')
     })
 
-    bus.subscribe_to("synth_TPM_filter", div_name, ([high_val, low_val]) => {
+    bus.subscribe_to("umap_value_filter", div_name, ([high_val, low_val]) => {
         if (destroyed) return
         if (!scatter.isSupported) {
             drawPointsCanvas(mainCtx, currentXScale, currentYScale, high_val, low_val)
