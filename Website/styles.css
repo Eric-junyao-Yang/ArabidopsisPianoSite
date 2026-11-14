@@ -56,6 +56,9 @@
     --waveform-max: 1000px;
     --nav-h: 3.25rem;
 
+    /* Synth panel tint while showing circadian genes only (like a darker "mode") */
+    --circadian-hue: var(--cb-indigo);
+
     --focus-ring: 0 0 0 3px color-mix(in srgb, var(--cb-sky) 55%, transparent);
     --transition-fast: 140ms ease;
 }
@@ -849,6 +852,12 @@ main {
     overflow: hidden;
 }
 
+#Waveform svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
 #Synth_Waveform {
     display: none; /* For prototyping! */
     width: 100%;
@@ -1251,6 +1260,109 @@ main {
     border-color: color-mix(in srgb, var(--cb-teal) 45%, white);
     color: color-mix(in srgb, var(--cb-teal) 55%, black);
     box-shadow: none;
+}
+
+/* ---------- Gene set toggle (All genes / Circadian only) ---------- */
+
+.gene-set-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+}
+
+.gene-set-toggle__options {
+    display: inline-flex;
+    align-items: stretch;
+    min-height: 2.5rem;
+    padding: 3px;
+    gap: 2px;
+    background: var(--color-bg-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+}
+
+.gene-set-toggle__option {
+    display: inline-flex;
+    margin: 0;
+    cursor: pointer;
+}
+
+/* Visually hidden but still focusable / keyboard operable */
+.gene-set-toggle__option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.gene-set-toggle__option span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.95rem;
+    border-radius: 999px;
+    color: var(--color-ink-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background var(--transition-fast), color var(--transition-fast),
+                box-shadow var(--transition-fast);
+}
+
+/* Swatch matching the UMAP point color of each gene set */
+.gene-set-toggle__option span::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--cb-indigo);
+}
+
+.gene-set-toggle__option--circadian span::before {
+    background: var(--cb-teal);
+}
+
+.gene-set-toggle__option:hover span {
+    background: var(--color-bg-elevated);
+    color: var(--cb-indigo);
+    box-shadow: var(--shadow-sm);
+}
+
+.gene-set-toggle__option input:focus-visible + span {
+    box-shadow: var(--focus-ring);
+}
+
+.gene-set-toggle__option input:checked + span {
+    background: var(--cb-indigo);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.gene-set-toggle__option input:checked + span::before {
+    background: #fff;
+}
+
+/* ---------- Synth panel tint per gene set ---------- */
+/* Re-scoping the surface tokens re-tints every panel, plot frame and shell inside the synth at once. */
+
+#Synth_Waveform_container,
+#Synth_Waveform_container :is(.plot-frame, .canvas-shell, .keyboard-shell, .synth-to-jukebox, .gene-set-toggle__options) {
+    transition: background-color 300ms ease, border-color 300ms ease;
+}
+
+#Synth_Waveform_container[data-gene-set="Circadian"] {
+    --color-bg-elevated: color-mix(in srgb, var(--circadian-hue) 5%, white);
+    --color-bg-sunken: color-mix(in srgb, var(--circadian-hue) 11%, white);
+    --color-border: color-mix(in srgb, var(--circadian-hue) 22%, white);
+    --color-accent-soft: color-mix(in srgb, var(--circadian-hue) 10%, white);
+    border-color: color-mix(in srgb, var(--circadian-hue) 45%, white);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #Synth_Waveform_container,
+    #Synth_Waveform_container :is(.plot-frame, .canvas-shell, .keyboard-shell, .synth-to-jukebox, .gene-set-toggle__options) {
+        transition: none;
+    }
 }
 
 .umap-gene-status {

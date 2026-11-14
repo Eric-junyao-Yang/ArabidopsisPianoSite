@@ -1,4 +1,4 @@
-import { PALETTE } from "/src/plotTheme.js"
+import { PALETTE, THEME, styleAxis, axisLabel } from "/src/plotTheme.js"
 import { catmullrom } from "/src/catmullrom.js"
 import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
 
@@ -8,9 +8,11 @@ const SAMPLE_SPACING = EXP_HOURS[1] - EXP_HOURS[0] // 3 h between time points
 const INTERPOLATE_COUNT = 256
 const SWEEP_TIME = 500 // ms, keep in sync with sweepInc in audio_processor.js
 const FADE_TIME = 5 * SWEEP_TIME // ~5 previous draws visible while fading
-const AXIS_TRANSITION = 300
-// Posterior draw colors; teal is reserved for the GP mean
-const SAMPLE_COLORS = Object.entries(PALETTE).filter(([name]) => name !== "teal").map(([, hex]) => hex)
+const RAW_COLOR = PALETTE.indigo
+const GP_MEAN_COLOR = "#2c7f72"
+const GP_BAND_COLOR = PALETTE.teal
+const SAMPLE_COLORS = [PALETTE.rose, PALETTE.purple, PALETTE.wine, PALETTE.green]
+const LIGHT_BANDS = [[0, 16, "light"], [16, 24, "dark"], [24, 40, "light"], [40, 48, "dark"]]
 
 /**
  * Waveform panel under the synth. Two modes, matching the Circadian / All genes toggle:
@@ -19,15 +21,17 @@ const SAMPLE_COLORS = Object.entries(PALETTE).filter(([name]) => name !== "teal"
  */
 export class plotWaveformsClass{
     constructor(div_name = "#Waveform"){
-        this.MARGINS = {top: 20, left: 50, bottom: 30, right: 20}
+        this.MARGINS = {top: 22, left: 56, bottom: 36, right: 16}
         this.HEIGHT = 200
         this.WIDTH = 1000
         this.innerHeight = this.HEIGHT - this.MARGINS.top - this.MARGINS.bottom
         this.innerWidth = this.WIDTH - this.MARGINS.left - this.MARGINS.right
 
         this.svg = d3.select(div_name).append("svg")
-            .attr("width", this.WIDTH)
-            .attr("height", this.HEIGHT)
+            .attr("viewBox", `0 0 ${this.WIDTH} ${this.HEIGHT}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .attr("role", "img")
+            .attr("aria-label", "Waveform of the selected gene over 48 hours")
 
         this.plotArea = this.svg.append('g')
             .attr("transform", `translate(${this.MARGINS.left},${this.MARGINS.top})`)
@@ -39,44 +43,62 @@ export class plotWaveformsClass{
             .domain([-1, 1])
             .range([this.innerHeight, 0])
 
-        // Light / dark shading (16 h light, 8 h dark), drawn first so data sits on top
-        const bands = [
-            [0, 16, PALETTE.sand, 0.28],
-            [16, 24, PALETTE.indigo, 0.12],
-            [24, 40, PALETTE.sand, 0.28],
-            [40, 48, PALETTE.indigo, 0.12],
-        ]
-        this.shadeGroup = this.plotArea.append('g')
-        for (const [x0, x1, color, opacity] of bands) {
+        // Light / dark shading, drawn first so data sits on top
+        this.shadeGroup = this.plotArea.append('g').attr("class", "light-dark")
+        for (const [x0, x1, phase] of LIGHT_BANDS) {
+            const isLight = phase === "light"
             this.shadeGroup.append("rect")
                 .attr("x", this.xScale(x0))
                 .attr("y", 0)
                 .attr("width", this.xScale(x1) - this.xScale(x0))
                 .attr("height", this.innerHeight)
-                .attr("fill", color)
-                .attr("opacity", opacity)
+                .attr("fill", isLight ? PALETTE.sand : PALETTE.indigo)
+                .attr("opacity", isLight ? 0.2 : 0.09)
+            this.shadeGroup.append("text")
+                .attr("x", this.xScale((x0 + x1) / 2))
+                .attr("y", -7)
+                .attr("text-anchor", "middle")
+                .attr("fill", THEME.muted)
+                .attr("font-size", 10)
+                .attr("letter-spacing", "0.08em")
+                .text(phase.toUpperCase())
         }
 
         this.xAxis = this.plotArea.append('g')
             .attr("transform", `translate(0,${this.innerHeight})`)
-            .call(d3.axisBottom(this.xScale).tickValues(EXP_HOURS))
+            .call(d3.axisBottom(this.xScale).tickValues(EXP_HOURS).tickSizeOuter(0))
+        styleAxis(this.xAxis)
         this.yAxis = this.plotArea.append('g')
-            .call(d3.axisLeft(this.yScale))
+            .call(d3.axisLeft(this.yScale).ticks(5).tickSizeOuter(0))
+        styleAxis(this.yAxis)
 
-        this.plotArea.append("text")
+        axisLabel(this.plotArea.append("text"))
             .attr("x", this.innerWidth / 2)
-            .attr("y", this.innerHeight + 30)
-            .attr("text-anchor", "middle")
-            .text("Hours")
+            .attr("y", this.innerHeight + 32)
+            .text("hours (ZT)")
+        axisLabel(this.plotArea.append("text"))
+            .attr("transform", "rotate(-90)")
+            .attr("x", -this.innerHeight / 2)
+            .attr("y", -42)
+            .text("expression (VST)")
 
-        // Persistent layers so updates replace paths instead of stacking
+        // Persistent layers
         // GP mode
         this.confIntGroup = this.plotArea.append('g').attr("class", "conf-int")
-        this.muLineGroup = this.plotArea.append('g').attr("class", "mu-line")
         this.sampleLineGroup = this.plotArea.append('g').attr("class", "sample-line")
+        this.muLineGroup = this.plotArea.append('g').attr("class", "mu-line") // mean above the draws
         // All genes mode
         this.interpLineGroup = this.plotArea.append('g').attr("class", "interp-line")
         this.rawDatGroup = this.plotArea.append('g').attr("class", "raw-pt")
+
+        // Shown when no gene is selected
+        this.emptyHint = this.plotArea.append("text")
+            .attr("x", this.innerWidth / 2)
+            .attr("y", this.innerHeight / 2)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "middle")
+            .attr("fill", THEME.muted)
+            .attr("font-size", 13)
 
         this.muLine = d3.line()
             .x((d) => this.xScale(d.x))
@@ -124,7 +146,13 @@ export class plotWaveformsClass{
 
     setYDomain(domain) {
         this.yScale.domain(domain).nice()
-        this.yAxis.transition().duration(AXIS_TRANSITION).call(d3.axisLeft(this.yScale))
+
+        this.yAxis.call(d3.axisLeft(this.yScale).ticks(5).tickSizeOuter(0))
+        styleAxis(this.yAxis)
+    }
+
+    setEmptyHint(text) {
+        this.emptyHint.text(text ?? "").attr("display", text ? null : "none")
     }
 
     clearAllMode() {
@@ -145,8 +173,10 @@ export class plotWaveformsClass{
         this.clearAllMode()
         if (!values) {
             this.setYDomain([-1, 1])
+            this.setEmptyHint("Select a gene on the UMAP or search for one to see its waveform")
             return
         }
+        this.setEmptyHint(null)
 
         const curve = this.interpCurve(values)
         this.setYDomain(d3.extent(curve, (d) => d.y))
@@ -154,9 +184,9 @@ export class plotWaveformsClass{
         this.interpLineGroup.append("path")
             .datum(curve)
             .attr("fill", "none")
-            .attr("stroke", "steelblue")
-            .attr("stroke-width", 1.75)
-            .attr("opacity", 0.95)
+            .attr("stroke", RAW_COLOR)
+            .attr("stroke-width", 2)
+            .attr("stroke-linejoin", "round")
             .attr("d", this.sampleLine)
 
         this.rawDatGroup.selectAll("circle")
@@ -164,14 +194,17 @@ export class plotWaveformsClass{
             .join("circle")
             .attr("cx", (d) => this.xScale(d.x))
             .attr("cy", (d) => this.yScale(d.y))
-            .attr("r", 6)
-            .attr("fill", "steelblue")
+            .attr("r", 4.5)
+            .attr("fill", RAW_COLOR)
+            .attr("stroke", THEME.surface)
+            .attr("stroke-width", 1.5)
     }
 
     /** Circadian mode. mu, std: GP posterior over one period, or null for an empty band. */
     showGP(mu = null, std = null) {
         this.clearAllMode()
         this.clearGPMode()
+        this.setEmptyHint(mu && std ? null : "Select a circadian gene to see its GP model and sampled waveforms")
         const dat = mu && std
             ? this.tileGrid(mu.length, (x, i) => ({ x, mu: mu[i], std: std[i] }))
             : [{ x: 0, mu: 0, std: 1 }, { x: EXPERIMENT_HOURS, mu: 0, std: 1 }]
@@ -183,17 +216,17 @@ export class plotWaveformsClass{
 
         this.confIntGroup.append("path")
             .datum(dat)
-            .attr("fill", PALETTE.indigo)
-            .attr("opacity", 0.12)
+            .attr("fill", GP_BAND_COLOR)
+            .attr("opacity", 0.18)
             .attr("stroke", "none")
             .attr("d", this.confArea)
 
         this.muLineGroup.append("path")
             .datum(dat)
             .attr("fill", "none")
-            .attr("stroke", PALETTE.teal)
-            .attr("stroke-width", 1.75)
-            .attr("opacity", 0.95)
+            .attr("stroke", GP_MEAN_COLOR)
+            .attr("stroke-width", 2.25)
+            .attr("stroke-linejoin", "round")
             .attr("d", this.muLine)
     }
 
@@ -215,7 +248,8 @@ export class plotWaveformsClass{
             .attr("class", "current")
             .attr("fill", "none")
             .attr("stroke", color)
-            .attr("stroke-width", 1.75)
+            .attr("stroke-width", 1.5)
+            .attr("stroke-linejoin", "round")
             .attr("opacity", 0.95)
             .attr("d", this.sampleLine)
     }

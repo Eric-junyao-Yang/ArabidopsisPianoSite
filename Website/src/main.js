@@ -148,7 +148,7 @@ function syncSynthToMidiControls() {
 
 function updateSynthGeneUI(GeneID) {
     currentSynthGeneID = GeneID || null
-    const label = currentSynthGeneID || "Custom Waveform"
+    const label = currentSynthGeneID || "No gene selected"
     if (synthWaveformLabelTextEl) synthWaveformLabelTextEl.textContent = label
     else if (synthWaveformLabelEl) synthWaveformLabelEl.textContent = label
     synthWaveformLabelEl?.classList.toggle("has-gene", Boolean(currentSynthGeneID))
@@ -907,6 +907,8 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
         umapFft.setData(circadian_fft_arr, "Circadian")
     }
     synth_node?.port.postMessage({ type: "DisplayModeSet", mode })
+    // Tints the whole synth panel (see styles.css) so the switch to a different dataset is obvious
+    document.getElementById("Synth_Waveform_container").dataset.geneSet = mode
     refreshUmapGenePanels()
     updateWaveformDisplay()
     swapViolin(umapColorMode) // gene set and LS vs MetaCycle fields changed
