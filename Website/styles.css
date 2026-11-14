@@ -1797,7 +1797,9 @@ main {
     outline: none;
 }
 
-.midi-hint {
+/* Hint boxes: jukebox load status, UMAP color-mode help */
+.midi-hint,
+.color-mode-hint {
     margin: 0 0 var(--space-2);
     padding: 0.35rem 0.65rem;
     font-size: 0.78rem;
@@ -1807,6 +1809,11 @@ main {
     border: 1px solid var(--color-border);
     border-left: 3px solid var(--cb-sand);
     border-radius: var(--radius-sm);
+}
+
+/* Spacing comes from #Synth_Plots_inner's gap */
+.color-mode-hint {
+    margin: 0;
 }
 
 .midi-tracks {

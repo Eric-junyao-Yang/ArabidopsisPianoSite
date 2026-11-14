@@ -33,6 +33,7 @@
 
             <h3>FAQ: But why? Why would you do such a thing?</h3>
             <p>Shushhhh... don't ruin this for me.</p>
+            <p>Anyways, here's a quick <span id="DEMO">DEMO</span> for the type of analysis you could do.</p>
 
             <!-- <h4>The web app is split into to main sections:</h4>
             <ol class="section-toc">
@@ -74,7 +75,7 @@
                                 Arabidopsis thaliana is a plant that scientists love to study.
                                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                                 grew Arabidopsis under <span style="color: #DDCC77">16hr light</span> and <span style="color: #332288">8hr dark</span> cycles, 
-                                and measured activities of each of the 27,000 genes 
+                                and measured activities of each of the 27,000 genes every three hours for two days.
                             </p>
                             <p>
                                 Here is TOC1 (AT5G61380), a known circadian gene along side PP2AA3 (AT1G13320), a housekeeping (non-oscillating) gene:
@@ -102,11 +103,12 @@
                                 </figure>
                             </div>
                             <p>
-                                For the synthesizer below, amplitude is locked and frequency is mapped to the keyboard, so you can focus on waveform shape.
+                                For the synthesizer below, <strong>amplitude</strong> is locked and <strong>frequency</strong> is mapped to the keyboard, so you can focus on waveform <strong>shape</strong>.
                                 That gives about 27,000 “instruments” derived from the Arabidopsis genome
                             </p>
                             <p>
-                                Use the synthesizer to explore the Arabidopsis transcriptional soundscape.
+                                How would we expect oscillating and non-oscillating genes to sound different? You can explore the interactive
+                                synthesizer below to figure it out for yourself, or go to the discussion section below for spoilers.
                             </p>
                         </div>
                     </div>
@@ -120,7 +122,58 @@
                     </summary>
                     <div class="fold__body" id="Synth_Howto_div">
                         <div class="synth-science prose-block">
-                            <p>HIHI</p>
+                            <h4>Picking a Sound</h4>
+                            <p>
+                                There are two linked plots below grouped by Biology vs Sound. Each point is a gene. 
+                                Click to select. Click away to cancel. Hover highlights the same gene in both views.
+                                Other parts of the dashboard will update as you select a gene.
+                            </p>
+                            <h4>Playing a Sound</h4>
+                            <p>
+                                Click the virtual keyboard at the bottom or use the cooresponding keys on your keyboard to play 
+                                the selected gene's waveform. Polyphony supported (i.e. multiple notes at once). The up and down
+                                arrows to the right controls octaves.
+                            </p>
+                            <h4>Coloring the Graph</h4>
+                            <p>
+                                The best way to explore the plots is by coloring them. Select any of the coloring modes will update
+                                the plots. As you change colors, the hint box below will update to give more details.
+                            </p>
+                            <h4>Filtering</h4>
+                            <p>
+                                Filtering is a great way to explore the colored graph dynamically. The vertical plot between the two larger
+                                plots is called a violin plot. Top and bottom circles can be click and dragged to set the upper and lower 
+                                filtering thresholds. The body of the window can be dragged and repositioned as well. The filter updates 
+                                based on coloring mode.
+                            </p>
+                            <h4>Energy %</h4>
+                            <p>
+                                Below the three plots is a narrow horizontal plot showing the energy % of the selected wave's component
+                                frequencies. The frequency components strongly effects how the waveform sounds. Discussion below 
+                                has more details.
+                            </p>
+                            <h4>Waveform</h4>
+                            <h5>All Genes Mode</h5>
+                            <p>
+                                The waveform above the keyboard displays the exerpimental data of the selected gene. The line is an interpolation
+                                through the data. The interpolation is used to generate the sounds you hear.
+                            </p>
+                            <h5>Circadian Mode</h5>
+                                Instead of simple interpolation, oscillating genes can be modeled. When you play a sound, 
+                                the model generates one possible wavefrom that fits the experimental data every half a second. 
+                                The green line is the average and green band is the 95% confidence interval. 
+                            <h4>All genes vs Circadian</h4>
+                            <p>
+                                Display all genes or only circadian ones. Some of the coloring mode has suble changes, pay attention to the hint box.
+                                The waveform (and sound) also changes. The sound you hear morphs between the sampled waveforms, 
+                                so the wobble you hear matches the certainty of the shape.
+                            </p>
+                            <h4>Jukebox</h4>
+                            <p>
+                                Clicking on the Jukebox sidebar slides the jukebox in and out of frame. There is a midi song loaded, but 
+                                you need to assign sounds (genes) to each track to hear it. If you have a gene you like after playing it,
+                                you can load it into the jukebox by picking a track and clicking the "Assign" button. 
+                            </p>
                         </div>
                     </div>
                 </details>
@@ -395,6 +448,7 @@
                                 </div>
                             </div>
                         </div>
+                        <p id="color_mode_help_text" class="color-mode-hint" aria-live="polite"></p>
                         <div class="umap-gene-status" aria-live="polite">
                             <div id="UMAP_selected_info" class="umap-gene-card umap-gene-card--selected is-empty">
                                 <span class="umap-gene-card__badge">Selected</span>

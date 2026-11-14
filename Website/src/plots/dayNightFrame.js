@@ -1,4 +1,4 @@
-import { PALETTE, THEME, styleAxis, axisLabel } from "/src/plotTheme.js"
+import { PALETTE, THEME, styleAxis, axisLabel } from "/src/plots/plotTheme.js"
 import { catmullrom } from "/src/catmullrom.js"
 import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
 

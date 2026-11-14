@@ -1,12 +1,5 @@
-import { interpolate_waveform } from "/src/catmullrom.js"
 import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
-
-function extractLdSeries(geneRow) {
-    if (!geneRow) return null
-    return Object.keys(geneRow)
-        .filter((k) => k.startsWith("LD_ZT"))
-        .map((k) => geneRow[k])
-}
+import { plotExpressionSeries } from "/src/plots/plotScienceDiv.js"
 
 function drawWave({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
     return Array.from({ length: steps }, (_, i) => {
@@ -16,92 +9,6 @@ function drawWave({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
         const wave = (1 - shape) * sin + shape * square
         return amplitude * wave
     })
-}
-
-function plotExpressionSeries(host, series, {
-    width = 650,
-    height = 280,
-    margin = { top: 20, right: 20, bottom: 40, left: 60 },
-} = {}) {
-    host.replaceChildren()
-    if (!series?.length) return
-
-    const innerWidth = width - margin.left - margin.right
-    const innerHeight = height - margin.top - margin.bottom
-
-    const svg = d3.select(host).append("svg")
-        .attr("viewBox", `0 0 ${width} ${height}`)
-        .attr("preserveAspectRatio", "xMidYMid meet")
-        .attr("class", "synth-science__svg")
-
-    const xScale = d3.scaleLinear().domain([0, 48]).range([0, innerWidth])
-    const yScale = d3.scaleLinear().domain(d3.extent(series)).range([innerHeight, 0]).nice()
-    const chart = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`)
-
-    const shade = (x0, x1, color, opacity) => chart.append("rect")
-        .attr("x", xScale(x0)).attr("y", 0)
-        .attr("width", xScale(x1) - xScale(x0)).attr("height", innerHeight)
-        .attr("fill", color).attr("opacity", opacity)
-    shade(0, 16, PALETTE.sand, 0.28)
-    shade(24, 40, PALETTE.sand, 0.28)
-    shade(16, 24, PALETTE.indigo, 0.12)
-    shade(40, 48, PALETTE.indigo, 0.12)
-
-    const tickVals = d3.range(16).map((i) => 2 + 3 * i)
-    drawAxis(
-        chart.append("g").attr("transform", `translate(0, ${innerHeight})`),
-        d3.axisBottom(xScale).tickValues(tickVals).tickSizeOuter(0)
-    )
-    drawAxis(chart.append("g"), d3.axisLeft(yScale).ticks(5).tickSizeOuter(0))
-
-    axisLabel(chart.append("text")
-        .attr("x", innerWidth / 2)
-        .attr("y", innerHeight + 32))
-        .text("Hours")
-
-    axisLabel(chart.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -innerHeight / 2)
-        .attr("y", -45))
-        .text("normalized expression")
-
-    chart.selectAll("circle.toc")
-        .data(series)
-        .join("circle")
-        .attr("class", "toc")
-        .attr("r", 3.5)
-        .attr("fill", PALETTE.rose)
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 1.25)
-        .attr("cx", (_, i) => xScale(2 + 3 * i))
-        .attr("cy", (d) => yScale(d))
-
-    let interp = interpolate_waveform(series, 2000)
-    interp = interp
-        .map((value, i) => ({ pos: i * (16 / 2000), value }))
-        .filter((d) => d.pos <= 15)
-
-    const lineGen = d3.line()
-        .x((d) => xScale(2 + 3 * d.pos))
-        .y((d) => yScale(d.value))
-        .curve(d3.curveLinear)
-
-    chart.append("path")
-        .datum(interp)
-        .attr("fill", "none")
-        .attr("stroke", PALETTE.rose)
-        .attr("stroke-width", 2)
-        .attr("stroke-linejoin", "round")
-        .attr("d", lineGen)
-
-    chart.append("text")
-        .attr("x", innerWidth - 4)
-        .attr("y", 14)
-        .attr("text-anchor", "end")
-        .attr("font-size", 12)
-        .attr("font-weight", 600)
-        .attr("fill", PALETTE.rose)
-        .text("TOC1")
 }
 
 function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, myName = null, title = null }) {
@@ -246,7 +153,7 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
  */
 export function mountSynthScienceDiv({
     root = document.getElementById("Synth_Science_div"),
-    geneRow = null,
+    geneRows = null,
     bus = null,
     initAudio = null,
 } = {}) {
@@ -279,9 +186,8 @@ export function mountSynthScienceDiv({
         },
     }
 
-    const series = extractLdSeries(geneRow)
     const dataHost = root.querySelector("#Synth_Science_data_plot")
-    if (dataHost) plotExpressionSeries(dataHost, series)
+    if (dataHost) plotExpressionSeries(dataHost, geneRows)
 
     const waveSpecs = [
         { sel: "#amp_plot", varyingParam: "amplitude", myName: "Amplitude", title: "Amplitude" },

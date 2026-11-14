@@ -35,7 +35,7 @@ const bus = {
 
 // ---- one shared AudioContext + master volume for the whole page ----
 // Context is created now and auto-resumes on the first user gesture (see globalVolumeControl.js).
-const globalAudio = initGlobalAudio({ workletUrl: "/src/audio_processor.js" })
+const globalAudio = initGlobalAudio({ workletUrl: "/src/audio/audio_processor.js" })
 
 // --------------------------------------- load data ---------------------------------------
 // UMAP bins are x/y only (same gene order as Normalized_counts / VST).
@@ -537,12 +537,11 @@ async function initMidiAudio() {
 }
 
 // --------------------------------------- Plots ---------------------------------------
-const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, per_gene_meta, specs_lookup, "read_counts", "UMAP of read counts over 48hrs", false, bus)
-const umapFft = plotUMAP(600, 500, allgenes_fft_arr, per_gene_meta, specs_lookup, "fft", "UMAP of FFT of waveforms", false, bus)
+const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, per_gene_meta, specs_lookup, "read_counts", "Group by Biology", false, bus)
+const umapFft = plotUMAP(600, 500, allgenes_fft_arr, per_gene_meta, specs_lookup, "fft", "Group by Sound", false, bus)
 plotHarmonics(specs_lookup, bus)
 const plotWaveforms = new plotWaveformsClass()
 plotWaveforms.showAll(null)
-
 
 
 // GP sampling
@@ -691,12 +690,41 @@ document.querySelectorAll('input[name="oscillation_energy"]').forEach((radio) =>
 bus.subscribe_to("umap_color_mode", "violin", swapViolin)
 swapViolin(umapColorMode)
 
+// ---- Color-mode hint box: text per coloring mode, per gene set ----
+const COLOR_MODE_HELP = {
+    none: { All: "Color Mode Help Text", Circadian: "Color Mode Help Text" },
+    circadian: { 
+        All: "Binary cutoff with q-value of 0.01. Circadian is <= 0.01", 
+        Circadian: "Binary cutoff with q-value of 0.01. Circadian is <= 0.01" },
+    qval: { 
+        All: "How confident we are that a gene is oscillating. A q-value cut off of 0.01 would mean a 1% false positive rate when calling an oscillating gene.", 
+        Circadian: "How confident we are that a gene is oscillating around 20~28hrs (Circadian). A q-value cut off of 0.01 would mean a 1% false positive rate when calling a circadian gene." },
+    phase: { 
+        All: "Hour in experiment where the data has the largest measurement", 
+        Circadian: "Hour in experiment where the data has the largest measurement" },
+    energyPct: { 
+        All: "% componsition of the selected frequency component", 
+        Circadian: "% componsition of the selected frequency component" },
+}
+
+function updateColorModeHelp() {
+    const el = document.getElementById("color_mode_help_text")
+    if (!el) return
+    el.textContent = COLOR_MODE_HELP[umapColorMode]?.[displayMode] ?? ""
+    el.hidden = !el.textContent
+}
+bus.subscribe_to("umap_color_mode", "colorModeHelp", updateColorModeHelp)
+bus.subscribe_to("DisplayModeSet", "colorModeHelp", updateColorModeHelp)
+updateColorModeHelp()
+
 setupHelpPopUps(document, window)
 
 // --------------------------------------- Synth science fold ---------------------------------------
+const TOC1 = VSTlookup_to_arr(VST_lookup.get("AT5G61380"))
+const PP2AA3 = VSTlookup_to_arr(VST_lookup.get("AT1G13320"))
 mountSynthScienceDiv({
     root: document.getElementById("Synth_Science_div"),
-    geneRow: normalized_counts_lookup.get("AT5G61380"),
+    geneRows: {TOC1, PP2AA3},
     bus,
     initAudio: initSynthScienceAudio,
 })
