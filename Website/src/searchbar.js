@@ -4,18 +4,17 @@
  * @param {HTMLElement} listEl
  * @param {Array<{GeneID: string}>} genes
  * @param {(item: object) => void} onSelect  called with the matched gene object
+ * @returns {{ setGenes: (genes: Array<{GeneID: string}>) => void }}  swap the searchable genes
  */
 export function searchbar(input, listEl, genes, onSelect) {
     const MAX_RESULTS = 8
     const optIdPrefix = `${listEl.id || "gene-search"}-opt`
-    const index = genes.map((item) => {
-        const id = item.GeneID
-        return {
-            item,
-            id,
-            lower: id.toLowerCase(),
-        }
-    })
+    const buildIndex = (list) => list.map((item) => ({
+        item,
+        id: item.GeneID,
+        lower: item.GeneID.toLowerCase(),
+    }))
+    let index = buildIndex(genes)
 
     let activeIndex = -1
     let currentMatches = []
@@ -252,4 +251,14 @@ export function searchbar(input, listEl, genes, onSelect) {
     input.addEventListener("blur", () => {
         requestAnimationFrame(() => close())
     })
+
+    return {
+        /** Search a different gene set (e.g. circadian only); clears any half-typed query. */
+        setGenes(nextGenes) {
+            clearTimeout(inputTimer)
+            index = buildIndex(nextGenes)
+            input.value = ""
+            close()
+        },
+    }
 }

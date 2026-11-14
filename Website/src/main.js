@@ -13,9 +13,11 @@ import { initGlobalAudio } from "/src/globalVolumeControl.js"
 import {
     loadMidiEvents,
     createMidiTransport,
-    geneToWavetable,
-    setTrackWavetable,
-    clearTrackWavetable,
+    setTrackStatic,
+    setTrackGP,
+    clearTrack,
+    clearAllTracks,
+    watchTrack,
 } from "/src/midiplayer.js"
 import { midiTrackPlots } from "/src/midiTrackPlot.js"
 import { plotHarmonics, energyPctAtPeriod } from "/src/plotHarmonics.js"
@@ -137,7 +139,7 @@ function setSynthToMidiStatus(message, kind = "success") {
 }
 
 function syncSynthToMidiControls() {
-    const hasGene = Boolean(currentSynthGeneID)
+    const hasGene = Boolean(currentSynthGeneID) && geneInMode(currentSynthGeneID)
     if (synthToMidiPanel) {
         synthToMidiPanel.classList.toggle("is-disabled", !hasGene)
         synthToMidiPanel.setAttribute("aria-disabled", hasGene ? "false" : "true")
@@ -148,10 +150,7 @@ function syncSynthToMidiControls() {
 
 function updateSynthGeneUI(GeneID) {
     currentSynthGeneID = GeneID || null
-    const label = currentSynthGeneID || "No gene selected"
-    if (synthWaveformLabelTextEl) synthWaveformLabelTextEl.textContent = label
-    else if (synthWaveformLabelEl) synthWaveformLabelEl.textContent = label
-    synthWaveformLabelEl?.classList.toggle("has-gene", Boolean(currentSynthGeneID))
+    renderWaveformLabel()
 
     if (synthToMidiGeneEl) {
         synthToMidiGeneEl.textContent = currentSynthGeneID || "selected gene"
@@ -159,6 +158,19 @@ function updateSynthGeneUI(GeneID) {
     }
     setSynthToMidiStatus(null)
     syncSynthToMidiControls()
+}
+
+// Gene shown above the waveform; "· Vocal" etc. while the plot follows a jukebox track
+function renderWaveformLabel() {
+    let label = "No gene selected"
+    if (currentSynthGeneID) {
+        // Only reached after load, once MIDI_TRACKS / watchedTrack (declared further down) exist
+        const track = MIDI_TRACKS.find((t) => t.trackIndex === watchedTrack)
+        label = track ? `${currentSynthGeneID} · ${track.label}` : currentSynthGeneID
+    }
+    if (synthWaveformLabelTextEl) synthWaveformLabelTextEl.textContent = label
+    else if (synthWaveformLabelEl) synthWaveformLabelEl.textContent = label
+    synthWaveformLabelEl?.classList.toggle("has-gene", Boolean(currentSynthGeneID))
 }
 
 function applySynthPreset(fn) {
@@ -223,9 +235,17 @@ function setMidiTrackLoaded(trackIndex, GeneID) {
     if (geneEl) {
         geneEl.replaceChildren()
         if (GeneID) {
-            const idSpan = document.createElement("span")
+            // Circadian: clicking the gene shows it in the waveform plot with this track's live draws
+            const idSpan = document.createElement(displayMode === "Circadian" ? "button" : "span")
             idSpan.className = "midi-gene-name__id"
             idSpan.textContent = GeneID
+            if (displayMode === "Circadian") {
+                idSpan.type = "button"
+                idSpan.classList.add("midi-gene-name__watch")
+                idSpan.setAttribute("aria-pressed", "false")
+                idSpan.title = "Show this track's waveform while the song plays"
+                idSpan.addEventListener("click", () => watchMidiTrack(trackIndex))
+            }
 
             const removeButton = document.createElement("button")
             removeButton.type = "button"
@@ -245,12 +265,17 @@ function setMidiTrackLoaded(trackIndex, GeneID) {
     updateMidiLoadHint()
 }
 
+// Set when a Circadian / All genes switch empties the jukebox; cleared once a gene is assigned
+let midiModeNotice = null
+
 function updateMidiLoadHint() {
     const hint = document.getElementById("midi_load_hint")
     if (!hint) return
     const loaded = midiTrackGenes.size
     const total = MIDI_TRACKS.length
-    if (loaded === 0) {
+    if (loaded === 0 && midiModeNotice) {
+        hint.textContent = midiModeNotice
+    } else if (loaded === 0) {
         hint.textContent = "Assign a gene to each track to load its sound. Unloaded tracks stay silent."
     } else if (loaded < total) {
         hint.textContent = `${loaded} of ${total} tracks loaded. Unloaded tracks stay silent until you assign a gene.`
@@ -259,11 +284,61 @@ function updateMidiLoadHint() {
     }
 }
 
-function syncMidiTrackWavetables() {
-    for (const [trackIndex, GeneID] of midiTrackGenes) {
-        const waveform = geneToWavetable(GeneID, normalized_counts_lookup)
-        if (waveform && midiNode) setTrackWavetable(midiNode, trackIndex, waveform)
+// What a jukebox track plays for a gene, from VST like the synth: in Circadian mode a morph
+// through its GP draws, otherwise its fixed wavetable. Genes without GP params fall back to fixed.
+function trackSourceFor(trackIndex, GeneID) {
+    if (!midiNode) return // sent later by syncMidiTrackSources once the worklet exists
+    const post = displayMode === "Circadian" ? gpSampler.posterior(GeneID) : null
+    if (post) {
+        setTrackGP(midiNode, trackIndex, post)
+        return
     }
+    // Loading is restricted to the current mode, so this means a bug
+    if (displayMode === "Circadian") console.warn(`Track ${trackIndex}: ${GeneID} has no GP, playing its fixed table`)
+    const VSTrow = VST_lookup.get(GeneID)
+    if (VSTrow) setTrackStatic(midiNode, trackIndex, VSTlookup_to_arr(VSTrow))
+    else clearTrack(midiNode, trackIndex)
+}
+
+function syncMidiTrackSources() {
+    for (const [trackIndex, GeneID] of midiTrackGenes) trackSourceFor(trackIndex, GeneID)
+}
+
+// Circadian and All genes stay separate in the jukebox: switching mode stops the song and
+// empties every track, so tracks only ever hold genes (and sounds) from the current mode
+function resetJukebox(mode) {
+    midiTransport?.stop() // onStop resets the play button
+    clearAllTracks(midiNode)
+    unwatchMidiTrack()
+    midiTrackGenes.clear()
+    midiModeNotice = mode === "Circadian"
+        ? "Switched to circadian genes. Assign genes to tracks to load their sound."
+        : "Switched to all genes. Assign genes to tracks to load their sound."
+    for (const track of MIDI_TRACKS) setMidiTrackLoaded(track.trackIndex, null)
+}
+
+// ---- Watching a jukebox track: the waveform plot shows its live GP draws (Circadian) ----
+let watchedTrack = null
+
+function setWatchedTrack(trackIndex) {
+    watchedTrack = trackIndex
+    watchTrack(midiNode, trackIndex)
+    for (const [index, el] of midiTrackEls) {
+        const btn = el?.querySelector(".midi-gene-name__watch")
+        btn?.classList.toggle("is-watched", index === trackIndex)
+        btn?.setAttribute("aria-pressed", String(index === trackIndex))
+    }
+    renderWaveformLabel()
+}
+
+function watchMidiTrack(trackIndex) {
+    // Select the gene everywhere first (this stops any previous watch), then follow the track
+    bus.execute_event("point_select", midiTrackGenes.get(trackIndex))
+    setWatchedTrack(trackIndex)
+}
+
+function unwatchMidiTrack() {
+    if (watchedTrack !== null) setWatchedTrack(null)
 }
 
 /** Format mm:ss for the scrubber before the transport exists. */
@@ -298,10 +373,7 @@ function loadMidiData() {
                 applyMidiDurationToUi(midiSongTime)
                 midiTrackPlots(midiEvents, MIDI_TRACKS, bus)
                 // If the user already hit play, wire events into the live transport
-                if (midiTransport) {
-                    midiTransport.setEvents(midiEvents, midiSongTime)
-                    syncMidiTrackWavetables()
-                }
+                if (midiTransport) midiTransport.setEvents(midiEvents, midiSongTime)
             })
             .catch((err) => {
                 midiDataPromise = null
@@ -327,8 +399,8 @@ synthToMidiSendBtn?.addEventListener("click", () => {
         setSynthToMidiStatus("Select a gene and track first", "error")
         return
     }
-    if (!normalized_counts_lookup.has(GeneID)) {
-        setSynthToMidiStatus("Gene not found", "error")
+    if (!geneInMode(GeneID)) {
+        setSynthToMidiStatus(displayMode === "Circadian" ? "Not a circadian gene" : "Gene not found", "error")
         return
     }
     bus.execute_event("midi_track_gene", { trackIndex, GeneID })
@@ -343,8 +415,7 @@ document.getElementById("midi_play").addEventListener("click", async () => {
         midiTransport.stop()
         document.getElementById("midi_play").textContent = "play"
     } else {
-        // Re-upload any genes assigned before (or while) the worklet was offline.
-        syncMidiTrackWavetables()
+        // Sources are already in the worklet: sent on assignment, or by initMidiAudio for earlier ones
         midiTransport.play()
         document.getElementById("midi_play").textContent = "stop"
     }
@@ -352,6 +423,15 @@ document.getElementById("midi_play").addEventListener("click", async () => {
 
 // ------------------------------- Display Mode Switching -------------------------------
 let displayMode = "All"
+
+/** Genes the current mode works with: circadian genes have GP params, All = every VST gene. */
+function geneInMode(GeneID) {
+    return displayMode === "Circadian" ? gpSampler.hasGene(GeneID) : VST_lookup.has(GeneID)
+}
+
+function genesForMode() {
+    return displayMode === "Circadian" ? gp_params_arr : VST_arr
+}
 
 function updateDisplayMode() {
     const el = document.querySelector('input[name="CircadianToggle"]:checked')
@@ -391,15 +471,10 @@ const synthReady = (async () => {
     compressor.release.value = 0.05
     synth_node.connect(compressor).connect(globalAudio.input)
     // synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
-    // The worklet owns the GP draw queue: it asks for draws as it uses them up,
-    // and says which draw it is morphing towards so the plot follows the sound
+    // In Circadian mode the worklet samples the GP itself and reports each draw it starts
+    // morphing towards, so the plot follows the sound
     synth_node.port.onmessage = (event) => {
-        if (event.data.type === "needDraw") {
-            sendGPDraw()
-        }
-        if (event.data.type === "gpTarget") {
-            plotGPDraw(event.data.id)
-        }
+        if (event.data.type === "gpDraw" && watchedTrack === null) plotWaveforms.drawSample(event.data.draw)
     }
     assign_keyboard_keys(synth_node)
     setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"), bus)
@@ -454,8 +529,15 @@ async function initMidiAudio() {
                 },
             }, bus)
             if (midiEvents && midiSongTime) midiTransport.setEvents(midiEvents, midiSongTime)
+            // Draws from the watched track feed the waveform plot
+            midiNode.port.onmessage = (event) => {
+                if (event.data.type === "trackDraw" && event.data.trackIndex === watchedTrack) {
+                    plotWaveforms.drawSample(event.data.draw)
+                }
+            }
             // Genes may have been assigned before the worklet existed — push them now.
-            syncMidiTrackWavetables()
+            syncMidiTrackSources()
+            if (watchedTrack !== null) watchTrack(midiNode, watchedTrack)
         })().catch((err) => {
             midiReady = null
             throw err
@@ -476,26 +558,6 @@ plotWaveforms.showAll(null)
 
 // GP sampling
 const gpSampler = new gpSamplerClass(gp_params_arr, VST_lookup)
-let gpGeneId = null // gene gpSampler's posterior is set to; null = no draws to give
-let nextDrawId = 0
-const sentDraws = new Map() // id -> draw, kept until the worklet has morphed past it
-
-function sendGPDraw(){
-    if (!gpGeneId) return
-    const id = nextDrawId++
-    const draw = gpSampler.drawPosterior()
-    sentDraws.set(id, draw)
-    synth_node.port.postMessage({ type: "newDraw", id, draw })
-}
-
-function plotGPDraw(id){
-    const draw = sentDraws.get(id)
-    if (!draw) return // draw from a previous gene
-    plotWaveforms.drawSample(draw)
-    for (const key of sentDraws.keys()) {
-        if (key < id - 1) sentDraws.delete(key) // remove prev draws
-    }
-}
 
 
 
@@ -664,45 +726,46 @@ if (TOC1 && PP2AA3) {
 }
 
 // --------------------------------------- Search Bars ---------------------------------------
-searchbar(
+// Each search only offers genes from the current mode (lists swapped on DisplayModeSet)
+const geneSearches = []
+geneSearches.push(searchbar(
     document.querySelector("#synth-search"),
     document.querySelector("#synth-results"),
-    count_arr,
+    genesForMode(),
     (item) => {
         bus.execute_event("point_select", item.GeneID)
     }
-)
+))
 
 // MIDI track gene search
 for (const track of MIDI_TRACKS) {
     setMidiTrackLoaded(track.trackIndex, null) // start unloaded
-    searchbar(
+    geneSearches.push(searchbar(
         document.querySelector(`#midi-${track.id}-search`),
         document.querySelector(`#midi-${track.id}-results`),
-        count_arr,
+        genesForMode(),
         (item) => {
             bus.execute_event("midi_track_gene", {
                 trackIndex: track.trackIndex,
                 GeneID: item.GeneID,
             })
         }
-    )
+    ))
 }
 
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {
+    if (trackIndex === watchedTrack) unwatchMidiTrack() // its gene is being removed or replaced
     if (!GeneID) {
         midiTrackGenes.delete(trackIndex)
         setMidiTrackLoaded(trackIndex, null)
-        if (midiNode) clearTrackWavetable(midiNode, trackIndex)
+        clearTrack(midiNode, trackIndex)
         return
     }
+    midiModeNotice = null
     midiTrackGenes.set(trackIndex, GeneID)
     setMidiTrackLoaded(trackIndex, GeneID)
-    const waveform = geneToWavetable(GeneID, normalized_counts_lookup)
-    if (!waveform) return
-    // Queue until worklet exists (user may search before first play)
-    if (midiNode) setTrackWavetable(midiNode, trackIndex, waveform)
+    trackSourceFor(trackIndex, GeneID)
 })
 
 // bus.subscribe_to("synth_waveform_changed", "main", (points) => {
@@ -850,31 +913,24 @@ function refreshUmapGenePanels() {
 // Circadian mode: GP posterior for the gene, and posterior draws feed the synth.
 // Genes without GP params (not circadian) show an empty band.
 function showGPWaveform(GeneID){
-    gpGeneId = null
-    sentDraws.clear()
-    if (GeneID && gpSampler.hasGene(GeneID)) {
-        gpSampler.updateMuStdSigma(GeneID)
-        plotWaveforms.showGP(gpSampler.mu, gpSampler.std)
-        gpGeneId = GeneID
-    } else {
-        plotWaveforms.showGP(null)
-    }
-    // Worklet answers with needDraw requests while gpGeneId is set
-    synth_node?.port.postMessage({ type: "clearDraws" })
+    const post = GeneID ? gpSampler.posterior(GeneID) : null // null for non-circadian genes
+    plotWaveforms.showGP(post?.mu ?? null, post?.std ?? null)
+    // Copied, not transferred: the posterior stays cached for reuse (e.g. jukebox tracks)
+    if (post) synth_node?.port.postMessage({ type: "setGP", mu: post.mu, L: post.L })
+    else synth_node?.port.postMessage({ type: "clearSource" })
 }
 
 // All genes mode: experimental points and the interpolated wavetable the synth plays
 function showAllWaveform(GeneID){
-    gpGeneId = null
-    sentDraws.clear()
     const VSTrow = GeneID ? VST_lookup.get(GeneID) : null
     if (!VSTrow) {
         plotWaveforms.showAll(null)
+        synth_node?.port.postMessage({ type: "clearSource" })
         return
     }
     const values = VSTlookup_to_arr(VSTrow)
     plotWaveforms.showAll(values)
-    synth_node?.port.postMessage({ type: "updatePoints", points: values })
+    synth_node?.port.postMessage({ type: "setStatic", points: values })
 }
 
 function updateWaveformDisplay(){
@@ -883,6 +939,7 @@ function updateWaveformDisplay(){
 }
 
 bus.subscribe_to("point_select", "main", (GeneID) => {
+    unwatchMidiTrack() // watchMidiTrack re-watches right after its own point_select
     updateSynthGeneUI(GeneID)
     umapSelectedGeneId = GeneID || null
     updateUmapGenePanel(umapGenePanels.selected, umapSelectedGeneId)
@@ -899,6 +956,10 @@ bus.subscribe_to("point_hover", "main", (GeneID) => {
 })
 
 bus.subscribe_to("DisplayModeSet", "main", (mode) => {
+    resetJukebox(mode)
+    for (const search of geneSearches) search.setGenes(genesForMode())
+    // A selected gene that isn't circadian has nothing to show or play in Circadian mode
+    if (umapSelectedGeneId && !geneInMode(umapSelectedGeneId)) bus.execute_event("point_select", null)
     if (mode === "All") {
         umapReadCounts.setData(allgenes_VST_arr, "All")
         umapFft.setData(allgenes_fft_arr, "All")
@@ -906,9 +967,9 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
         umapReadCounts.setData(circadian_VST_arr, "Circadian")
         umapFft.setData(circadian_fft_arr, "Circadian")
     }
-    synth_node?.port.postMessage({ type: "DisplayModeSet", mode })
-    // Tints the whole synth panel (see styles.css) so the switch to a different dataset is obvious
-    document.getElementById("Synth_Waveform_container").dataset.geneSet = mode
+    // Tints the synth panel and jukebox (see .gene-set-scope in styles.css) so the switch to a different dataset is obvious
+    for (const el of document.querySelectorAll(".gene-set-scope")) el.dataset.geneSet = mode
+    syncSynthToMidiControls() // Assign depends on whether the gene is in the new mode
     refreshUmapGenePanels()
     updateWaveformDisplay()
     swapViolin(umapColorMode) // gene set and LS vs MetaCycle fields changed

@@ -62,12 +62,50 @@ export function interpolate_waveform(input_array, output_n_points) {
  * Worklets map back with `sample * 2 - 1`.
  */
 export function toUnipolarWavetable(input_array, output_n_points) {
-    const bipolar = maxAbsScaling(interpolate_waveform(input_array, output_n_points))
-    const table = new Float32Array(bipolar.length)
-    for (let i = 0; i < bipolar.length; i++) {
-        table[i] = (bipolar[i] + 1) * 0.5
-    }
+    const table = new Float32Array(output_n_points)
+    writeUnipolarWavetable(input_array, table, new Float64Array(output_n_points))
     return table
+}
+
+/**
+ * Same build as toUnipolarWavetable, written into `out` with no allocation (for the audio thread).
+ * `scratch` is a Float64Array of out.length; working in doubles keeps the result identical.
+ */
+export function writeUnipolarWavetable(input_array, out, scratch) {
+    const n = input_array.length
+    const m = out.length
+
+    // periodic Catmull-Rom resample (as interpolate_waveform)
+    let sum = 0
+    for (let i = 0; i < m; i++) {
+        const pos = i * (n / m)
+        const P1 = Math.floor(pos)
+        const v = catmullrom(
+            input_array[(P1 - 1 + n) % n],
+            input_array[P1 % n],
+            input_array[(P1 + 1) % n],
+            input_array[(P1 + 2) % n],
+            pos - P1,
+        )
+        scratch[i] = v
+        sum += v
+    }
+
+    // mean-center and max-abs scale (as maxAbsScaling), then map [-1, 1] -> [0, 1]
+    const mu = sum / m
+    let max = 0
+    for (let i = 0; i < m; i++) {
+        const v = scratch[i] - mu
+        scratch[i] = v
+        const a = v < 0 ? -v : v
+        if (a > max) max = a
+    }
+    if (!(max > 0)) {
+        out.fill(0.5) // flat input: silence
+        return out
+    }
+    for (let i = 0; i < m; i++) out[i] = (scratch[i] / max + 1) * 0.5
+    return out
 }
 
 /** Extract LD_* timepoint values in chronological column order. */

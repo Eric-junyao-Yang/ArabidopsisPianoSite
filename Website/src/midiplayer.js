@@ -1,4 +1,3 @@
-import { toUnipolarWavetable, ldTimepoints } from "/src/catmullrom.js"
 import { Midi } from "https://esm.sh/@tonejs/midi@2.0.28"
 
 const LOOKAHEAD_SEC = 0.1
@@ -8,12 +7,6 @@ const A4_HZ = 440
 
 export function midiToFreq(midiNote) {
     return A4_HZ * 2 ** ((midiNote - A4_MIDI) / 12)
-}
-
-export function geneToWavetable(GeneID, normalized_counts_lookup, tableSize = 2048) {
-    const item = normalized_counts_lookup.get(GeneID)
-    if (!item) return null
-    return toUnipolarWavetable(ldTimepoints(item), tableSize)
 }
 
 export async function loadMidiEvents(filePath, maxTracks = Infinity) {
@@ -219,22 +212,32 @@ export function createMidiTransport(midiCtx, midiNode, { onStop } = {}, bus) {
     }
 }
 
-/** Upload a per-track wavetable (copies into the worklet). */
-export function setTrackWavetable(midiNode, trackIndex, waveform) {
-    if (!midiNode || !waveform) return
-    // Structured clone is fine at gene-select rate; keep main-thread buffer intact for re-use.
-    midiNode.port.postMessage({
-        type: "updateWavetable",
-        trackIndex,
-        waveform,
-    })
+// ---- Track sources (see MidiAudioProcessor / src/audio/sources.js) ----
+
+/** Track plays a fixed wavetable built in the worklet from a gene's 16 VST points. */
+export function setTrackStatic(midiNode, trackIndex, points) {
+    midiNode?.port.postMessage({ type: "setTrackStatic", trackIndex, points })
 }
 
-/** Mark a track as having no gene assigned (silent until a new table is uploaded). */
-export function clearTrackWavetable(midiNode, trackIndex) {
-    if (!midiNode) return
-    midiNode.port.postMessage({
-        type: "clearWavetable",
-        trackIndex,
-    })
+/**
+ * Track morphs through draws from a GP posterior (gpSamplerClass.posterior()).
+ * mu / L are copied, not transferred, so the cached posterior stays usable.
+ */
+export function setTrackGP(midiNode, trackIndex, posterior) {
+    midiNode?.port.postMessage({ type: "setTrackGP", trackIndex, mu: posterior.mu, L: posterior.L })
+}
+
+/** Every track loses its gene (e.g. on a Circadian / All genes switch); sounding notes release. */
+export function clearAllTracks(midiNode) {
+    midiNode?.port.postMessage({ type: "clearAllTracks" })
+}
+
+/** Post the given track's GP draws back as "trackDraw" messages (null = none). */
+export function watchTrack(midiNode, trackIndex) {
+    midiNode?.port.postMessage({ type: "watchTrack", trackIndex })
+}
+
+/** Track has no gene: silent, and its sounding notes release. */
+export function clearTrack(midiNode, trackIndex) {
+    midiNode?.port.postMessage({ type: "clearTrack", trackIndex })
 }

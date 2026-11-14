@@ -1342,15 +1342,15 @@ main {
     background: #fff;
 }
 
-/* ---------- Synth panel tint per gene set ---------- */
-/* Re-scoping the surface tokens re-tints every panel, plot frame and shell inside the synth at once. */
+/* ---------- Tint per gene set (synth panel and jukebox: .gene-set-scope) ---------- */
+/* Re-scoping the surface tokens re-tints every panel, plot frame and shell inside at once. */
 
-#Synth_Waveform_container,
-#Synth_Waveform_container :is(.plot-frame, .canvas-shell, .keyboard-shell, .synth-to-jukebox, .gene-set-toggle__options) {
+/* :where = zero specificity, so elements with their own transition list keep it */
+:where(.gene-set-scope, .gene-set-scope :is(.panel, .plot-frame, .canvas-shell, .keyboard-shell, .gene-set-toggle__options, #midi_handle)) {
     transition: background-color 300ms ease, border-color 300ms ease;
 }
 
-#Synth_Waveform_container[data-gene-set="Circadian"] {
+.gene-set-scope[data-gene-set="Circadian"] {
     --color-bg-elevated: color-mix(in srgb, var(--circadian-hue) 5%, white);
     --color-bg-sunken: color-mix(in srgb, var(--circadian-hue) 11%, white);
     --color-border: color-mix(in srgb, var(--circadian-hue) 22%, white);
@@ -1359,8 +1359,7 @@ main {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #Synth_Waveform_container,
-    #Synth_Waveform_container :is(.plot-frame, .canvas-shell, .keyboard-shell, .synth-to-jukebox, .gene-set-toggle__options) {
+    :where(.gene-set-scope, .gene-set-scope :is(.panel, .plot-frame, .canvas-shell, .keyboard-shell, .gene-set-toggle__options, #midi_handle)) {
         transition: none;
     }
 }
@@ -1662,7 +1661,7 @@ main {
     background:
         linear-gradient(
             135deg,
-            color-mix(in srgb, var(--cb-teal) 6%, white) 0%,
+            color-mix(in srgb, var(--cb-teal) 6%, var(--color-bg-elevated)) 0%,
             var(--color-bg-elevated) 42%,
             var(--color-bg-elevated) 100%
         );
@@ -1874,7 +1873,7 @@ main {
     background:
         linear-gradient(
             90deg,
-            color-mix(in srgb, var(--cb-teal) 7%, white) 0,
+            color-mix(in srgb, var(--cb-teal) 7%, var(--color-bg-elevated)) 0,
             var(--color-bg-elevated) 7rem
         );
 }
@@ -1965,6 +1964,38 @@ main {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Circadian mode: the gene name is a button that shows the track's live draws in the waveform plot */
+.midi-gene-name__watch {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    padding: 0.05rem 0.35rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.midi-gene-name__watch:hover {
+    background: color-mix(in srgb, var(--cb-indigo) 14%, white);
+}
+
+.midi-gene-name__watch:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.midi-gene-name__watch.is-watched {
+    background: var(--cb-indigo);
+    color: #fff;
+    text-decoration: none;
 }
 
 .midi-track-remove {
