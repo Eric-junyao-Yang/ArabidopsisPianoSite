@@ -33,7 +33,6 @@
 
             <h3>FAQ: But why? Why would you do such a thing?</h3>
             <p>Shushhhh... don't ruin this for me.</p>
-            <p>Anyways, here's a quick <span id="DEMO">DEMO</span> for the type of analysis you could do.</p>
 
             <!-- <h4>The web app is split into to main sections:</h4>
             <ol class="section-toc">
@@ -141,7 +140,8 @@
                             </p>
                             <h4>Filtering</h4>
                             <p>
-                                Filtering is a great way to explore the colored graph dynamically. The vertical plot between the two larger
+                                Filtering is a great way to explore the colored graph dynamically. Here is a <button type="button" id="DEMO" class="link-button">DEMO</button>.
+                                The vertical plot between the two larger
                                 plots is called a violin plot. Top and bottom circles can be click and dragged to set the upper and lower 
                                 filtering thresholds. The body of the window can be dragged and repositioned as well. The filter updates 
                                 based on coloring mode.
@@ -149,7 +149,8 @@
                             <h4>Energy %</h4>
                             <p>
                                 Below the three plots is a narrow horizontal plot showing the energy % of the selected wave's component
-                                frequencies. The frequency components strongly effects how the waveform sounds. Discussion below 
+                                frequencies. The frequency components strongly effects how the waveform sounds. The richer the high
+                                frequency components (e.g. below 24hrs) the "brigher" the sound. Discussion below 
                                 has more details.
                             </p>
                             <h4>Waveform</h4>
@@ -159,12 +160,14 @@
                                 through the data. The interpolation is used to generate the sounds you hear.
                             </p>
                             <h5>Circadian Mode</h5>
+                            <p>
                                 Instead of simple interpolation, oscillating genes can be modeled. When you play a sound, 
                                 the model generates one possible wavefrom that fits the experimental data every half a second. 
                                 The green line is the average and green band is the 95% confidence interval. 
+                            </p>
                             <h4>All genes vs Circadian</h4>
                             <p>
-                                Display all genes or only circadian ones. Some of the coloring mode has suble changes, pay attention to the hint box.
+                                Display all genes or only circadian ones. Some of the coloring mode has suble changes, pay attention to the help text.
                                 The waveform (and sound) also changes. The sound you hear morphs between the sampled waveforms, 
                                 so the wobble you hear matches the certainty of the shape.
                             </p>
@@ -576,7 +579,59 @@
         </section>
 
         <div id="help-popup" role="dialog" aria-live="polite"></div>
+        <div>
+            </details>
+            <details class="fold fold--science">
+                <summary class="fold__summary">
+                    <span class="fold__badge">Discussion</span>
+                    <span class="fold__title">Oscillating data and Sound Quality</span>
+                    <span class="fold__chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="fold__body" id="Synth_Howto_div">
+                    <div class="synth-science prose-block">
+                        <h4>Graph Grouping</h4>
+                        <p>
+                            These plots are called UMAPs, and data points that are similar are grouped together.
+                        </p>
+                        <h5>All Genes Mode</h5>
+                        <p>
+                            In "Group by Biology", you will notice the organizing principles are "peak-time (phase)" and oscillation energy. 
+                            In "Group by Sound", phase information is discarded because we assume the waveform repeats indefinitely, 
+                            so the plot is organized by oscillation energy only.
+                        </p>
+                        <h5>Circaidan Mode</h5>
+                        <p>
+                            "Group by Biology" is still strongly organized by "peak-time (phase)", but "Group by Sound" no longer groups well because
+                            now every gene has strong 24hr oscillation energy.
+                        </p>
 
+                        <h4>Oscillating Genes</h4>
+                        <p>
+                            The vast majority of the oscillating genes oscillate at around 24 hours. A smaller extent oscillates at 12 hours. 
+                            Genes that doesn't seem to repeat their pattern will have strong 48hr oscillation component because that's how long
+                            the experiment went.
+                        </p>
+
+                        <h4>Sound Quality</h4>
+                        <p>
+                            Best way to seprate sound quality is by their oscillation energy. The three clearest types of sound comes from 
+                            those with strong 48, 24 and 12 hr components. A gene with strong 24hr component will sound like an octave 
+                            higher than a gene with strong 48hr component. A gene with strong 12hr component will sound another octave 
+                            higher still. A gene with strong 16hr component should sound like a perfect fifth away from a gene with 
+                            strong 24hr component, but unfortunately there are no genes with a really strong 16hr component so the difference
+                            sounds really subtle.
+                        </p>
+
+                        <h4>Circadian vs All Genes Sounds</h4>
+                        <p>
+                            The synth sound from Circadian Mode is a lot smoother than "All Genes Mode", and that is exclusively due to the modeling method.
+                            After all, the underlying data is still the same. So instead, focus on how the sound "wobbles" over time as you hold down a note.
+                            That represents how uncertain we are of the true shape of the waveform.
+                        </p>
+                    </div>
+                </div>
+            </details>
+        </div>
         <section id="methods" class="app-section app-section--methods" aria-labelledby="methods-heading">
             <header class="section-header">
                 <span class="section-header__index" aria-hidden="true">03</span>

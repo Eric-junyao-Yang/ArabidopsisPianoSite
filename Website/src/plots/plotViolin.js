@@ -102,10 +102,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('rx', 4)
         .style('cursor', 'grab')
         .style('touch-action', 'none')
-        .on("dblclick", () => {
-            [low_val, high_val] = [ymin, ymax]
-            updateScrubber(true)
-        })
+        .on("dblclick", () => setRange(ymin, ymax, { animate: true }))
 
     // Top bar
     const SCRUBBER_HANDLES_HEIGHT = 14 // generous hit area for touch
@@ -216,11 +213,19 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         updateScrubber()
     }))
 
+    // Set the filter window from code (e.g. the demo); clamped to the plotted range
+    function setRange(low, high, { animate = false } = {}) {
+        low_val = Math.max(ymin, Math.min(ymax, low))
+        high_val = Math.max(low_val, Math.min(ymax, high))
+        updateScrubber(animate)
+    }
+
     // apply default scrubber values
     if (default_high !== null && default_low !== null){
-        [high_val, low_val] = [default_high, default_low]
-        updateScrubber()
+        setRange(default_low, default_high)
     }
+
+    return { domain: [ymin, ymax], setRange, node: svg.node() }
 }
 
 /** Assumes arr is already sorted ascending. */

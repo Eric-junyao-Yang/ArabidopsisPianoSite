@@ -122,6 +122,27 @@ a:hover {
     text-decoration-color: currentColor;
 }
 
+/* A button that reads like an inline link (actions in prose, e.g. DEMO) */
+.link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--color-link);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+    text-decoration-color: color-mix(in srgb, var(--color-link) 40%, transparent);
+    cursor: pointer;
+    transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
+}
+
+.link-button:hover {
+    color: var(--color-link-hover);
+    text-decoration-color: currentColor;
+}
+
 :focus-visible {
     outline: 2px solid var(--cb-indigo);
     outline-offset: 2px;

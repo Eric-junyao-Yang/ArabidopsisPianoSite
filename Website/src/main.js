@@ -423,16 +423,17 @@ function genesForMode() {
     return displayMode === "Circadian" ? gp_params_arr : VST_arr
 }
 
-function updateDisplayMode() {
-    const el = document.querySelector('input[name="CircadianToggle"]:checked')
-    if (el?.value === "All" || el?.value === "Circadian") displayMode = el.value
-    return displayMode
+/** Switch gene set ("All" | "Circadian"): syncs the radios, then tells everyone via DisplayModeSet. */
+function setDisplayMode(mode) {
+    if (mode !== "All" && mode !== "Circadian") return
+    displayMode = mode
+    const radio = document.querySelector(`input[name="CircadianToggle"][value="${mode}"]`)
+    if (radio) radio.checked = true
+    bus.execute_event("DisplayModeSet", mode)
 }
 document.querySelectorAll('input[name="CircadianToggle"]').forEach((radio) => {
     radio.addEventListener("change", () => {
-        if (!radio.checked) return
-        updateDisplayMode()
-        bus.execute_event("DisplayModeSet", radio.value)
+        if (radio.checked) setDisplayMode(radio.value)
     })
 })
 
@@ -630,6 +631,7 @@ function violinMetric(mode){
 }
 
 const violinDiv = d3.select("#filter_slider")
+let violin = null // handle of the violin on screen ({ domain, setRange, node }); replaced on every swap
 
 function swapViolin(mode){
     const { label, valueOf } = violinMetric(mode)
@@ -645,7 +647,7 @@ function swapViolin(mode){
 
     // keep non-plot children (e.g. the help button)
     violinDiv.selectAll(":scope > svg").remove()
-    plotViolin(
+    violin = plotViolin(
         130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
         values, violinDiv, label, bus, "umap_value_filter"
     )
@@ -716,6 +718,86 @@ function updateColorModeHelp() {
 bus.subscribe_to("umap_color_mode", "colorModeHelp", updateColorModeHelp)
 bus.subscribe_to("DisplayModeSet", "colorModeHelp", updateColorModeHelp)
 updateColorModeHelp()
+
+// ---- DEMO: phase coloring on the Counts UMAP, then sweep a peak-time window up and back down ----
+const DEMO_WINDOW_HOURS = 4
+const DEMO_SWEEP_MS = 4000 // per direction
+let demoRun = 0 // bumped to cancel a running demo
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** Resolves once a smooth scroll settles (or after `timeout`, e.g. when there was nothing to scroll). */
+function scrollSettled(timeout = 1000) {
+    return new Promise((resolve) => {
+        const done = () => {
+            clearTimeout(timer)
+            window.removeEventListener("scrollend", done)
+            resolve()
+        }
+        const timer = setTimeout(done, timeout)
+        window.addEventListener("scrollend", done)
+    })
+}
+
+/** Calls step(easedT) every frame for `ms`. Resolves true when finished, false if isLive() turns false first. */
+function animateFor(ms, ease, step, isLive) {
+    return new Promise((resolve) => {
+        const timer = d3.timer((elapsed) => {
+            if (!isLive()) {
+                timer.stop()
+                return resolve(false)
+            }
+            const t = Math.min(1, elapsed / ms)
+            step(ease(t))
+            if (t === 1) {
+                timer.stop()
+                resolve(true)
+            }
+        })
+    })
+}
+
+async function runDemo() {
+    const run = ++demoRun
+
+    // Switching gene set empties the jukebox, so only switch when needed
+    if (displayMode !== "All") setDisplayMode("All")
+    setUmapColorMode("phase") // rebuilds the violin with peak time and clears the filter
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    document.getElementById("read_counts")?.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "center",
+    })
+    await scrollSettled()
+
+    // Any user change to the violin (drag, color mode, gene set) or another DEMO press ends the demo
+    const v = violin
+    const isLive = () => run === demoRun && violin === v
+    if (!isLive()) return
+
+    const [ymin, ymax] = v.domain
+    const top = ymax - DEMO_WINDOW_HOURS
+    const showWindow = (low) => v.setRange(low, low + DEMO_WINDOW_HOURS)
+
+    v.setRange(ymin, ymin + DEMO_WINDOW_HOURS, { animate: true })
+    await delay(800) // let the 400 ms scrubber transition finish before driving it per frame
+    if (!isLive()) return
+
+    const up = await animateFor(DEMO_SWEEP_MS, d3.easeCubicInOut, (t) => showWindow(ymin + t * (top - ymin)), isLive)
+    if (!up) return
+    const down = await animateFor(DEMO_SWEEP_MS, d3.easeCubicInOut, (t) => showWindow(top - t * (top - ymin)), isLive)
+    if (!down) return
+
+    await delay(400)
+    if (isLive()) v.setRange(ymin, ymax, { animate: true })
+}
+
+document.getElementById("DEMO")?.addEventListener("click", runDemo)
+// User grabbed the scrubber (the help button sits in the same div, so only count the plot)
+violinDiv.node()?.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("svg")) demoRun++
+})
 
 setupHelpPopUps(document, window)
 
