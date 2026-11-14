@@ -13,7 +13,7 @@ import {
     drawAxis,
     containerSize,
     onResize,
-} from "/src/plotTheme.js"
+} from "/src/plots/plotTheme.js"
 
 /** Harmonics 1..8 of a 48h fundamental → 48, 24, 16, … */
 const TICK_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => 48 / k)

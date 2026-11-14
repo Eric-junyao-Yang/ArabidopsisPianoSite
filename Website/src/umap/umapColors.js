@@ -1,5 +1,5 @@
-import { PALETTE, THEME, hexToRgb01 } from "/src/plotTheme.js"
-import { energyPctAtPeriod } from "/src/plotHarmonics.js"
+import { PALETTE, THEME, hexToRgb01 } from "/src/plots/plotTheme.js"
+import { energyPctAtPeriod } from "/src/plots/plotHarmonics.js"
 
 export const QVAL_CUTOFF = 0.01
 const PHASE_SCALE_H = 48

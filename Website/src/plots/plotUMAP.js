@@ -1,4 +1,4 @@
-import { THEME, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "/src/plotTheme.js"
+import { THEME, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "/src/plots/plotTheme.js"
 import {
     buildColorRgbArr,
     rgb01ToCss,

@@ -1,4 +1,4 @@
-import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plotTheme.js"
+import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plots/plotTheme.js"
 
 export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 20, left: 50}, 
     Arr, d3_select_div, y_lab, bus, execute_event = "", default_high = null, default_low = null){

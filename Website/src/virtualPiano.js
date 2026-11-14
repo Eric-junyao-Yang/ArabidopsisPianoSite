@@ -1,4 +1,4 @@
-import { PALETTE, THEME } from "/src/plotTheme.js"
+import { PALETTE, THEME } from "/src/plots/plotTheme.js"
 
 // Builds the piano and keeps it fitted to its container (rebuilds on resize; keys are
 // stateless, so a rebuild is cheap and safe).

@@ -1,5 +1,5 @@
 import { interpolate_waveform } from "/src/catmullrom.js"
-import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plotTheme.js"
+import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
 
 function extractLdSeries(geneRow) {
     if (!geneRow) return null

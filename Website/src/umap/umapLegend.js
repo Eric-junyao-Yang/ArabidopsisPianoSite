@@ -1,4 +1,4 @@
-import { PALETTE, THEME } from "/src/plotTheme.js"
+import { PALETTE, THEME } from "/src/plots/plotTheme.js"
 import { QVAL_CUTOFF, continuousColorScale } from "/src/umap/umapColors.js"
 
 function drawContinuousLegend(svg, legend, gradId, interpolator, leftLabel, rightLabel, title) {

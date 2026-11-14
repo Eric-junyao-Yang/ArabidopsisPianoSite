@@ -1,15 +1,13 @@
-import { Synth_Waveform } from "/src/synth_waveform.js"
-import { plotUMAP, selectedEnergyPeriodHours } from "/src/plotUMAP.js"
+import { plotUMAP, selectedEnergyPeriodHours } from "/src/plots/plotUMAP.js"
 import { phaseField, qvalField } from "/src/umap/umapColors.js"
 import { bin_to_array } from "/src/binHelper.js"
-import { plotViolin } from "/src/plotViolin.js"
-import { plotWaveformsClass } from "/src/GaussianProcess/plotWaveforms.js"
+import { plotViolin } from "/src/plots/plotViolin.js"
+import { plotWaveformsClass } from "/src/plots/plotWaveforms.js"
 import { mountSynthScienceDiv } from "/src/synthScienceDiv.js"
-import { plotGene } from "/src/gene_plots.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
 import { searchbar } from "/src/searchbar.js"
-import { initGlobalAudio } from "/src/globalVolumeControl.js"
+import { initGlobalAudio } from "/src/audio/globalVolumeControl.js"
 import {
     loadMidiEvents,
     createMidiTransport,
@@ -19,8 +17,8 @@ import {
     clearAllTracks,
     watchTrack,
 } from "/src/midiplayer.js"
-import { midiTrackPlots } from "/src/midiTrackPlot.js"
-import { plotHarmonics, energyPctAtPeriod } from "/src/plotHarmonics.js"
+import { midiTrackPlots } from "/src/plots/midiTrackPlot.js"
+import { plotHarmonics, energyPctAtPeriod } from "/src/plots/plotHarmonics.js"
 import { gpSamplerClass, VSTlookup_to_arr } from "/src/GaussianProcess/GPalgo.js"
 
 // ---- add a bus for communication between modules ----
@@ -104,8 +102,6 @@ const specs_lookup = new Map(per_gene_meta.map((v) => [
     })),
 ]))
 // --------------------------------------- Synth waveform ---------------------------------------
-// const synth_waveform_canvas = document.getElementById("Synth_Waveform")
-// const synth_waveform = new Synth_Waveform(synth_waveform_canvas, bus, VST_arr)
 
 /** Current gene driving the synth waveform (null = custom / preset). */
 let currentSynthGeneID = null
@@ -178,12 +174,6 @@ function applySynthPreset(fn) {
     // Presets / reset leave the gene data behind — clear selection so UI matches the sound.
     bus.execute_event("point_select", null)
 }
-
-// document.getElementById("reset").addEventListener("click", () => applySynthPreset(() => synth_waveform.reset()))
-// document.getElementById("sine").addEventListener("click", () => applySynthPreset(() => synth_waveform.sine()))
-// document.getElementById("square").addEventListener("click", () => applySynthPreset(() => synth_waveform.square()))
-// document.getElementById("saw").addEventListener("click", () => applySynthPreset(() => synth_waveform.saw()))
-// document.getElementById("triangle").addEventListener("click", () => applySynthPreset(() => synth_waveform.triangle()))
 
 synthToMidiTrackSelect?.addEventListener("change", () => {
     setSynthToMidiStatus(null)
@@ -470,7 +460,6 @@ const synthReady = (async () => {
     compressor.attack.value = 0.003
     compressor.release.value = 0.05
     synth_node.connect(compressor).connect(globalAudio.input)
-    // synth_node.port.postMessage({ type: "updatePoints", points: synth_waveform.points })
     // In Circadian mode the worklet samples the GP itself and reports each draw it starts
     // morphing towards, so the plot follows the sound
     synth_node.port.onmessage = (event) => {
@@ -712,19 +701,6 @@ mountSynthScienceDiv({
     initAudio: initSynthScienceAudio,
 })
 
-const step_seq_plot_div = document.getElementById("Gene_Plots")
-// viewBox keeps the 800x300 layout but lets the figure scale down on narrow screens
-const introSvg = d3.select(step_seq_plot_div).append("svg")
-    .attr("viewBox", "0 0 800 300")
-    .attr("preserveAspectRatio", "xMidYMid meet")
-    .style("width", "100%")
-    .style("height", "auto")
-const TOC1 = normalized_counts_lookup.get("AT5G61380")
-const PP2AA3 = normalized_counts_lookup.get("AT1G13320")
-if (TOC1 && PP2AA3) {
-    plotGene(introSvg, [PP2AA3, TOC1], ["PP2AA3", "TOC1"])
-}
-
 // --------------------------------------- Search Bars ---------------------------------------
 // Each search only offers genes from the current mode (lists swapped on DisplayModeSet)
 const geneSearches = []
@@ -767,74 +743,6 @@ bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {
     setMidiTrackLoaded(trackIndex, GeneID)
     trackSourceFor(trackIndex, GeneID)
 })
-
-// bus.subscribe_to("synth_waveform_changed", "main", (points) => {
-//     if (synth_node) {
-//         synth_node.port.postMessage({ type: "updatePoints", points })
-//     }
-// })
-
-// bus.subscribe_to("playNote", "main", ([mv, GeneID, Index, freq, sweep]) => {
-//     const node = createVoice(mv, shared)
-//     if (!node) return
-//     node.port.postMessage({
-//         type: "geneSpecifics",
-//         GeneID,
-//         Index,
-//         freq,
-//         sweep,
-//         duration: 1,
-//     })
-// })
-
-// bus.subscribe_to("selection_modified", "main", (selection) => {
-//     renderSelectionPanel(selection)
-// })
-
-// bus.subscribe_to("gene_label_select", "main", (item) => {
-//     if (!item) {
-//         plotWaveforms.renderEmpty()
-//         renderGPMeta(null)
-//         return
-//     }
-//     const VST_dat = VST_lookup.get(item.GeneID)
-//     if (!VST_dat) return
-//     plotWaveforms.updatePlot({
-//         metaValues,
-//         shared,
-//         cur_mu: osc_perGene_mu[item.index],
-//         cur_std: osc_perGene_std[item.index],
-//         meta_item: item,
-//         VST_dat,
-//     })
-//     renderGPMeta(item)
-// })
-
-// bus.subscribe_to("resetSelection", "main", () => {
-//     plotWaveforms.renderEmpty()
-//     renderGPMeta(null)
-// })
-
-// bus.subscribe_to("updateParams", "main", (params) => {
-//     if (!synthSlides_node) return
-//     if (!synthSlideDestinationConnection) {
-//         synthSlides_node.connect(globalAudio.input)
-//         synthSlideDestinationConnection = true
-//     }
-//     synthSlides_node.port.postMessage({
-//         type: "updateWave",
-//         amplitude: params.amplitude,
-//         shape: params.shape,
-//         cycles: params.cycles,
-//     })
-// })
-
-// bus.subscribe_to("stopSlideSound", "main", () => {
-//     if (synthSlides_node && synthSlideDestinationConnection) {
-//         synthSlides_node.disconnect(globalAudio.input)
-//         synthSlideDestinationConnection = false
-//     }
-// })
 
 const umapGenePanels = {
     hover: {
