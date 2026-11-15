@@ -21,7 +21,7 @@
             <p class="site-lede">
                 Have you ever looked at a wiggly graph and wondered what would happen if you plug the shape into a synthesizer?
                 Who hasn't?</p>
-            <p class="side_lede">
+            <p class="site-lede">
                 Transcription measurements reflect gene activity, which can be affected by external or internal stimuli. 
                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                 measured the effect of the day/night cycle on each of the roughly
@@ -33,6 +33,15 @@
 
             <h3>FAQ: But why? Why would you do such a thing?</h3>
             <p>Shushhhh... don't ruin this for me.</p>
+
+            <p>
+                Feel free to go ahead and start loading up sounds to play with the synth keyboard. But if you're curious to learn more about the biology, here are some questions to get you started:
+            </p>
+            <ol>
+                <li>How are the plots organized in "All Genes Mode"? How about "Circadian Only Mode"?</li>
+                <li>How can the plots help you pick out the most "differently sounding" genes in each mode to load into the Jukebox?</li>
+                <li>How does the biology relate to the sound quality in each mode?</li>
+            </ol>
 
             <!-- <h4>The web app is split into two main sections:</h4>
             <ol class="section-toc">
@@ -74,7 +83,7 @@
                                 Arabidopsis thaliana is a plant that scientists love to study.
                                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                                 grew Arabidopsis under <span style="color: #DDCC77">16hr light</span> and <span style="color: #332288">8hr dark</span> cycles, 
-                                and measured the activity of each of the 27,000 genes every three hours for two days.
+                                and measured the activity of each of the roughly 27,000 genes every three hours for two days.
                             </p>
                             <p>
                                 Here is TOC1 (AT5G61380), a known circadian gene, alongside PP2AA3 (AT1G13320), a housekeeping (non-oscillating) gene:
@@ -103,7 +112,7 @@
                             </div>
                             <p>
                                 For the synthesizer below, <strong>amplitude</strong> is locked and <strong>frequency</strong> is mapped to the keyboard, so you can focus on waveform <strong>shape</strong>.
-                                That gives about 27,000 “instruments” derived from the Arabidopsis genome.
+                                That gives about 19,200 (after filtering from 27,000) “instruments” derived from the Arabidopsis genome.
                             </p>
                             <p>
                                 How would we expect oscillating and non-oscillating genes to sound different? You can explore the interactive
@@ -121,24 +130,40 @@
                     </summary>
                     <div class="fold__body" id="Synth_Howto_div">
                         <div class="synth-science prose-block">
-                            <h4>Picking a Sound</h4>
+                            <h3>Picking a Sound</h3>
                             <p>
-                                There are two linked plots below grouped by Biology vs Sound. Each point is a gene. 
-                                Click to select. Click away to cancel. Hover highlights the same gene in both views.
+                                There are two linked plots below "Group by Biology" vs "Group by Sound".
+                            </p> 
+                            <h4>Group by Biology</h4>
+                            <p>
+                                Tries to place similar points together based on experimental data. 
+                            </p>
+                            <h4>Group by Sound</h4>
+                            <p>
+                                Tries to place similar points together based on the waveform's sound. It uses the same data but discards 
+                                phase information. For sound, what matters is the component frequencies of each wave, and shifting the wave
+                                in time does not change this information.
+                            </p>
+                            <p>
+                                Each point is a gene. Click to select. Click away to cancel. Hover highlights the same gene in both views.
                                 Other parts of the dashboard will update as you select a gene.
                             </p>
-                            <h4>Playing a Sound</h4>
+                            <h3>Playing a Sound</h3>
                             <p>
                                 Click the virtual keyboard at the bottom or use the corresponding keys on your keyboard to play 
                                 the selected gene's waveform. Polyphony is supported (i.e. multiple notes at once). The up and down
                                 arrows to the right control the octave.
                             </p>
-                            <h4>Coloring the Graph</h4>
+                            <p>
+                                If you feel intimidated by the piano keyboard, just load up a gene and 
+                                press "adgj" (maj7) together on your keyboard and feel the jazziness.
+                            </p>
+                            <h3>Coloring the Graph</h3>
                             <p>
                                 The best way to explore the plots is by coloring them. Selecting any of the coloring modes updates
                                 the plots. As you change colors, the hint box below will update to give more details.
                             </p>
-                            <h4>Filtering</h4>
+                            <h3>Filtering</h3>
                             <p>
                                 Filtering is a great way to explore the colored graph dynamically. Here is a <button type="button" id="DEMO" class="link-button">DEMO</button>.
                                 The vertical plot between the two larger
@@ -146,32 +171,39 @@
                                 filtering thresholds. The body of the window can be dragged and repositioned as well. The filter updates 
                                 based on the coloring mode.
                             </p>
-                            <h4>Energy %</h4>
+                            <h3>Energy %</h3>
                             <p>
                                 Below the three plots is a narrow horizontal plot showing the energy % of the selected wave's component
                                 frequencies. The frequency components strongly affect how the waveform sounds. The stronger the high
                                 frequency components (periods shorter than 24 hr), the "brighter" the sound. The discussion below 
                                 has more details.
                             </p>
-                            <h4>Waveform</h4>
-                            <h5>All Genes Mode</h5>
+                            <h3>Waveform</h3>
+                            <h4>All Genes Mode</h4>
                             <p>
                                 The waveform above the keyboard displays the experimental data of the selected gene. The line is an interpolation
                                 through the data. The interpolation is used to generate the sounds you hear.
                             </p>
-                            <h5>Circadian Mode</h5>
+                            <h4>Circadian Mode</h4>
                             <p>
-                                Instead of simple interpolation, oscillating genes can be modeled. When you play a sound, 
-                                the model generates one possible waveform that fits the experimental data every half a second. 
-                                The green line is the average and the green band is the 95% confidence interval. 
-                            </p>
-                            <h4>All genes vs Circadian</h4>
-                            <p>
-                                Display all genes or only circadian ones. Some coloring modes change subtly, so keep an eye on the help text.
-                                The waveform (and sound) also changes. The sound you hear morphs between the sampled waveforms, 
+                                Instead of simple interpolation, circadian genes can be modeled. 
+                                The model starts by assuming a smooth curve that repeats every 24hrs. 
+                                The model compares day1 vs day2 of the experimental data and the less they agree on, 
+                                the less confident we are of the shape of the wave.
+                            </p>    
+                            <p>When you play a sound, 
+                                the model generates one possible waveform that fits the experimental data every 50ms. 
+                                The teal line is the average and the teal band is the 95% confidence interval.
+                                
+                                The sound you hear morphs between the sampled waveforms, 
                                 so the wobble you hear matches the certainty of the shape.
                             </p>
-                            <h4>Jukebox</h4>
+                            <h3>All genes vs Circadian</h3>
+                            <p>
+                                Display all genes or only circadian ones. Some coloring modes change subtly, so keep an eye on the help text.
+                                The waveform (and sound) also changes.
+                            </p>
+                            <h3>Jukebox</h3>
                             <p>
                                 Clicking on the Jukebox sidebar slides the jukebox in and out of frame. There is a MIDI song loaded, but 
                                 you need to assign sounds (genes) to each track to hear it. If you have a gene you like after playing it,
@@ -386,7 +418,7 @@
                                                         <input type="radio" name="oscillating_type" value="qval">
                                                         <span>oscillating</span>
                                                     </label>
-                                                    <label class="umap-color-menu__option">
+                                                    <label class="umap-color-menu__option" id="oscillating_type_circadian">
                                                         <input type="radio" name="oscillating_type" value="circadian" checked>
                                                         <span>circadian</span>
                                                     </label>
@@ -434,8 +466,9 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <button id="waveConf">waveform confidence</button>
                                     </div>
+                                    <!-- Circadian mode only: needs the GP fit (see syncColorChoicesToGeneSet) -->
+                                    <button type="button" class="btn" id="UMAP_waveConf" aria-pressed="false" hidden>waveform confidence</button>
                                 </div>
                             </div>
                             <div class="gene-set-toggle">
@@ -500,7 +533,7 @@
                     class="help-panel toolbar"
                     data-help-text="The waveform you see will be the waveform played when you click on the virtual keyboard or play with your actual keyboard (it supports polyphony!).
                     
-                    load in experimental data by searching for a Gene ID or clicking one of the points from the UMAPs."
+                    Load in experimental data by searching for a Gene ID or clicking one of the points from the UMAPs."
                     >
                     <div id="Synth_interaction_bar">
                         <div id="synth_waveform_name" class="synth-waveform-label" aria-live="polite">
@@ -538,7 +571,7 @@
                 
                 <div id="Synth_Keyboard_div" class="keyboard-shell" aria-label="Virtual keyboard"></div>
 
-                <divd
+                <div
                     id="pushSound"
                     class="synth-to-jukebox help-panel is-disabled"
                     aria-disabled="true"
@@ -581,44 +614,51 @@
                 </summary>
                 <div class="fold__body" id="Synth_Discussion_div">
                     <div class="synth-science prose-block">
-                        <h4>Graph Grouping</h4>
+                        <h3>Graph Grouping</h3>
                         <p>
                             These plots are called UMAPs, and data points that are similar are grouped together.
                         </p>
-                        <h5>All Genes Mode</h5>
+                        <h4>All Genes Mode</h4>
                         <p>
                             In "Group by Biology", you will notice the organizing principles are "peak-time (phase)" and oscillation energy. 
                             In "Group by Sound", phase information is discarded because we assume the waveform repeats indefinitely, 
                             so the plot is organized by oscillation energy only.
                         </p>
-                        <h5>Circadian Mode</h5>
+                        <h4>Circadian Mode</h4>
                         <p>
-                            "Group by Biology" is still strongly organized by "peak-time (phase)", but "Group by Sound" no longer groups well because
-                            now every gene has strong 24hr oscillation energy.
+                            "Group by Biology" is still strongly organized by "peak-time (phase)", but "Group by Sound" no longer groups by oscillation energy
+                            because only genes that oscillate around 24hr are kept. The plot is largely organized by waveform confidence, 
+                            which correlates highly with noisiness of the data. 
                         </p>
 
-                        <h4>Oscillating Genes</h4>
+                        <h3>Sonic Grouping</h3>
+                        <h4>All Genes Mode</h4>
                         <p>
                             The vast majority of the oscillating genes oscillate at around 24 hours. A smaller group oscillates at 12 hours. 
                             Genes that don't seem to repeat their pattern will have a strong 48hr oscillation component, because that's how long
                             the experiment lasted.
                         </p>
-
-                        <h4>Sound Quality</h4>
                         <p>
-                            The best way to separate sound quality is by oscillation energy. The three clearest types of sound come from 
+                            The best way to separate sound quality is by their oscillation energy. The stronger the higher harmonic content,
+                            the "brighter" the sound. The three clearest types of sound come from 
                             genes with strong 48, 24 and 12 hr components. A gene with a strong 24hr component will sound an octave 
                             higher than a gene with a strong 48hr component. A gene with a strong 12hr component will sound another octave 
                             higher still. A gene with a strong 16hr component should sound a perfect fifth away from a gene with a 
                             strong 24hr component, but unfortunately there are no genes with a really strong 16hr component so the difference
-                            sounds really subtle.
+                            sounds reaaaaaally subtle (but there!).
                         </p>
-
-                        <h4>Circadian vs All Genes Sounds</h4>
+                        <h4>Circadian Mode</h4>
                         <p>
-                            The synth sound from Circadian Mode is a lot smoother than "All Genes Mode", and that is exclusively due to the modeling method.
-                            After all, the underlying data is still the same. So instead, focus on how the sound "wobbles" over time as you hold down a note.
-                            That represents how uncertain we are of the true shape of the waveform.
+                            Since only genes oscillating around 24hrs are kept, the sonic separation of harmonics is not helpful. 
+                            There are still some genes with higher harmonic content, but much rarer and less obvious. Instead,
+                            the primary sonic difference is in the confidence of the shape of the wave (the wobble) since the sound is continuously 
+                            sampled. I absolutely love the sound.
+                        </p>
+                        <h3>Picking Sounds for Jukebox</h3>
+                        <p>
+                            In audio mixing, letting instruments dodge each other in terms of occupied frequencies prevents the music from sounding muddy.
+                            In "All Genes Mode", we have 3 main audio repertoire (48, 24, and 12hrs). The 12 hr component sounds the brightest, those genes are suitable for vocal or brass.
+                            48hr is the dullest, and those genes are suitable as bass.
                         </p>
                     </div>
                 </div>
@@ -650,67 +690,71 @@
                     <h5>DESeq2: adjusting for differences in sequencing depth and RNA composition</h5>
                     <p>
                         DESeq2 was used to normalize the samples after using tximport to summarize transcript-level data.
-                        Normalized counts are used for sound wave generation: FFT analysis and as the input waveform for the synth.
                         Genes with fewer than 5 average DESeq2 normalized counts across all samples were dropped.
                     </p>
                     <h5>TPM: adjusting for differences in gene length</h5>
                     <p>
-                        Log10 of mean TPM on DESeq2 normalized counts was kept for downstream between-gene comparisons.
+                        Log10 of the mean salmon TPM across the 16 samples was kept as a filtering metric for the violin plot.
                     </p>
                     <h5>VST: adjusting for heteroskedasticity</h5>
                     <p>
-                        VST was performed and the output was used for analysis of the biological signal: UMAP, Lomb-Scargle and Gaussian Process modeling.
+                        VST was performed and the output was used for all the rest of the downstream steps: 
+                        UMAP, Lomb-Scargle, MetaCycle, Sound generation, and Gaussian Process modeling.
                     </p>
-
+                    <h3>Sound Generation</h3>
+                    <p>
+                        VST or sampled GP waves for the selected gene are interpolated with Catmull-Rom then mean centered then max-absolute scaled to place the data between -1 and 1 to be treated as audio signal.
+                    </p>
                     <h3>UMAPs</h3>
                     <h4>Counts</h4>
                     <p>
                         VST data for each gene is z-score normalized across the 16 timepoints
                         before running UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "cosine". Distance between points is (1 - Pearson correlation).
+                        "Circadian Mode" reruns the UMAP on only the filtered genes.
                     </p>
                     <h4>FFT</h4>
                     <p>
-                        Each gene's normalized counts were interpolated using Catmull-Rom, mean centered, and max-absolute scaled to between -1 and 1.
-                        FFT is performed on each waveform and the resulting magnitude of each detected frequency within a gene is converted to dB relative to the
-                        strongest frequency and floored at -40dB by setting any frequency 100x weaker than the strongest frequency to 0.
-                        All dB values were shifted up by 40dB so the data ranges from 0~40dB.
-                        The resulting array is used to generate the UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "euclidean".
+                        Each gene's VST was interpolated using Catmull-Rom, mean centered, and max-absolute scaled to between -1 and 1.
+                        The first 8 frequency components (not including DC) are kept for UMAP. This is because the original data only has 16 points,
+                        which only gives 8 frequency components. Interpolation does not give new information.
+                        UMAP is run with n_neighbors = 10, min_dist = 0.25, and metric = "euclidean".
+                        "Circadian Mode" reruns the UMAP on only the filtered genes.
                     </p>
 
-                    <!-- <h3>Oscillating Gene Detection</h3>
+                    <h3>Oscillating Gene Detection</h3>
                     <p>
-                        Lomb Scargle algorithm from astropy was used to detect inherent rhythms using VST from all genes with a search grid of
-                         minimum_frequency = 1/32; maximum_frequency = 1/6; samples_per_peak = 30. 
-                         The maximum of 1/6 is due to the Nyquist frequency. And minimal of 1/32 allows at least 1.5 cycles to be measured within the 48 hour experiment.
-                        Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, the resulting q-value is threshold to 0.2 for data export.
-                        Uncertainty in the detected period is determined using bootstrapping. Assuming the uncertainty in detection is due to noise in the data,
-                        the residual for each data point is randomly shuffled with replacement among all data points for a gene. The process is repeated 500 times,
-                        and the resulting spread of detected periods is used to determine the 95% confidence interval.
+                        Lomb-Scargle algorithm from astropy was used to detect inherent rhythms using VST from all genes with a search grid of
+                        minimum_frequency = 1/48; maximum_frequency = 1/6; samples_per_peak = 30. 
+                        The maximum of 1/6 is due to the Nyquist frequency.
+                        Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, q-value is calculated.
+                        Phase and q-value are used for coloring and filtering in All Genes Mode.
+                    </p>
+                    <p>
+                        MetaCycle R package is used for specifically circadian gene detection. Default search range of 20~28hrs is used. 
+                        Phase and q-value from the MetaCycle result is used for color and filtering in Circadian Mode.
+                        q-value of less than 0.01 is considered circadian.
                     </p>
 
                     <h3>Gaussian Process Modeling</h3>
                     <p>
-                        To capture a sense of confidence of the predicted waveform, the Gaussian Process was used to model the oscillating genes from VST data.
-                        Gpflow was used to fit the GP model with a fixed period from Lomb Scargle and a Periodic SquaredExponential base kernel.
+                        For circadian genes (MetaCycle q-val <= 0.01), Gaussian Process was used to model the waveform from VST data.
+                        GPflow was used to fit the GP model with a fixed period of 24 hrs and a Periodic kernel with a SquaredExponential base kernel.
                         After fitting multiple low qval genes with different starting length scales without a prior, length scale was found to be around 0.4 ~ 0.5.
                         0.4 was chosen to be the initial length scale and prior.
-                        Variance is set to the square of std, and mean is set to the mean of all measurements for the gene.
-
-                        Multiple QC metrics are derived but as they mostly correlate well with a Spearman correlation of 0.7~0.8, only the relative std is kept as a
+                        Variance is initialized to the variance, and mean is initalized to the mean of all measurements for the gene.
+                        Multiple QC metrics are derived but as they mostly correlate well with a Spearman correlation of 0.7~0.9, only the relative std is kept as a
                         metric for fit quality.
-                    </p> -->
+                    </p>
                 </div>
 
                 <div class="limitations">
                     <h3>Limitations</h3>
                     <ul>
-                        <li>Expression strength is currently not mapped to anything sonically, and is only used as a filter.</li>
-                        <li>16 points is limiting in terms of possible sounds and harmonics.</li>
-                        <!-- <li>Assumes gene expression loops around after 48 hours (indefinitely)</li>
-                        <li>Bootstrapping method for confidence interval of period detection assumes the underlying model is sinusoidal and the residuals are independent of each other.
-                            Experimenting with synthetic data suggests instability in cycle period over experimental time will cause the predicted period to drift.
-                        </li>
-                        <li>Uncertainty in period estimation isn't reflected in the Gaussian Process modeling.</li> -->
+                        <li>Expression strength is currently not mapped to anything sonically, and is only used as a filter, to not distract from the harmonics.</li>
+                        <li>In all genes mode, the gene is played as if it perfectly loops around after 48 hours, which non-circadian genes certainly don't. So even though
+                            genes with strong oscillation at 48hrs make up an important group, they're not really oscillating at 48hrs. 
+                            Even circadian genes will not perfectly loop indefinitely.</li>
+                        <li>Uncertainty in period estimation isn't reflected in the Gaussian Process modeling.</li>
                         <li>The same smoothing function (Catmull-Rom) is used on every waveform, so they all sound like the same family of instruments.</li>
                     </ul>
                 </div>
@@ -723,9 +767,3 @@
 </body>
 
 </html>
-
-<!-- To do: mention that qval matches confidence of GP reasonably well,
- so overall sense of confidence of the waveform is captured by both the variation in sound
- (GP confidence) as well as how fast the sound morphs (qval: how confident we are in periodicity) -->
-
- <!-- https://www.sfu.ca/sonic-studio-webdav/handbook/Just_Tuning.html Resource, cite! -->

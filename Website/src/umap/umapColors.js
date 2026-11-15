@@ -9,6 +9,8 @@ const PHASE_INTERPOLATOR = d3.interpolateTurbo
 const QVAL_INTERPOLATOR = d3.interpolateInferno
 const QVAL_NEGLOG10_MAX = 5
 const ENERGY_INTERPOLATOR = d3.interpolateViridis
+// Reversed so bright = low relative std = confident fit (bright = "more" in every other mode too)
+const WAVE_CONF_INTERPOLATOR = (t) => d3.interpolateCividis(1 - t)
 
 export function rgb01ToCss([r, g, b], a = 1) {
     return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
@@ -128,6 +130,29 @@ export function continuousColorScale(mode, umap_arr, metaByGene, specsLookup, di
                 const energyPct = energyPctAtPeriod(geneId, specsLookup, periodHours)
                 if (energyPct == null || !Number.isFinite(energyPct)) return null
                 return normalizeToDomain(energyPct, lo, hi)
+            },
+        }
+    }
+    if (mode === "waveConf") {
+        // GP relative std (meta.gp_relative_std, circadian genes only). Long right tail (most genes
+        // ~0.2-0.5, a few up to ~3), so the top of the scale is the 98th percentile; above it saturates.
+        const vals = []
+        for (const d of umap_arr) {
+            const v = metaByGene.get(d.GeneID)?.gp_relative_std
+            if (v != null && Number.isFinite(v)) vals.push(v)
+        }
+        vals.sort(d3.ascending)
+        const [lo, hi] = extentOrFallback([vals[0], d3.quantileSorted(vals, 0.98)], 0, 1)
+        return {
+            interpolator: WAVE_CONF_INTERPOLATOR,
+            leftLabel: formatLegendNum(lo, 2),
+            rightLabel: `≥${formatLegendNum(hi, 2)}`,
+            title: "GP relative std",
+            gradIdSuffix: "waveconf",
+            color01(meta) {
+                const v = meta?.gp_relative_std
+                if (v == null || !Number.isFinite(v)) return null
+                return normalizeToDomain(v, lo, hi)
             },
         }
     }

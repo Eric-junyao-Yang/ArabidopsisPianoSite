@@ -81,6 +81,11 @@ const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 const per_gene_meta_lookup = new Map(per_gene_meta.map((val) => [val.GeneID, val]))
 const gp_params_lookup = new Map(gp_params_arr.map((val) => [val.GeneID, val]))
+// GP fit quality rides along with the other per-gene metrics, so UMAP coloring reads it from meta
+for (const { GeneID, relative_std } of gp_params_arr) {
+    const meta = per_gene_meta_lookup.get(GeneID)
+    if (meta) meta.gp_relative_std = relative_std
+}
 // Circadian UMAP bins share row order with gp_params (GeneIDs) but have no rownames / TPM.
 for (let i = 0; i < gp_params_arr.length; i++) {
     const GeneID = gp_params_arr[i].GeneID
@@ -493,6 +498,29 @@ async function initSynthScienceAudio() {
     await globalAudio.resume()
 }
 
+// The demo plots publish their animated wave every frame while their button is playing
+bus.subscribe_to("updateParams", "main", (params) => {
+    if (!synthSlides_node) return
+    if (!synthSlideDestinationConnection) {
+        synthSlides_node.connect(globalAudio.input)
+        synthSlideDestinationConnection = true
+    }
+    synthSlides_node.port.postMessage({
+        type: "updateWave",
+        amplitude: params.amplitude,
+        shape: params.shape,
+        cycles: params.cycles,
+    })
+})
+
+// The worklet never stops generating, so silence it by unplugging it
+bus.subscribe_to("stopSlideSound", "main", () => {
+    if (synthSlides_node && synthSlideDestinationConnection) {
+        synthSlides_node.disconnect(globalAudio.input)
+        synthSlideDestinationConnection = false
+    }
+})
+
 // existing sounds needs to be scaled as new sounds join
 function rescaleGains() {
     const n = activeVoices.size
@@ -565,6 +593,7 @@ const umapColorChoices = [
         menuId: "UMAP_energy_menu",
         isActive: (m) => m === "energyPct",
     },
+    { id: "UMAP_waveConf", isActive: (m) => m === "waveConf" },
 ]
 let umapColorMode = "none"
 
@@ -596,7 +625,25 @@ function setUmapColorMode(mode) {
     syncUmapColorSuboptions()
     bus.execute_event("umap_color_mode", umapColorMode)
 }
-console.log(gp_params_arr)
+
+/**
+ * Color choices that only make sense for one gene set:
+ * - waveform confidence needs a GP fit, so Circadian only
+ * - the binary "circadian" split is trivial when every gene shown is circadian, so All only
+ * Moves the color mode off a choice that just disappeared.
+ */
+function syncColorChoicesToGeneSet(mode) {
+    const circadian = mode === "Circadian"
+    document.getElementById("UMAP_waveConf").hidden = !circadian
+    document.getElementById("oscillating_type_circadian").hidden = circadian
+    if (circadian) {
+        const qvalRadio = document.querySelector('input[name="oscillating_type"][value="qval"]')
+        if (qvalRadio) qvalRadio.checked = true
+    }
+
+    if (circadian && umapColorMode === "circadian") setUmapColorMode("qval")
+    else if (!circadian && umapColorMode === "waveConf") setUmapColorMode("none")
+}
 // ---- Violin / filter: shows (and filters on) whatever the UMAPs are colored by ----
 // "none" and "circadian" (binary) fall back to mean expression.
 function violinMetric(mode){
@@ -675,6 +722,9 @@ document.getElementById("UMAP_phase")?.addEventListener("click", () => {
 document.getElementById("UMAP_energy")?.addEventListener("click", () => {
     setUmapColorMode(umapEnergyChoice.isActive(umapColorMode) ? "none" : "energyPct")
 })
+document.getElementById("UMAP_waveConf")?.addEventListener("click", () => {
+    setUmapColorMode(umapColorMode === "waveConf" ? "none" : "waveConf")
+})
 
 document.querySelectorAll('input[name="oscillating_type"]').forEach((radio) => {
     radio.addEventListener("change", () => {
@@ -694,10 +744,6 @@ document.querySelectorAll('input[name="oscillation_energy"]').forEach((radio) =>
     })
 })
 
-document.getElementById("waveConf").addEventListener("click", () => {
-    bus.execute_event("umap_color_mode", "waveConf")
-})
-
 // umap_color_mode also fires when the energy period or oscillating type changes within a mode
 bus.subscribe_to("umap_color_mode", "violin", swapViolin)
 swapViolin(umapColorMode)
@@ -709,14 +755,15 @@ const COLOR_MODE_HELP = {
         All: "Binary cutoff with q-value of 0.01. Circadian is <= 0.01", 
         Circadian: "Binary cutoff with q-value of 0.01. Circadian is <= 0.01" },
     qval: { 
-        All: "How confident we are that a gene is oscillating. A q-value cut off of 0.01 would mean a 1% false positive rate when calling an oscillating gene.", 
+        All: "How confident we are that a gene is oscillating. A q-value cut off of 0.01 would mean a 1% false discovery rate when calling an oscillating gene.", 
         Circadian: "How confident we are that a gene is oscillating around 20~28hrs (Circadian). A q-value cut off of 0.01 would mean a 1% false positive rate when calling a circadian gene." },
     phase: { 
-        All: "Hour in experiment where the data has the largest measurement", 
+        All: "Peak time of the fitted sinusoid,", 
         Circadian: "Hour in experiment where the data has the largest measurement" },
     energyPct: { 
-        All: "% componsition of the selected frequency component", 
-        Circadian: "% componsition of the selected frequency component" },
+        All: "% composition of the selected frequency component", 
+        Circadian: "% composition of the selected frequency component" },
+    waveConf: { All: "", Circadian: 'A metric for "spread" of the sampled wave.'},
 }
 
 function updateColorModeHelp() {
@@ -891,7 +938,7 @@ function formatUmapNumber(value, digits = 2) {
 }
 
 function umapMetricForMode(mode, geneId) {
-    if (!OSCILLATING_MODES.has(mode) && mode !== "phase" && mode !== "energyPct") return null
+    if (!OSCILLATING_MODES.has(mode) && !["phase", "energyPct", "waveConf"].includes(mode)) return null
     const meta = geneId ? per_gene_meta_lookup.get(geneId) : null
     const useMetaCycle = displayMode === "Circadian"
     // Categorical circadian coloring is always MetaCycle; continuous qval follows display mode.
@@ -909,6 +956,9 @@ function umapMetricForMode(mode, geneId) {
         const raw = useMetaCycle ? meta?.metacycle_phase : meta?.LS_phase
         const phase = formatUmapNumber(raw, 2)
         return { label: "peak-time", value: phase === "—" ? phase : `${phase} h` }
+    }
+    if (mode === "waveConf") {
+        return { label: "relative std", value: formatUmapNumber(meta?.gp_relative_std, 3) }
     }
     const energy = geneId ? energyPctAtPeriod(geneId, specs_lookup, oscillation_energy) : null
     const pct = formatUmapNumber(energy, 1)
@@ -995,6 +1045,7 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
         umapReadCounts.setData(circadian_VST_arr, "Circadian")
         umapFft.setData(circadian_fft_arr, "Circadian")
     }
+    syncColorChoicesToGeneSet(mode)
     // Tints the synth panel and jukebox (see .gene-set-scope in styles.css) so the switch to a different dataset is obvious
     for (const el of document.querySelectorAll(".gene-set-scope")) el.dataset.geneSet = mode
     syncSynthToMidiControls() // Assign depends on whether the gene is in the new mode

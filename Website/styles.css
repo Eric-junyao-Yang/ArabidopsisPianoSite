@@ -1121,7 +1121,8 @@ main {
     align-items: flex-start;
     gap: var(--space-1);
     min-width: 0;
-    flex: 1 1 18rem;
+    /* Size to the buttons, so "Genes shown" wraps below instead of being overlapped */
+    flex: 1 1 auto;
 }
 
 .umap-color-toggles__label {
@@ -1249,6 +1250,12 @@ main {
     align-items: center;
     margin: 0;
     cursor: pointer;
+}
+
+/* Gene-set-specific choices are toggled with [hidden]; beat the inline-flex above and on .btn */
+.umap-color-menu__option[hidden],
+.umap-color-mode .btn[hidden] {
+    display: none;
 }
 
 .umap-color-menu__option input {
