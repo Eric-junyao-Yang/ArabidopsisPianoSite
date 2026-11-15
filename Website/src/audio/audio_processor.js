@@ -1,6 +1,6 @@
 import { TABLE_SIZE, StaticSource, GPSource, stepEnvelope } from "/src/audio/sources.js"
 
-const SYNTH_SWEEP_SECONDS = 0.5 // keep in sync with SWEEP_TIME in plotWaveforms.js
+const SYNTH_SWEEP_SECONDS = 0.05 // keep in sync with SWEEP_TIME in plotWaveforms.js
 
 class SynthAudioProcessor extends AudioWorkletProcessor {
     constructor() {

@@ -20,11 +20,11 @@
             <h1 class="site-title">Arabidopsis Synthesizer</h1>
             <p class="site-lede">
                 Have you ever looked at a wiggly graph and wondered what would happen if you plug the shape into a synthesizer?
-                Who haven't? </p>
+                Who hasn't?</p>
             <p class="side_lede">
-                Transcription measurements reflects gene activity, which can be affected by external or internal stimuli. 
+                Transcription measurements reflect gene activity, which can be affected by external or internal stimuli. 
                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
-                measured the effect of day / night cycle on each of the roughly
+                measured the effect of the day/night cycle on each of the roughly
                 27,000 genes in Arabidopsis thaliana. This interactive data "sonification" explores this experimental dataset using
                 <span class="sound-wave" aria-label="sound">
                     <span class="sound-wave__letter" style="--i:0">s</span><span class="sound-wave__letter" style="--i:1">o</span><span class="sound-wave__letter" style="--i:2">u</span><span class="sound-wave__letter" style="--i:3">n</span><span class="sound-wave__letter" style="--i:4">d</span>
@@ -34,7 +34,7 @@
             <h3>FAQ: But why? Why would you do such a thing?</h3>
             <p>Shushhhh... don't ruin this for me.</p>
 
-            <!-- <h4>The web app is split into to main sections:</h4>
+            <!-- <h4>The web app is split into two main sections:</h4>
             <ol class="section-toc">
                 <li><a href="#SynthDiv">Arabidopsis synthesizer</a>: custom "instruments" derived directly from biological data.</li>
                 <li><a href="#SequencerDiv">Arabidopsis step sequencer</a>: explore gene oscillations using harmony.</li>
@@ -74,10 +74,10 @@
                                 Arabidopsis thaliana is a plant that scientists love to study.
                                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                                 grew Arabidopsis under <span style="color: #DDCC77">16hr light</span> and <span style="color: #332288">8hr dark</span> cycles, 
-                                and measured activities of each of the 27,000 genes every three hours for two days.
+                                and measured the activity of each of the 27,000 genes every three hours for two days.
                             </p>
                             <p>
-                                Here is TOC1 (AT5G61380), a known circadian gene along side PP2AA3 (AT1G13320), a housekeeping (non-oscillating) gene:
+                                Here is TOC1 (AT5G61380), a known circadian gene, alongside PP2AA3 (AT1G13320), a housekeeping (non-oscillating) gene:
                             </p>
                             <div id="Synth_Science_data_plot" class="synth-science__plot"></div>
                             <p>
@@ -103,7 +103,7 @@
                             </div>
                             <p>
                                 For the synthesizer below, <strong>amplitude</strong> is locked and <strong>frequency</strong> is mapped to the keyboard, so you can focus on waveform <strong>shape</strong>.
-                                That gives about 27,000 “instruments” derived from the Arabidopsis genome
+                                That gives about 27,000 “instruments” derived from the Arabidopsis genome.
                             </p>
                             <p>
                                 How would we expect oscillating and non-oscillating genes to sound different? You can explore the interactive
@@ -113,7 +113,7 @@
                     </div>
 
                 </details>
-                <details class="fold fold--science">
+                <details class="fold fold--howto">
                     <summary class="fold__summary">
                         <span class="fold__badge">How To</span>
                         <span class="fold__title">Quick guide and orientation</span>
@@ -129,51 +129,51 @@
                             </p>
                             <h4>Playing a Sound</h4>
                             <p>
-                                Click the virtual keyboard at the bottom or use the cooresponding keys on your keyboard to play 
-                                the selected gene's waveform. Polyphony supported (i.e. multiple notes at once). The up and down
-                                arrows to the right controls octaves.
+                                Click the virtual keyboard at the bottom or use the corresponding keys on your keyboard to play 
+                                the selected gene's waveform. Polyphony is supported (i.e. multiple notes at once). The up and down
+                                arrows to the right control the octave.
                             </p>
                             <h4>Coloring the Graph</h4>
                             <p>
-                                The best way to explore the plots is by coloring them. Select any of the coloring modes will update
+                                The best way to explore the plots is by coloring them. Selecting any of the coloring modes updates
                                 the plots. As you change colors, the hint box below will update to give more details.
                             </p>
                             <h4>Filtering</h4>
                             <p>
                                 Filtering is a great way to explore the colored graph dynamically. Here is a <button type="button" id="DEMO" class="link-button">DEMO</button>.
                                 The vertical plot between the two larger
-                                plots is called a violin plot. Top and bottom circles can be click and dragged to set the upper and lower 
+                                plots is called a violin plot. The top and bottom circles can be clicked and dragged to set the upper and lower 
                                 filtering thresholds. The body of the window can be dragged and repositioned as well. The filter updates 
-                                based on coloring mode.
+                                based on the coloring mode.
                             </p>
                             <h4>Energy %</h4>
                             <p>
                                 Below the three plots is a narrow horizontal plot showing the energy % of the selected wave's component
-                                frequencies. The frequency components strongly effects how the waveform sounds. The richer the high
-                                frequency components (e.g. below 24hrs) the "brigher" the sound. Discussion below 
+                                frequencies. The frequency components strongly affect how the waveform sounds. The stronger the high
+                                frequency components (periods shorter than 24 hr), the "brighter" the sound. The discussion below 
                                 has more details.
                             </p>
                             <h4>Waveform</h4>
                             <h5>All Genes Mode</h5>
                             <p>
-                                The waveform above the keyboard displays the exerpimental data of the selected gene. The line is an interpolation
+                                The waveform above the keyboard displays the experimental data of the selected gene. The line is an interpolation
                                 through the data. The interpolation is used to generate the sounds you hear.
                             </p>
                             <h5>Circadian Mode</h5>
                             <p>
                                 Instead of simple interpolation, oscillating genes can be modeled. When you play a sound, 
-                                the model generates one possible wavefrom that fits the experimental data every half a second. 
-                                The green line is the average and green band is the 95% confidence interval. 
+                                the model generates one possible waveform that fits the experimental data every half a second. 
+                                The green line is the average and the green band is the 95% confidence interval. 
                             </p>
                             <h4>All genes vs Circadian</h4>
                             <p>
-                                Display all genes or only circadian ones. Some of the coloring mode has suble changes, pay attention to the help text.
+                                Display all genes or only circadian ones. Some coloring modes change subtly, so keep an eye on the help text.
                                 The waveform (and sound) also changes. The sound you hear morphs between the sampled waveforms, 
                                 so the wobble you hear matches the certainty of the shape.
                             </p>
                             <h4>Jukebox</h4>
                             <p>
-                                Clicking on the Jukebox sidebar slides the jukebox in and out of frame. There is a midi song loaded, but 
+                                Clicking on the Jukebox sidebar slides the jukebox in and out of frame. There is a MIDI song loaded, but 
                                 you need to assign sounds (genes) to each track to hear it. If you have a gene you like after playing it,
                                 you can load it into the jukebox by picking a track and clicking the "Assign" button. 
                             </p>
@@ -200,14 +200,14 @@
                         <div id="midi_content">
                             <div id="midi"
                                 class="help-panel panel panel--midi"
-                                data-help-text='By assigning a different wavefrom to each MIDI track, you can play a whole song with sounds derived from the Arabidopsis plant!
+                                data-help-text='By assigning a different waveform to each MIDI track, you can play a whole song with sounds derived from the Arabidopsis plant!
                                 
                                 You can load sounds by typing in the Gene ID or by loading it via the "Assign" button below the synth.'>
 
                                 <div class="panel__header midi-header">
                                     <div class="midi-header__titles">
                                         <h3 class="panel__title">Arabidopsis Jukebox</h3>
-                                        <p class="midi-header__sub">Assign your favorate genes to individual tracks to hear them play together.</p>
+                                        <p class="midi-header__sub">Assign your favorite genes to individual tracks to hear them play together.</p>
                                     </div>
                                 </div>
 
@@ -434,6 +434,7 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <button id="waveConf">waveform confidence</button>
                                     </div>
                                 </div>
                             </div>
@@ -478,23 +479,15 @@
                             <div id="Synth_Plots_plots">
                                 <div id="read_counts"
                                     class="help-panel plot-frame"
-                                    data-help-text="UMAP representation of experimental data: 
-                                    Points closer together are similar in experimental data (biology). 
-                                    Waveform should have similar shape + phase (peak time).
-                                    
-                                    Each point is a gene. You can zoom, pan, and select genes to update the waveform above. Gene highlighted is synced between the two plots. Double click to reset graph."></div>
+                                    data-help-text="UMAP representation of experimental data.
+                                    You can zoom and pan. Double click to reset."></div>
                                 <div id="filter_slider"
                                     class="help-panel plot-frame plot-frame--narrow"
-                                    data-help-text="This slider controls cutoffs for average gene expression.
-
-                                    You can adjust the top and bottom slider to set thresholds, and drag the threshold regions around. Blue lines represents the quantiles. Double click to reset."></div>
+                                    data-help-text="Drag the top and bottom handles to set thresholds, or drag the window to move it. The teal lines mark the quartiles. Double click to reset."></div>
                                 <div id="fft"
                                     class="help-panel plot-frame"
-                                    data-help-text="UMAP representation of Fast Fourier fransformed
-                                    waveform: Points closer together have similar sound.
-                                    phase (peak time) infomration is discarded.
-                                    
-                                    Each point is a gene. You can zoom, pan, and select genes to update the waveform above. Gene highlighted is synced between the two plots. Double click to reset graph."></div>
+                                    data-help-text="UMAP representation of Fast Fourier transformed waveform.
+                                    You can zoom and pan. Double click to reset."></div>
                             </div>
                             <div id="Harmonic_div"
                                 class="help-panel plot-frame plot-frame--harmonics"
@@ -507,7 +500,7 @@
                     class="help-panel toolbar"
                     data-help-text="The waveform you see will be the waveform played when you click on the virtual keyboard or play with your actual keyboard (it supports polyphony!).
                     
-                    You can modify the waveforms by clicking and dragging through the waveform, or load in experimental data by searching for a Gene ID or clicking one of the points from the UMAPs below."
+                    load in experimental data by searching for a Gene ID or clicking one of the points from the UMAPs."
                     >
                     <div id="Synth_interaction_bar">
                         <div id="synth_waveform_name" class="synth-waveform-label" aria-live="polite">
@@ -545,11 +538,11 @@
                 
                 <div id="Synth_Keyboard_div" class="keyboard-shell" aria-label="Virtual keyboard"></div>
 
-                <div
+                <divd
                     id="pushSound"
                     class="synth-to-jukebox help-panel is-disabled"
                     aria-disabled="true"
-                    data-help-text="Found a sound you like? You can assign it to a Jukebox track. Only experimental data allowed, not hand-drawn waveforms."
+                    data-help-text="Found a sound you like? You can assign it to a Jukebox track."
                 >
                     <div class="synth-to-jukebox__copy">
                         <span class="synth-to-jukebox__title">Send to Jukebox</span>
@@ -572,22 +565,21 @@
                         <button id="send_waveform_to_midi" type="button" class="btn btn--primary" disabled>Assign</button>
                     </div>
                 </div>
-                
-
-
             </div>
+            </div><!-- /.synth-sticky-region -->
         </section>
 
         <div id="help-popup" role="dialog" aria-live="polite"></div>
-        <div>
-            </details>
-            <details class="fold fold--science">
+
+        <section id="discussion" class="app-section" aria-label="Discussion">
+            <div class="fold-stack">
+            <details class="fold fold--discussion">
                 <summary class="fold__summary">
                     <span class="fold__badge">Discussion</span>
-                    <span class="fold__title">Oscillating data and Sound Quality</span>
+                    <span class="fold__title">Oscillating data and sound quality</span>
                     <span class="fold__chevron" aria-hidden="true"></span>
                 </summary>
-                <div class="fold__body" id="Synth_Howto_div">
+                <div class="fold__body" id="Synth_Discussion_div">
                     <div class="synth-science prose-block">
                         <h4>Graph Grouping</h4>
                         <p>
@@ -599,7 +591,7 @@
                             In "Group by Sound", phase information is discarded because we assume the waveform repeats indefinitely, 
                             so the plot is organized by oscillation energy only.
                         </p>
-                        <h5>Circaidan Mode</h5>
+                        <h5>Circadian Mode</h5>
                         <p>
                             "Group by Biology" is still strongly organized by "peak-time (phase)", but "Group by Sound" no longer groups well because
                             now every gene has strong 24hr oscillation energy.
@@ -607,17 +599,17 @@
 
                         <h4>Oscillating Genes</h4>
                         <p>
-                            The vast majority of the oscillating genes oscillate at around 24 hours. A smaller extent oscillates at 12 hours. 
-                            Genes that doesn't seem to repeat their pattern will have strong 48hr oscillation component because that's how long
-                            the experiment went.
+                            The vast majority of the oscillating genes oscillate at around 24 hours. A smaller group oscillates at 12 hours. 
+                            Genes that don't seem to repeat their pattern will have a strong 48hr oscillation component, because that's how long
+                            the experiment lasted.
                         </p>
 
                         <h4>Sound Quality</h4>
                         <p>
-                            Best way to seprate sound quality is by their oscillation energy. The three clearest types of sound comes from 
-                            those with strong 48, 24 and 12 hr components. A gene with strong 24hr component will sound like an octave 
-                            higher than a gene with strong 48hr component. A gene with strong 12hr component will sound another octave 
-                            higher still. A gene with strong 16hr component should sound like a perfect fifth away from a gene with 
+                            The best way to separate sound quality is by oscillation energy. The three clearest types of sound come from 
+                            genes with strong 48, 24 and 12 hr components. A gene with a strong 24hr component will sound an octave 
+                            higher than a gene with a strong 48hr component. A gene with a strong 12hr component will sound another octave 
+                            higher still. A gene with a strong 16hr component should sound a perfect fifth away from a gene with a 
                             strong 24hr component, but unfortunately there are no genes with a really strong 16hr component so the difference
                             sounds really subtle.
                         </p>
@@ -631,7 +623,9 @@
                     </div>
                 </div>
             </details>
-        </div>
+            </div>
+        </section>
+
         <section id="methods" class="app-section app-section--methods" aria-labelledby="methods-heading">
             <header class="section-header">
                 <span class="section-header__index" aria-hidden="true">03</span>
@@ -643,25 +637,29 @@
                     <h3>Processing Raw Reads</h3>
                     <p>
                         The Diurnal Dataset from
-                        <a href="https://www.jbc.org/article/S0021-9258(17)49454-3/fulltext"> Yuchen Yang and colleagues </a>
-                        is downloaded from
-                        <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE137732"> GSE137732 </a> .
-                        These are bulk RNAseq dataset from Arabidopsis grown under long-day conditions [16hr light / 8hr dark]
+                        <a href="https://www.jbc.org/article/S0021-9258(17)49454-3/fulltext">Yuchen Yang and colleagues</a>
+                        was downloaded from
+                        <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE137732">GSE137732</a>.
+                        This is a bulk RNA-seq dataset from Arabidopsis grown under long-day conditions (16hr light / 8hr dark).
                     </p>
                     <p>
-                        The paired end reads were processed with <a href="https://github.com/OpenGene/fastp">fastp</a> with "--detect_adapter_for_pe".
-                        Results before and after trimming were checked using <a href="https://github.com/MultiQC/MultiQC">Multiqc</a>.
-                        Fragments were mapped to TAIR10 transcriptome and transcripts were counted using <a href="https://salmon.readthedocs.io/en/latest/index.html">salmon</a> using the genome as decoy.
-                        <h5>DESeq2: adjusting for difference in sequencing depth and RNA composition</h5>
-                        DESeq2 was used to normalize the samples after using tximport to summarize transcript level data.
-                        Normalized counts is used for sound wave generation: FFT analysis and as input waveform for the synth.
-                        Genes with less than 5 average DESeq2 normalized counts across all samples were dropped.
-                        <h5>TPM: adjusting for difference in gene lengths</h5>
-                        Log10 of mean TPM on DESeq2 normalized counts were kept for downstream between gene comparisons.
-                        <h5>VST: adjusting for heteroskedasticity</h5>
-                        VST transformation was performed and the output was used for analysis of the biological signal: UMAP, LombScargle and Gaussian Process modeling.
-                        
-                        
+                        The paired-end reads were processed with <a href="https://github.com/OpenGene/fastp">fastp</a> with "--detect_adapter_for_pe".
+                        Results before and after trimming were checked using <a href="https://github.com/MultiQC/MultiQC">MultiQC</a>.
+                        Fragments were mapped to the TAIR10 transcriptome and transcripts were counted using <a href="https://salmon.readthedocs.io/en/latest/index.html">salmon</a>, with the genome as decoy.
+                    </p>
+                    <h5>DESeq2: adjusting for differences in sequencing depth and RNA composition</h5>
+                    <p>
+                        DESeq2 was used to normalize the samples after using tximport to summarize transcript-level data.
+                        Normalized counts are used for sound wave generation: FFT analysis and as the input waveform for the synth.
+                        Genes with fewer than 5 average DESeq2 normalized counts across all samples were dropped.
+                    </p>
+                    <h5>TPM: adjusting for differences in gene length</h5>
+                    <p>
+                        Log10 of mean TPM on DESeq2 normalized counts was kept for downstream between-gene comparisons.
+                    </p>
+                    <h5>VST: adjusting for heteroskedasticity</h5>
+                    <p>
+                        VST was performed and the output was used for analysis of the biological signal: UMAP, Lomb-Scargle and Gaussian Process modeling.
                     </p>
 
                     <h3>UMAPs</h3>
@@ -673,19 +671,19 @@
                     <h4>FFT</h4>
                     <p>
                         Each gene's normalized counts were interpolated using Catmull-Rom, mean centered, and max-absolute scaled to between -1 and 1.
-                        FFT is performed on each waveform and the resulting magnitude of each detected frequencies within a gene are converted to dB relative to the
+                        FFT is performed on each waveform and the resulting magnitude of each detected frequency within a gene is converted to dB relative to the
                         strongest frequency and floored at -40dB by setting any frequency 100x weaker than the strongest frequency to 0.
                         All dB values were shifted up by 40dB so the data ranges from 0~40dB.
-                        The resulting array is used to generate the UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "euclidean"
+                        The resulting array is used to generate the UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "euclidean".
                     </p>
 
                     <!-- <h3>Oscillating Gene Detection</h3>
                     <p>
-                        Lomb Scargle algorithm from astropy was used to detect inherit rythums using VST from all genes with a search grid of
+                        Lomb Scargle algorithm from astropy was used to detect inherent rhythms using VST from all genes with a search grid of
                          minimum_frequency = 1/32; maximum_frequency = 1/6; samples_per_peak = 30. 
-                         Maxium of 1/6 is due to the Nyquist freqency. And minimal of 1/32 allows at least 1.5 cycles to be measured within the 48 hour experiment.
+                         The maximum of 1/6 is due to the Nyquist frequency. And minimal of 1/32 allows at least 1.5 cycles to be measured within the 48 hour experiment.
                         Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, the resulting q-value is threshold to 0.2 for data export.
-                        Uncertanties in the detected period is determined using boot strapping. Assuming the uncertanties in detection is due to noise in the data,
+                        Uncertainty in the detected period is determined using bootstrapping. Assuming the uncertainty in detection is due to noise in the data,
                         the residual for each data point is randomly shuffled with replacement among all data points for a gene. The process is repeated 500 times,
                         and the resulting spread of detected periods is used to determine the 95% confidence interval.
                     </p>
@@ -695,10 +693,10 @@
                         To capture a sense of confidence of the predicted waveform, the Gaussian Process was used to model the oscillating genes from VST data.
                         Gpflow was used to fit the GP model with a fixed period from Lomb Scargle and a Periodic SquaredExponential base kernel.
                         After fitting multiple low qval genes with different starting length scales without a prior, length scale was found to be around 0.4 ~ 0.5.
-                        0.4 was chosen to be the inital length scale and prior.
+                        0.4 was chosen to be the initial length scale and prior.
                         Variance is set to the square of std, and mean is set to the mean of all measurements for the gene.
 
-                        Multiple QC metrics are derived but as they mostly correlate well with a spearman correlction of 0.7~0.8, only the relative std is kept as a
+                        Multiple QC metrics are derived but as they mostly correlate well with a Spearman correlation of 0.7~0.8, only the relative std is kept as a
                         metric for fit quality.
                     </p> -->
                 </div>
@@ -710,10 +708,10 @@
                         <li>16 points is limiting in terms of possible sounds and harmonics.</li>
                         <!-- <li>Assumes gene expression loops around after 48 hours (indefinitely)</li>
                         <li>Bootstrapping method for confidence interval of period detection assumes the underlying model is sinusoidal and the residuals are independent of each other.
-                            Experimenting with synthetic data suggest instability in cycle period over experimental time will cause the predicted period to drift.
+                            Experimenting with synthetic data suggests instability in cycle period over experimental time will cause the predicted period to drift.
                         </li>
-                        <li>Uncertanties in period estimation isn't reflected in the Gaussian Process modeling.</li> -->
-                        <li>The same smoothing function (Catmull-Rom) used on the waveform makes it so they all sound sonically in the same family.</li>
+                        <li>Uncertainty in period estimation isn't reflected in the Gaussian Process modeling.</li> -->
+                        <li>The same smoothing function (Catmull-Rom) is used on every waveform, so they all sound like the same family of instruments.</li>
                     </ul>
                 </div>
             </div>
@@ -726,8 +724,8 @@
 
 </html>
 
-<!-- To do: metion that qval matches confidence of GP reasonably well,
+<!-- To do: mention that qval matches confidence of GP reasonably well,
  so overall sense of confidence of the waveform is captured by both the variation in sound
- (GP confidence) as well as how fast the sound morphs (qval in how confidence we are in periodicity) -->
+ (GP confidence) as well as how fast the sound morphs (qval: how confident we are in periodicity) -->
 
  <!-- https://www.sfu.ca/sonic-studio-webdav/handbook/Just_Tuning.html Resource, cite! -->

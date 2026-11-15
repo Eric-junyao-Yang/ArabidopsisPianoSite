@@ -3,7 +3,7 @@ import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
 import { createDayNightFrame, periodicCurve, EXPERIMENT_HOURS } from "/src/plots/dayNightFrame.js"
 
 const PERIOD = 24
-const SWEEP_TIME = 500 // ms, keep in sync with SYNTH_SWEEP_SECONDS in audio_processor.js
+const SWEEP_TIME = 50 // ms, keep in sync with SYNTH_SWEEP_SECONDS in audio_processor.js
 const FADE_TIME = 5 * SWEEP_TIME // ~5 previous draws visible while fading
 const RAW_COLOR = PALETTE.indigo
 const GP_MEAN_COLOR = "#2c7f72"

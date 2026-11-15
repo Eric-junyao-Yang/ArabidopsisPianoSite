@@ -80,7 +80,7 @@ for (let i = 0; i < count_arr.length; i++) {
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 const per_gene_meta_lookup = new Map(per_gene_meta.map((val) => [val.GeneID, val]))
-
+const gp_params_lookup = new Map(gp_params_arr.map((val) => [val.GeneID, val]))
 // Circadian UMAP bins share row order with gp_params (GeneIDs) but have no rownames / TPM.
 for (let i = 0; i < gp_params_arr.length; i++) {
     const GeneID = gp_params_arr[i].GeneID
@@ -596,7 +596,7 @@ function setUmapColorMode(mode) {
     syncUmapColorSuboptions()
     bus.execute_event("umap_color_mode", umapColorMode)
 }
-
+console.log(gp_params_arr)
 // ---- Violin / filter: shows (and filters on) whatever the UMAPs are colored by ----
 // "none" and "circadian" (binary) fall back to mean expression.
 function violinMetric(mode){
@@ -622,6 +622,12 @@ function violinMetric(mode){
         return {
             label: `% ${period}h energy`,
             valueOf: (GeneID) => energyPctAtPeriod(GeneID, specs_lookup, period) ?? NaN,
+        }
+    }
+    if (mode === "waveConf") {
+        return {
+            label: "relative std",
+            valueOf: (GeneID) => gp_params_lookup.get(GeneID)?.relative_std ?? NaN,
         }
     }
     return {
@@ -686,6 +692,10 @@ document.querySelectorAll('input[name="oscillation_energy"]').forEach((radio) =>
         if (umapColorMode !== "energyPct") setUmapColorMode("energyPct")
         else bus.execute_event("umap_color_mode", "energyPct")
     })
+})
+
+document.getElementById("waveConf").addEventListener("click", () => {
+    bus.execute_event("umap_color_mode", "waveConf")
 })
 
 // umap_color_mode also fires when the energy period or oscillating type changes within a mode
