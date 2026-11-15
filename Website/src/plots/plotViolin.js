@@ -1,7 +1,12 @@
 import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plots/plotTheme.js"
 
+/**
+ * levels: optional sorted, evenly spaced values the data can take (e.g. the 16 sample hours).
+ * When given, draws one bar per level instead of a smoothed violin, and the window snaps to whole bins.
+ */
 export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 20, left: 50}, 
-    Arr, d3_select_div, y_lab, bus, execute_event = "", default_high = null, default_low = null){
+    Arr, d3_select_div, y_lab, bus, execute_event = "", default_high = null, default_low = null,
+    { levels = null } = {}){
 
     const innerWidth = width - margin.left - margin.right
     const innerHeight = height - margin.top - margin.bottom
@@ -14,12 +19,16 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
     const plotArea = svg.append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`)
     
-    const yScale = d3.scaleLinear()
-        .domain(d3.extent(Arr))
-        .range([innerHeight, 0])
-        .nice()
-    
-    drawAxis(plotArea.append("g"), d3.axisLeft(yScale).ticks(Math.max(4, Math.floor(innerHeight / 50))).tickSizeOuter(0))
+    // Discrete: each level owns a bin of width `step` centred on it
+    const step = levels ? levels[1] - levels[0] : 0
+    const yScale = d3.scaleLinear().range([innerHeight, 0])
+    if (levels) yScale.domain([levels[0] - step / 2, levels.at(-1) + step / 2])
+    else yScale.domain(d3.extent(Arr)).nice()
+
+    const yAxis = levels
+        ? d3.axisLeft(yScale).tickValues(levels)
+        : d3.axisLeft(yScale).ticks(Math.max(4, Math.floor(innerHeight / 50)))
+    drawAxis(plotArea.append("g"), yAxis.tickSizeOuter(0))
     axisLabel(plotArea.append("text")
         .attr("transform", "rotate(90)")
         .attr("x", innerHeight/2)
@@ -28,7 +37,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
 
     const histogram = d3.histogram()
         .domain(yScale.domain())
-        .thresholds(yScale.ticks(20))
+        .thresholds(levels ? levels.map((l) => l - step / 2).slice(1) : yScale.ticks(20))
 
     const bins = histogram(Arr)   
     const binScale = d3.scaleLinear()
@@ -40,23 +49,47 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         x: binScale(d.length) 
     }))
 
-    const curve = d3.area()
-        .x0(0)
-        .x1(d => d.x)
-        .y(d => d.y)
-        .curve(d3.curveCatmullRom)
+    if (levels) {
+        // One bar per level, with a gap so it reads as separate values, not a continuum
+        const barHeight = (yScale(0) - yScale(step)) * 0.8
+        plotArea.append("g")
+            .selectAll("rect")
+            .data(curveDat)
+            .join("rect")
+            .attr("x", 0)
+            .attr("y", (d) => d.y - barHeight / 2)
+            .attr("width", (d) => d.x)
+            .attr("height", barHeight)
+            .attr("rx", 2)
+            .style("stroke", PALETTE.indigo)
+            .style("stroke-width", 1)
+            .style("stroke-opacity", 0.8)
+            .style("fill", PALETTE.indigo)
+            .style("fill-opacity", 0.18)
+    } else {
+        const curve = d3.area()
+            .x0(0)
+            .x1(d => d.x)
+            .y(d => d.y)
+            .curve(d3.curveCatmullRom)
 
-    plotArea.append("path")
-        .datum(curveDat)
-        .style("stroke", PALETTE.indigo)
-        .style("stroke-width", 1.25)
-        .style("stroke-opacity", 0.8)
-        .style("fill", PALETTE.indigo)
-        .style("fill-opacity", 0.18)
-        .attr("d", curve)
+        plotArea.append("path")
+            .datum(curveDat)
+            .style("stroke", PALETTE.indigo)
+            .style("stroke-width", 1.25)
+            .style("stroke-opacity", 0.8)
+            .style("fill", PALETTE.indigo)
+            .style("fill-opacity", 0.18)
+            .attr("d", curve)
+    }
 
     // Add quantile
     function widthAtY(y) {
+        if (levels) { // bar length of the level the quantile falls on
+            const value = yScale.invert(y)
+            const bar = curveDat.find((d, i) => value >= bins[i].x0 && value <= bins[i].x1)
+            return bar ? bar.x : 0
+        }
         for (let i = 0; i < curveDat.length - 1; i++) {
             const a = curveDat[i];
             const b = curveDat[i + 1];
@@ -88,6 +121,9 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
 
     // ----- Add Scrubber -----
     const [ymin, ymax] = yScale.domain()
+    // Discrete: window edges sit on bin edges and the window always spans at least one bin
+    const snap = (v) => levels ? ymin + Math.round((v - ymin) / step) * step : v
+    const minWidth = levels ? step : 0
     let [low_val, high_val] = [ymin, ymax]
 
     // rectangle
@@ -175,48 +211,48 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
     }
 
     scrubber_handle_top.call(d3.drag().on("drag", (event) => {
-        high_val = Math.min(
+        const next = Math.min(
             ymax, Math.max(
-                low_val,
-                yScale.invert(event.y)
+                low_val + minWidth,
+                snap(yScale.invert(event.y))
             )
         )
+        if (next === high_val) return
+        high_val = next
         updateScrubber()
     }))
 
     scrubber_handle_bot.call(d3.drag().on("drag", (event) => {
-        low_val = Math.max(
+        const next = Math.max(
             ymin, Math.min(
-                high_val,
-                yScale.invert(event.y)
+                high_val - minWidth,
+                snap(yScale.invert(event.y))
             )
         )
+        if (next === low_val) return
+        low_val = next
         updateScrubber()
     }))
 
-    scrubber_rect.call(d3.drag().on("drag", (event) => {
-        const window_height = high_val - low_val
-        high_val = Math.min(
-            ymax, Math.max(
-                ymin + window_height,
-                high_val - (ymax - yScale.invert(event.dy))
-            )
-        )
-
-        low_val = high_val - window_height
-
-        if (low_val < ymin) {
-            low_val = ymin
-            high_val = ymin + window_height
-        }
-        
-        updateScrubber()
-    }))
+    // Window drag: shift by the pointer's total travel since grab, so snapping can step whole bins
+    let dragStart = null
+    scrubber_rect.call(d3.drag()
+        .on("start", (event) => { dragStart = { y: event.y, low: low_val, high: high_val } })
+        .on("drag", (event) => {
+            const window_height = dragStart.high - dragStart.low
+            let shift = yScale.invert(event.y) - yScale.invert(dragStart.y)
+            if (levels) shift = Math.round(shift / step) * step
+            const low = Math.max(ymin, Math.min(ymax - window_height, dragStart.low + shift))
+            if (low === low_val) return
+            low_val = low
+            high_val = low + window_height
+            updateScrubber()
+        }))
 
     // Set the filter window from code (e.g. the demo); clamped to the plotted range
     function setRange(low, high, { animate = false } = {}) {
-        low_val = Math.max(ymin, Math.min(ymax, low))
-        high_val = Math.max(low_val, Math.min(ymax, high))
+        low_val = Math.max(ymin, Math.min(ymax - minWidth, snap(low)))
+        high_val = Math.max(low_val + minWidth, Math.min(ymax, snap(high)))
         updateScrubber(animate)
     }
 

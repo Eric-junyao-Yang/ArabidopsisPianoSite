@@ -1,5 +1,5 @@
 import { plotUMAP, selectedEnergyPeriodHours } from "/src/plots/plotUMAP.js"
-import { phaseField, qvalField } from "/src/umap/umapColors.js"
+import { PEAK_HOUR_FIELD, phaseField, qvalField } from "/src/umap/umapColors.js"
 import { bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plots/plotViolin.js"
 import { plotWaveformsClass } from "/src/plots/plotWaveforms.js"
@@ -19,7 +19,7 @@ import {
 } from "/src/midiplayer.js"
 import { midiTrackPlots } from "/src/plots/midiTrackPlot.js"
 import { plotHarmonics, energyPctAtPeriod } from "/src/plots/plotHarmonics.js"
-import { gpSamplerClass, VSTlookup_to_arr } from "/src/GaussianProcess/GPalgo.js"
+import { gpSamplerClass, VSTlookup_to_arr, EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
 
 // ---- add a bus for communication between modules ----
 const bus = {
@@ -85,6 +85,13 @@ const gp_params_lookup = new Map(gp_params_arr.map((val) => [val.GeneID, val]))
 for (const { GeneID, relative_std } of gp_params_arr) {
     const meta = per_gene_meta_lookup.get(GeneID)
     if (meta) meta.gp_relative_std = relative_std
+}
+// Peak time = sample hour of the highest measurement, no period fitting or folding. It can only be
+// one of the 16 sample hours, so the violin shows it as bars (see violinMetric's levels). All genes only;
+// Circadian mode keeps MetaCycle phase (see phaseField).
+for (const [GeneID, meta] of per_gene_meta_lookup) {
+    const row = VST_lookup.get(GeneID)
+    if (row) meta[PEAK_HOUR_FIELD] = EXP_HOURS[d3.maxIndex(VSTlookup_to_arr(row))]
 }
 // Circadian UMAP bins share row order with gp_params (GeneIDs) but have no rownames / TPM.
 for (let i = 0; i < gp_params_arr.length; i++) {
@@ -659,9 +666,11 @@ function violinMetric(mode){
     }
     if (mode === "phase") {
         const field = phaseField(displayMode)
+        const isRawPeak = field === PEAK_HOUR_FIELD
         return {
-            label: "peak time (h)",
+            label: isRawPeak ? "peak hour (h)" : "MetaCycle peak (h)",
             valueOf: (GeneID) => per_gene_meta_lookup.get(GeneID)?.[field] ?? NaN,
+            levels: isRawPeak ? EXP_HOURS : null, // only the raw peak is limited to sample hours
         }
     }
     if (mode === "energyPct") {
@@ -687,7 +696,7 @@ const violinDiv = d3.select("#filter_slider")
 let violin = null // handle of the violin on screen ({ domain, setRange, node }); replaced on every swap
 
 function swapViolin(mode){
-    const { label, valueOf } = violinMetric(mode)
+    const { label, valueOf, levels = null } = violinMetric(mode)
 
     // UMAP points filter on filterVal; set it on every embedding so a later mode switch stays in sync
     for (const arr of [allgenes_VST_arr, allgenes_fft_arr, circadian_VST_arr, circadian_fft_arr]) {
@@ -702,7 +711,7 @@ function swapViolin(mode){
     violinDiv.selectAll(":scope > svg").remove()
     violin = plotViolin(
         130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
-        values, violinDiv, label, bus, "umap_value_filter"
+        values, violinDiv, label, bus, "umap_value_filter", null, null, { levels }
     )
     // New metric, new units: the old scrubber range is meaningless, so clear the filter
     bus.execute_event("umap_value_filter", [Infinity, -Infinity])
@@ -758,8 +767,8 @@ const COLOR_MODE_HELP = {
         All: "How confident we are that a gene is oscillating. A q-value cut off of 0.01 would mean a 1% false discovery rate when calling an oscillating gene.", 
         Circadian: "How confident we are that a gene is oscillating around 20~28hrs (Circadian). A q-value cut off of 0.01 would mean a 1% false positive rate when calling a circadian gene." },
     phase: { 
-        All: "Peak time of the fitted sinusoid,", 
-        Circadian: "Hour in experiment where the data has the largest measurement" },
+        All: "The sample hour at which the gene's measured expression is highest.", 
+        Circadian: "Within the detected period (20~28 hrs), the hour at which the fitted MetaCycle curve peaks."},
     energyPct: { 
         All: "% composition of the selected frequency component", 
         Circadian: "% composition of the selected frequency component" },
@@ -777,7 +786,7 @@ bus.subscribe_to("DisplayModeSet", "colorModeHelp", updateColorModeHelp)
 updateColorModeHelp()
 
 // ---- DEMO: phase coloring on the Counts UMAP, then sweep a peak-time window up and back down ----
-const DEMO_WINDOW_HOURS = 4
+const DEMO_WINDOW_HOURS = 6 // two sample hours; the peak-hour violin snaps to whole 3 h bins
 const DEMO_SWEEP_MS = 4000 // per direction
 let demoRun = 0 // bumped to cancel a running demo
 
@@ -953,9 +962,12 @@ function umapMetricForMode(mode, geneId) {
         }
     }
     if (mode === "phase") {
-        const raw = useMetaCycle ? meta?.metacycle_phase : meta?.LS_phase
-        const phase = formatUmapNumber(raw, 2)
-        return { label: "peak-time", value: phase === "—" ? phase : `${phase} h` }
+        if (useMetaCycle) {
+            const phase = formatUmapNumber(meta?.metacycle_phase, 2)
+            return { label: "MetaCycle peak", value: phase === "—" ? phase : `${phase} h` }
+        }
+        const peak = meta?.[PEAK_HOUR_FIELD]
+        return { label: "peak hour", value: Number.isFinite(peak) ? `${peak} h` : "—" }
     }
     if (mode === "waveConf") {
         return { label: "relative std", value: formatUmapNumber(meta?.gp_relative_std, 3) }
@@ -992,7 +1004,8 @@ function refreshUmapGenePanels() {
 // Genes without GP params (not circadian) show an empty band.
 function showGPWaveform(GeneID){
     const post = GeneID ? gpSampler.posterior(GeneID) : null // null for non-circadian genes
-    plotWaveforms.showGP(post?.mu ?? null, post?.std ?? null)
+    const dat_points = VST_lookup.get(GeneID)
+    plotWaveforms.showGP(post?.mu ?? null, post?.std ?? null, dat_points? VSTlookup_to_arr(dat_points):null)
     // Copied, not transferred: the posterior stays cached for reuse (e.g. jukebox tracks)
     if (post) synth_node?.port.postMessage({ type: "setGP", mu: post.mu, L: post.L })
     else synth_node?.port.postMessage({ type: "clearSource" })

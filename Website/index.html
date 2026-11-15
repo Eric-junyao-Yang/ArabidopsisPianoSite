@@ -426,7 +426,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button type="button" class="btn" id="UMAP_phase" aria-pressed="false">peak-time (phase)</button>
+                                    <button type="button" class="btn" id="UMAP_phase" aria-pressed="false">peak time</button>
                                     <div class="umap-color-choice-wrap" data-expanded="false">
                                         <button type="button" class="btn umap-color-choice"
                                             id="UMAP_energy"
@@ -620,13 +620,13 @@
                         </p>
                         <h4>All Genes Mode</h4>
                         <p>
-                            In "Group by Biology", you will notice the organizing principles are "peak-time (phase)" and oscillation energy. 
+                            In "Group by Biology", you will notice the organizing principles are "peak time" and oscillation energy. 
                             In "Group by Sound", phase information is discarded because we assume the waveform repeats indefinitely, 
                             so the plot is organized by oscillation energy only.
                         </p>
                         <h4>Circadian Mode</h4>
                         <p>
-                            "Group by Biology" is still strongly organized by "peak-time (phase)", but "Group by Sound" no longer groups by oscillation energy
+                            "Group by Biology" is still strongly organized by "peak time", but "Group by Sound" no longer groups by oscillation energy
                             because only genes that oscillate around 24hr are kept. The plot is largely organized by waveform confidence, 
                             which correlates highly with noisiness of the data. 
                         </p>
@@ -711,6 +711,7 @@
                         VST data for each gene is z-score normalized across the 16 timepoints
                         before running UMAP with n_neighbors = 10, min_dist = 0.25, and metric = "cosine". Distance between points is (1 - Pearson correlation).
                         "Circadian Mode" reruns the UMAP on only the filtered genes.
+                        In All Genes Mode, peak time (used for coloring and filtering) is the sample hour with the highest VST value; no period is fitted and the 48 hours are not folded.
                     </p>
                     <h4>FFT</h4>
                     <p>
@@ -727,11 +728,11 @@
                         minimum_frequency = 1/48; maximum_frequency = 1/6; samples_per_peak = 30. 
                         The maximum of 1/6 is due to the Nyquist frequency.
                         Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, q-value is calculated.
-                        Phase and q-value are used for coloring and filtering in All Genes Mode.
+                        The q-value is used for coloring and filtering in All Genes Mode.
                     </p>
                     <p>
                         MetaCycle R package is used for specifically circadian gene detection. Default search range of 20~28hrs is used. 
-                        Phase and q-value from the MetaCycle result is used for color and filtering in Circadian Mode.
+                        Phase and q-value from the MetaCycle result are used for coloring and filtering in Circadian Mode.
                         q-value of less than 0.01 is considered circadian.
                     </p>
 

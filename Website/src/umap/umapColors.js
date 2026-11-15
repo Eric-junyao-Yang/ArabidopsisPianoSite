@@ -57,8 +57,15 @@ export function selectedEnergyPeriodHours() {
 }
 
 /** Circadian display → MetaCycle fields; All genes → Lomb–Scargle fields. */
+/** Per-gene meta field for the raw peak: sample hour of the highest VST measurement (set in main.js). */
+export const PEAK_HOUR_FIELD = "peak_hour"
+
+/**
+ * Peak-time field per gene set. All genes: raw peak hour (no period is trusted for every gene).
+ * Circadian: MetaCycle phase, folded by a 20–28 h period that these genes passed q ≤ 0.01 for.
+ */
 export function phaseField(displayMode) {
-    return displayMode === "Circadian" ? "metacycle_phase" : "LS_phase"
+    return displayMode === "Circadian" ? "metacycle_phase" : PEAK_HOUR_FIELD
 }
 
 export function qvalField(displayMode) {
@@ -78,7 +85,7 @@ export function continuousColorScale(mode, umap_arr, metaByGene, specsLookup, di
             interpolator: PHASE_INTERPOLATOR,
             leftLabel: `${formatLegendNum(lo, 1)}h`,
             rightLabel: `${formatLegendNum(hi, 1)}h`,
-            title: displayMode === "Circadian" ? "MetaCycle peak" : "peak time",
+            title: displayMode === "Circadian" ? "MetaCycle peak" : "peak hour",
             gradIdSuffix: "phase",
             color01(meta) {
                 const phase = meta?.[field]
