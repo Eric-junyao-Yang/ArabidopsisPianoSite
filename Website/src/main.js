@@ -3,7 +3,7 @@ import { PEAK_HOUR_FIELD, phaseField, qvalField } from "/src/umap/umapColors.js"
 import { bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plots/plotViolin.js"
 import { plotWaveformsClass } from "/src/plots/plotWaveforms.js"
-import { mountMorphExplainers } from "/src/explainers/explainers.js"
+import { createVoiceOwner, mountMorphExplainers, mountHarmonicMixer } from "/src/explainers/explainers.js"
 import { plotExpressionExplainer } from "/src/plots/plotExpressionExplainer.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { virtualPiano } from "/src/virtualPiano.js"
@@ -495,9 +495,9 @@ const synthReady = (async () => {
     console.error("Synth audio setup failed", err)
 })
 
-// Explainer voice: one oscillator shared by the sound explainers (morph demos, harmonic mixer)
+// Explainer voice: one oscillator shared by the sound explainers (morph explainers, harmonic mixer).
+// Connected once; it is silent until an explainer opens its gate.
 let explainerNode = null
-let explainerConnected = false
 let explainerReady = null
 async function initExplainerAudio() {
     if (!explainerReady) {
@@ -505,19 +505,6 @@ async function initExplainerAudio() {
             const ctx = await sharedContext()
             explainerNode = new AudioWorkletNode(ctx, "explainer-voice-processor")
             explainerNode.connect(globalAudio.input)
-
-            document.querySelectorAll(".harmonic-mixer__slider").forEach(el => {
-                el.addEventListener("input", event => {
-                    const item = harmonic_values.find(v => v.harmonics === Number(event.target.dataset.harmonic))
-                    item.value = event.target.value
-                    explainerNode?.port.postMessage({
-                        type: "updateHarmonics",
-                        harmonic_values
-                    })
-                })
-            })
-
-            explainerConnected = true
         })().catch((err) => {
             explainerReady = null
             throw err
@@ -527,28 +514,10 @@ async function initExplainerAudio() {
     await globalAudio.resume()
 }
 
-// The demo plots publish their animated wave every frame while their button is playing
-bus.subscribe_to("updateParams", "main", (params) => {
-    if (!explainerNode) return
-    if (!explainerConnected) {
-        explainerNode.connect(globalAudio.input)
-        explainerConnected = true
-    }
-    explainerNode.port.postMessage({
-        type: "updateWave",
-        amplitude: params.amplitude,
-        shape: params.shape,
-        cycles: params.cycles,
-    })
-})
-
-// The worklet never stops generating, so silence it by unplugging it
-bus.subscribe_to("stopSlideSound", "main", () => {
-    if (explainerNode && explainerConnected) {
-        explainerNode.disconnect(globalAudio.input)
-        explainerConnected = false
-    }
-})
+const explainerVoice = {
+    ready: initExplainerAudio,
+    send: (msg) => explainerNode?.port.postMessage(msg),
+}
 
 // existing sounds needs to be scaled as new sounds join
 function rescaleGains() {
@@ -1065,10 +1034,10 @@ const TOC1 = VSTlookup_to_arr(VST_lookup.get("AT5G61380"))
 const PP2AA3 = VSTlookup_to_arr(VST_lookup.get("AT1G13320"))
 const expressionHost = document.getElementById("Expression_Explainer_plot")
 if (expressionHost) plotExpressionExplainer(expressionHost, { TOC1, PP2AA3 })
-mountMorphExplainers(document.getElementById("Morph_Explainers"), {
-    bus,
-    initAudio: initExplainerAudio,
-})
+// One owner for both, so starting one explainer stops the other
+const explainerVoiceOwner = createVoiceOwner(explainerVoice)
+mountMorphExplainers(document.getElementById("Morph_Explainers"), explainerVoiceOwner)
+mountHarmonicMixer(document.getElementById("Harmonic_Mixer"), explainerVoiceOwner, bus)
 
 // --------------------------------------- Search Bars ---------------------------------------
 // Each search only offers genes from the current mode (lists swapped on DisplayModeSet)
@@ -1097,26 +1066,6 @@ for (const track of MIDI_TRACKS) {
         }
     ))
 }
-
-// --------------------------------------- Harmonic mixer ---------------------------------------
-const harmonic_values = Array.from({length: 8}).map((v,i) => ({
-    harmonics: i+1,
-    value: 0
-}))
-
-document.getElementById("Harmonic_Mixer_play").addEventListener("click", async (event) => {
-    if(!explainerNode) await initExplainerAudio()
-    explainerNode?.port.postMessage({
-        type: "switchMode",
-        mode: "harmonics"
-    })
-    explainerNode?.port.postMessage({
-        type: "updateHarmonics",
-        harmonic_values
-    })
-    explainerNode.connect(globalAudio.input)
-})
-
 
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {

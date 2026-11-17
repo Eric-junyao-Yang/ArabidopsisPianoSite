@@ -609,49 +609,108 @@
                         </p>
 
                         <h3>Sonic Grouping</h3>
-                        <h4>All Genes Mode</h4>
-                        <p>
-                            The vast majority of the oscillating genes oscillate at around 24 hours. A smaller group oscillates at 12 hours. 
-                            Genes that don't seem to repeat their pattern will have a strong 48hr oscillation component, because that's how long
-                            the experiment lasted.
-                        </p>
-                        <p>
-                            The best way to separate sound quality is by their oscillation energy. The three clearest types of sound come from 
-                            genes with strong 48, 24 and 12 hr components. A gene with a strong 24hr component will sound an octave 
-                            higher than a gene with a strong 48hr component. A gene with a strong 12hr component will sound another octave 
-                            higher still. A gene with a strong 16hr component should sound a perfect fifth away from a gene with a 
-                            strong 24hr component, but unfortunately there are no genes with a really strong 16hr component so the difference
-                            sounds reaaaaaally subtle (but there!).
-                        </p>
-                        <p>
-                            Another aspect of the frequency component is that the higher the
-                        </p>
-                        <p>
-                            Here you can experiment the blending between sound frequencies and brightness. 
-                            In the synthesizer, the waveform is recorded over 48hrs. 
-                            So the harmonics has the following periods:
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Harmonics</th>
-                                        <th>Ratio</th>
-                                        <th>Interval</th>
-                                        <th>Period (hrs)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>1st</td>
-                                        <td>1:1</td>
-                                        <td>Unison</td>
-                                        <td>48</td>
-                                    </tr>
-                                </tbody>
-                            </table>
 
-                            These are the energy % ploted above.
+                        <p> 
+                            Because we're exploring the shape of waveforms between genes, 
+                            the sonic profile is determined by the frequency composition of the waveforms 
+                            (found in oscillation energy colorings or the energy % plot). Two things are at play here
+                            that are closely related: brightness and pitch.
+                        </p>
 
-                            The fundamental (1st harmonic) played below will be mapped to 440Hz.
+                        <p>
+                            With 16 data points, there can be 8 frequency components after fourier transfomration. These components
+                            are called harmonics. Each associated harmonics is a whole number multiple of the fundemental frequency, 
+                            as shown in the table here:
+                        </p>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Harmonics</th>
+                                    <th>Ratio</th>
+                                    <th>Interval</th>
+                                    <th>Period (hrs)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1st</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>2nd</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>3rd</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>4th</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>5th</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>6th</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>7th</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                                <tr>
+                                    <td>8th</td>
+                                    <td>1:1</td>
+                                    <td>Unison</td>
+                                    <td>48</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <p>
+                            Since each harmonic has a different (higher) frequency than the fundemental, they all have different pitches.
+                            But when you mix them together, something interesting happens. Human ears tend to interpret a mix of related harmonics
+                            as the fundamental frequency with varying "brightness". The stronger the higher frequency components, the brighter the sound.
+                            But the notes will still sound like the fundamental note.
+                        </p>
+                        <p>
+                            Interestingly, even if the fundamental note is completely missing. If the associated harmonics are present, we still
+                            tend to interpet the note as the fundamental note. Its called the 
+                            <a href="https://en.wikipedia.org/wiki/Missing_fundamental">missing fundamental</a>. Psychoacoustics is wild.
+                        </p>
+                        <p>
+                            This means using the filters above, you can hone down sounds of varying brightness by finding genes with 
+                            progressively higher % of higher harmonics. But 3 interesting cases stands out in the dataset.
+                        </p>
+                        <p>
+                            Because there are true circadian genes that oscillate at 24hrs. Those genes can have such a dominant 24hr component 
+                            that they will sound like an octave higher instead of just a brighter fundamental note. Same with genes with a prominant
+                            12hr period in the data set. There are no other harmonics that are as dominant as the 48, 24, and 12hr periods in the dataset,
+                            so if you try to pick a gene with a really strong 16hr harmonic, it will likely sound like a brighter sound instead of a perfect
+                            fifth, but that's mostly because of the dataset.
+                        </p>
+                        <p>
+                            The blending of harmonics is hard to explain with words so here is a applet that lets you play with it yourself!
+                            Each slider sets that harmonic's share of the energy, and the mix is always played at the same loudness, 
+                            so only the balance changes the sound. The fundamental (1st harmonic) starts at 440 Hz. Keep hearing the same note
+                            can be distracting so while the mixer plays, the synth keyboard changes the drone's pitch.
                         </p>
                         <div id="Harmonic_Mixer" class="harmonic-mixer">
                             <div>
@@ -676,12 +735,14 @@
                                 <button id="Harmonic_Mixer_play" class="harmonic-mixer__play">Play</button>
                             </div>
                         </div>
+
+
                         <h4>Circadian Mode</h4>
                         <p>
-                            Since only genes oscillating around 24hrs are kept, the sonic separation of harmonics is not helpful. 
-                            There are still some genes with higher harmonic content, but much rarer and less obvious. Instead,
-                            the primary sonic difference is in the confidence of the shape of the wave (the wobble) since the sound is continuously 
-                            sampled. I absolutely love the sound.
+                            The pitch difference aspect really only applies in "All Genes Mode". 
+                            Since only genes oscillating around 24hrs are kept, most difference you can hear will be varying brightness. 
+                            However, the most prominant difference you will notice is the "wobble". It is the confidence of the shape of 
+                            the wave since the sound is continuously sampled. I absolutely love the sound.
                         </p>
                         <h3>Picking Sounds for Jukebox</h3>
                         <p>

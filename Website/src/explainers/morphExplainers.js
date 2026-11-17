@@ -1,5 +1,7 @@
 import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
 
+const PLAY_MS = 4000 // how long a morph explainer plays per press
+
 function morphSamples({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
     return Array.from({ length: steps }, (_, i) => {
         const phase = 2 * Math.PI * cycles * (i / steps)
@@ -53,6 +55,15 @@ function plotMorphWave(host, voiceOwner, { varyingParam, playSoundBtn = false, n
             .text(title)
     }
 
+    // The wave on screen right now; the sound follows it every frame while this plot owns the voice
+    let params = { steps: 2000, cycles: 3, amplitude: 1, shape: 0 }
+    const morphMessage = () => ({
+        type: "morph",
+        amplitude: params.amplitude,
+        shape: params.shape,
+        cycles: params.cycles,
+    })
+
     let resetBtn = null
     if (playSoundBtn) {
         const button = chart.append("g")
@@ -97,21 +108,20 @@ function plotMorphWave(host, voiceOwner, { varyingParam, playSoundBtn = false, n
             text.text("Play sound")
         }
 
-        button.on("click", async (event) => {
+        button.on("click", (event) => {
             event.stopPropagation()
             if (voiceOwner.owner === name) {
-                voiceOwner.release()
+                voiceOwner.release(name)
                 return
             }
-            await voiceOwner.claim(name, resetBtn)
+            voiceOwner.claim(name, resetBtn, morphMessage)
+            // Plays for PLAY_MS; the filling bar shows how long is left
             progress.interrupt().attr("width", 0)
                 .transition()
-                .duration(4000)
+                .duration(PLAY_MS)
                 .ease(d3.easeLinear)
                 .attr("width", 96)
-                .on("end", () => {
-                    if (voiceOwner.owner === name) voiceOwner.release()
-                })
+                .on("end", () => voiceOwner.release(name))
             text.text("Stop")
         })
     }
@@ -131,14 +141,12 @@ function plotMorphWave(host, voiceOwner, { varyingParam, playSoundBtn = false, n
     function animate() {
         if (!host.isConnected) return
         t += 0.05
-        const params = { steps: 2000, cycles: 3, amplitude: 1, shape: 0 }
+        params = { steps: 2000, cycles: 3, amplitude: 1, shape: 0 }
         if (varyingParam === "amplitude") params.amplitude = 0.6 + 0.4 * Math.sin(t)
         if (varyingParam === "cycles") params.cycles = 3 + Math.sin(t)
         if (varyingParam === "shape") params.shape = Math.abs(Math.sin(t * 0.5))
 
-        if (voiceOwner.bus && voiceOwner.owner === name) {
-            voiceOwner.bus.execute_event("updateParams", params)
-        }
+        voiceOwner.send(name, morphMessage())
 
         path.datum(morphSamples(params)).attr("d", lineGen)
         requestAnimationFrame(animate)
@@ -146,39 +154,9 @@ function plotMorphWave(host, voiceOwner, { varyingParam, playSoundBtn = false, n
     animate()
 }
 
-/**
- * Mount the amplitude / frequency / shape explainers into root.
- * Audio still uses the shared bus events `updateParams` / `stopSlideSound`.
- */
-export function mountMorphExplainers(root, { bus = null, initAudio = null } = {}) {
-    if (!root) return null
-
-    const voiceOwner = {
-        bus,
-        owner: null,
-        releaseTimer: null,
-        onRelease: null,
-        initAudio,
-
-        async claim(name, onRelease) {
-            this.release()
-            if (this.initAudio) await this.initAudio()
-            this.owner = name
-            this.onRelease = onRelease
-            clearTimeout(this.releaseTimer)
-            this.releaseTimer = setTimeout(() => this.release(), 4000)
-        },
-
-        release() {
-            clearTimeout(this.releaseTimer)
-            const onRelease = this.onRelease
-            this.onRelease = null
-            if (onRelease) onRelease()
-            this.owner = null
-            this.releaseTimer = null
-            this.bus?.execute_event("stopSlideSound", null)
-        },
-    }
+/** Mount the amplitude / frequency / shape explainers into root; they play through voiceOwner. */
+export function mountMorphExplainers(root, voiceOwner) {
+    if (!root) return
 
     const morphSpecs = [
         { sel: "#Morph_amplitude", varyingParam: "amplitude", name: "Amplitude", title: "Amplitude" },
@@ -195,6 +173,4 @@ export function mountMorphExplainers(root, { bus = null, initAudio = null } = {}
             title: spec.title,
         })
     }
-
-    return voiceOwner
 }

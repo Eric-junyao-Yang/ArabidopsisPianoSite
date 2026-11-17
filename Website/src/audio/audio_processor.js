@@ -204,103 +204,72 @@ class MidiAudioProcessor extends AudioWorkletProcessor {
     }
 }
 
+const EXPLAINER_GAIN = 0.2
+const EXPLAINER_FADE_SECONDS = 0.01 // gate fade, so starting / stopping doesn't click
+
+/**
+ * One oscillator shared by the sound explainers. Every sound is a single wavetable read at freq;
+ * the messages only rewrite that table:
+ *   { type: "morph", amplitude, shape, cycles }  sine→square blend at 440 Hz × cycles / 3
+ *   { type: "harmonics", levels, freq }           harmonic k gets levels[k-1] as its share of the energy;
+ *                                                 freq is harmonic 1
+ *   { type: "gate", on }                          fade the output in / out
+ */
 class ExplainerVoiceProcessor extends AudioWorkletProcessor {
     constructor() {
         super()
         this.table = new Float32Array(TABLE_SIZE)
-        this.amplitude = 1
         this.freq = 440
-        this.shape = 0
         this.phase = 0
-        this.mode = "morph"
-        this.updateTable()
+        this.gain = 0
+        this.targetGain = 0
+        this.fadeCoef = 1 - Math.exp(-1 / (EXPLAINER_FADE_SECONDS * sampleRate))
+        this.setMorph({ amplitude: 1, shape: 0, cycles: 3 })
 
-        //Harmonics Mixing
-        this.harmonics = [1,2,3,4,5,6,7,8].map((v,i) => ({
-            waveform: this.buildHarmonics(v),
-            value: 0
-        }))
-
-        this.port.onmessage = (event) => {
-            if (event.data.type === "updateWave") {
-                this.mode = "morph"
-                this.amplitude = event.data.amplitude
-                this.shape = event.data.shape
-                this.freq = 440 * (event.data.cycles / 3)
-                this.updateTable()
-            }
-            if (event.data.type === "updateHarmonics") {
-                const harmonic_values = event.data.harmonic_values
-                for (let i=0; i<harmonic_values.length; i++){
-                    this.harmonics[i].value = Number(harmonic_values[i].value)
-                }
-            }
-            if (event.data.type === "switchMode") {
-                this.mode = event.data.mode
-                if (this.mode === "harmonics"){
-                    this.freq = 440
-                }
-            }
+        this.port.onmessage = ({ data }) => {
+            if (data.type === "morph") this.setMorph(data)
+            else if (data.type === "harmonics") this.setHarmonics(data.levels, data.freq)
+            else if (data.type === "gate") this.targetGain = data.on ? EXPLAINER_GAIN : 0
         }
     }
 
-    buildHarmonics(ratio){
-        const wave = new Float32Array(TABLE_SIZE)
-        for (let i=0; i<TABLE_SIZE; i++){
-            wave[i] = Math.sin(2*Math.PI * (i/TABLE_SIZE) * ratio)
-        }
-        return wave
-    }
-
-    updateTable(){
-        for (let i=0;i<TABLE_SIZE;i++){
-            const phase = 2 * Math.PI * (i/TABLE_SIZE)
-            const sin = Math.sin(phase)
+    setMorph({ amplitude, shape, cycles }) {
+        this.freq = 440 * (cycles / 3)
+        for (let i = 0; i < TABLE_SIZE; i++) {
+            const sin = Math.sin(2 * Math.PI * (i / TABLE_SIZE))
             const square = Math.sign(sin)
-            const wave = (1 - this.shape) * sin + this.shape * square
-            this.table[i] = this.amplitude * wave
+            this.table[i] = amplitude * ((1 - shape) * sin + shape * square)
         }
     }
 
-    generateSound(channels, gain, source){
-        const outputLength = channels[0].length
-        const increment = this.freq * TABLE_SIZE / sampleRate
+    // levels are energy shares: amplitude_k = sqrt(level_k / Σ levels), so Σ amplitude² = 1 and every
+    // mix has the RMS of a full-scale sine (equal loudness). Only the balance changes the sound.
+    setHarmonics(levels, freq = 440) {
+        this.freq = freq
+        const total = levels.reduce((a, b) => a + b, 0)
+        const amps = levels.map((level) => (total > 0 ? Math.sqrt(level / total) : 0))
+        for (let i = 0; i < TABLE_SIZE; i++) {
+            const theta = 2 * Math.PI * (i / TABLE_SIZE)
+            let sample = 0
+            for (let k = 0; k < amps.length; k++) {
+                if (amps[k]) sample += amps[k] * Math.sin((k + 1) * theta)
+            }
+            this.table[i] = sample
+        }
+    }
 
-        for (let i=0; i < outputLength; i ++){
-            //wavetable
+    process(inputs, outputs) {
+        const channels = outputs[0]
+        const increment = this.freq * TABLE_SIZE / sampleRate
+        for (let i = 0; i < channels[0].length; i++) {
             const base = Math.floor(this.phase)
-            const i0 = base % TABLE_SIZE //lookup index in wavetable
+            const i0 = base % TABLE_SIZE
             const i1 = (i0 + 1) % TABLE_SIZE
             const frac = this.phase - base
-            const sample = source[i0] * (1-frac) + source[i1] * frac
-            for (const channel of channels){
-                channel[i] += sample * gain
-            }
-            this.phase += increment
-
-            if (this.phase >= TABLE_SIZE){
-                this.phase %= TABLE_SIZE
-            }
-        }
-    }
-
-    generateSoundHarmonics(channels){
-        for (const item of this.harmonics){
-            this.generateSound(channels, item.value, item.waveform)
-        }
-    }
-
-    process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
-        const channels = outputs[0]
-        for (const channel of channels){
-            channel.fill(0)
-        }
-        if (this.mode === "morph"){
-            const gain = 0.2
-            this.generateSound(channels, gain, this.table)
-        }
-        if (this.mode === "harmonics"){
-            this.generateSoundHarmonics(channels)
+            this.gain += (this.targetGain - this.gain) * this.fadeCoef
+            const sample = (this.table[i0] * (1 - frac) + this.table[i1] * frac) * this.gain
+            for (const channel of channels) channel[i] = sample
+            this.phase = (this.phase + increment) % TABLE_SIZE
         }
         return true
     }

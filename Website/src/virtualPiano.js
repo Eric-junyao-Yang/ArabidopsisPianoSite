@@ -13,6 +13,8 @@ export class virtualPiano {
         })
         this.notes_playing = new Set()
         this.isNotePlaying = false
+        this.octave = 0 // mirrors the synth worklet's octave shift (same ±3 clamp)
+        this.capture = null // { keyDown(key, freq), keyUp(key) } while another instrument borrows the keyboard
 
         let last = ""
         const build = () => this.drawPiano()
@@ -35,6 +37,11 @@ export class virtualPiano {
         })
         this.bus.subscribe_to("synthetic_keyUp", "virtualPiano", (key) => {
             this.keyUp(key)
+        })
+        // Another instrument (e.g. the harmonic mixer) takes the note keys; null hands them back to the synth
+        this.bus.subscribe_to("piano_capture", "virtualPiano", (handler) => {
+            this.releaseSynthNotes() // otherwise their keyUp would go to the new target and they'd hang
+            this.capture = handler
         })
     }
 
@@ -299,16 +306,32 @@ export class virtualPiano {
         }
     }
 
+    // The key's pitch including the octave shift
+    keyFreq(key){
+        return this.key_freq_map.get(key) * Math.pow(2, this.octave)
+    }
+
+    releaseSynthNotes(){
+        if (this.capture) return // the captured notes never reached the synth
+        for (const key of [...this.notes_playing]) {
+            this.synth_node?.port.postMessage({type: "keyUpUpdate", freq: this.key_freq_map.get(key)})
+            this.updateUpKeys(key)
+        }
+    }
+
     keyDown(key){
         const synth_node = this.synth_node
         if (!synth_node) return
         if (this.key_freq_map.has(key)){
-            synth_node.port.postMessage({type: "keyDownUpdate", freq: this.key_freq_map.get(key)})
+            if (this.capture) this.capture.keyDown(key, this.keyFreq(key))
+            else synth_node.port.postMessage({type: "keyDownUpdate", freq: this.key_freq_map.get(key)})
             this.updateDownKeys(key)
         } else if (key === "["){
+            this.octave = Math.max(-3, this.octave - 1)
             synth_node.port.postMessage({type: "synthFreqShift", dir: "down"})
             this.updateDownKeys(key)
         } else if (key === "]"){
+            this.octave = Math.min(3, this.octave + 1)
             synth_node.port.postMessage({type: "synthFreqShift", dir: "up"})
             this.updateDownKeys(key)
         }
@@ -318,7 +341,8 @@ export class virtualPiano {
         const synth_node = this.synth_node
         if (!synth_node) return
         if (this.key_freq_map.has(key)){
-            synth_node.port.postMessage({type: "keyUpUpdate", freq: this.key_freq_map.get(key)})
+            if (this.capture) this.capture.keyUp(key)
+            else synth_node.port.postMessage({type: "keyUpUpdate", freq: this.key_freq_map.get(key)})
             this.updateUpKeys(key)
             return
         }
