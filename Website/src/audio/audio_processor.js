@@ -204,7 +204,7 @@ class MidiAudioProcessor extends AudioWorkletProcessor {
     }
 }
 
-class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
+class ExplainerVoiceProcessor extends AudioWorkletProcessor {
     constructor() {
         super()
         this.table = new Float32Array(TABLE_SIZE)
@@ -212,17 +212,44 @@ class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
         this.freq = 440
         this.shape = 0
         this.phase = 0
-
+        this.mode = "morph"
         this.updateTable()
+
+        //Harmonics Mixing
+        this.harmonics = [1,2,3,4,5,6,7,8].map((v,i) => ({
+            waveform: this.buildHarmonics(v),
+            value: 0
+        }))
 
         this.port.onmessage = (event) => {
             if (event.data.type === "updateWave") {
+                this.mode = "morph"
                 this.amplitude = event.data.amplitude
                 this.shape = event.data.shape
                 this.freq = 440 * (event.data.cycles / 3)
                 this.updateTable()
             }
+            if (event.data.type === "updateHarmonics") {
+                const harmonic_values = event.data.harmonic_values
+                for (let i=0; i<harmonic_values.length; i++){
+                    this.harmonics[i].value = Number(harmonic_values[i].value)
+                }
+            }
+            if (event.data.type === "switchMode") {
+                this.mode = event.data.mode
+                if (this.mode === "harmonics"){
+                    this.freq = 440
+                }
+            }
         }
+    }
+
+    buildHarmonics(ratio){
+        const wave = new Float32Array(TABLE_SIZE)
+        for (let i=0; i<TABLE_SIZE; i++){
+            wave[i] = Math.sin(2*Math.PI * (i/TABLE_SIZE) * ratio)
+        }
+        return wave
     }
 
     updateTable(){
@@ -235,7 +262,7 @@ class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
         }
     }
 
-    generateSound(channels, gain){
+    generateSound(channels, gain, source){
         const outputLength = channels[0].length
         const increment = this.freq * TABLE_SIZE / sampleRate
 
@@ -245,7 +272,7 @@ class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
             const i0 = base % TABLE_SIZE //lookup index in wavetable
             const i1 = (i0 + 1) % TABLE_SIZE
             const frac = this.phase - base
-            const sample = this.table[i0] * (1-frac) + this.table[i1] * frac
+            const sample = source[i0] * (1-frac) + source[i1] * frac
             for (const channel of channels){
                 channel[i] += sample * gain
             }
@@ -257,15 +284,24 @@ class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
         }
     }
 
+    generateSoundHarmonics(channels){
+        for (const item of this.harmonics){
+            this.generateSound(channels, item.value, item.waveform)
+        }
+    }
+
     process(inputs, outputs) { //input is from previous node, should be empty for this; output is what the worklet needs manipulated into real data
         const channels = outputs[0]
         for (const channel of channels){
             channel.fill(0)
         }
-
-        const gain = 0.2
-        this.generateSound(channels, gain)
-
+        if (this.mode === "morph"){
+            const gain = 0.2
+            this.generateSound(channels, gain, this.table)
+        }
+        if (this.mode === "harmonics"){
+            this.generateSoundHarmonics(channels)
+        }
         return true
     }
 }
@@ -273,5 +309,5 @@ class SynthSlidesAudioProcessor extends AudioWorkletProcessor {
 
 
 registerProcessor("synth-audio-processor", SynthAudioProcessor)
-registerProcessor("synthslides-audio-processor", SynthSlidesAudioProcessor)
+registerProcessor("explainer-voice-processor", ExplainerVoiceProcessor)
 registerProcessor("midi-audio-processor", MidiAudioProcessor)

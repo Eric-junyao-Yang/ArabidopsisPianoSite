@@ -64,8 +64,8 @@
                         <span class="fold__title">How gene expression becomes an instrument</span>
                         <span class="fold__chevron" aria-hidden="true"></span>
                     </summary>
-                    <div class="fold__body" id="Synth_Science_div">
-                        <div class="synth-science prose-block">
+                    <div class="fold__body" id="Sound_Explainer">
+                        <div class="explainer prose-block">
                             <p>
                                 <em>Arabidopsis thaliana</em> is a plant that scientists love to study.
                                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
@@ -75,7 +75,7 @@
                             <p>
                                 Here is TOC1 (AT5G61380), a known circadian gene, alongside PP2AA3 (AT1G13320), a housekeeping (non-oscillating) gene:
                             </p>
-                            <div id="Synth_Science_data_plot" class="synth-science__plot"></div>
+                            <div id="Expression_Explainer_plot" class="explainer__plot"></div>
                             <p>
                                 We can “hear” the data if we treat the resulting plot as an audio waveform.
                             </p>
@@ -83,17 +83,17 @@
                             <p>
                                 An audio waveform is a representation of sound:
                             </p>
-                            <div id="Synth_Science_audio_waveforms" class="synth-science__waves">
-                                <figure id="audio_waveform_amp" class="synth-science__wave">
-                                    <div id="amp_plot" class="synth-science__wave-plot"></div>
+                            <div id="Morph_Explainers" class="explainer__waves">
+                                <figure class="explainer__wave">
+                                    <div id="Morph_amplitude" class="explainer__wave-plot"></div>
                                     <figcaption>Amplitude controls volume.</figcaption>
                                 </figure>
-                                <figure id="audio_waveform_freq" class="synth-science__wave">
-                                    <div id="freq_plot" class="synth-science__wave-plot"></div>
+                                <figure class="explainer__wave">
+                                    <div id="Morph_frequency" class="explainer__wave-plot"></div>
                                     <figcaption>Frequency (how fast the waveform repeats) controls pitch.</figcaption>
                                 </figure>
-                                <figure id="audio_waveform_shape" class="synth-science__wave">
-                                    <div id="shape_plot" class="synth-science__wave-plot"></div>
+                                <figure class="explainer__wave">
+                                    <div id="Morph_shape" class="explainer__wave-plot"></div>
                                     <figcaption>Shape of the waveform controls timbre. Think of each unique shape as its own instrument!</figcaption>
                                 </figure>
                             </div>
@@ -116,7 +116,7 @@
                         <span class="fold__chevron" aria-hidden="true"></span>
                     </summary>
                     <div class="fold__body" id="Synth_Howto_div">
-                        <div class="synth-science prose-block">
+                        <div class="explainer prose-block">
                             <h3>Picking a Sound</h3>
                             <p>
                                 Click on a circle in any of the two linked plots below: "Group by Biology" or "Group by Sound".
@@ -590,7 +590,7 @@
                     <span class="fold__chevron" aria-hidden="true"></span>
                 </summary>
                 <div class="fold__body" id="Synth_Discussion_div">
-                    <div class="synth-science prose-block">
+                    <div class="explainer prose-block">
                         <h3>Graph Grouping</h3>
                         <p>
                             These plots are called UMAPs, and data points that are similar are grouped together.
@@ -626,6 +626,56 @@
                         <p>
                             Another aspect of the frequency component is that the higher the
                         </p>
+                        <p>
+                            Here you can experiment the blending between sound frequencies and brightness. 
+                            In the synthesizer, the waveform is recorded over 48hrs. 
+                            So the harmonics has the following periods:
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Harmonics</th>
+                                        <th>Ratio</th>
+                                        <th>Interval</th>
+                                        <th>Period (hrs)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>1st</td>
+                                        <td>1:1</td>
+                                        <td>Unison</td>
+                                        <td>48</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            These are the energy % ploted above.
+
+                            The fundamental (1st harmonic) played below will be mapped to 440Hz.
+                        </p>
+                        <div id="Harmonic_Mixer" class="harmonic-mixer">
+                            <div>
+                                <label>1st Harmonic (48hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="1" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>2nd Harmonic (24hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="2" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>3rd Harmonic (16hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="3" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>4th Harmonic (12hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="4" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>5th Harmonic (9.6hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="5" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>6th Harmonic (8hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="6" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>7th Harmonic (6.9hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="7" type="range" min="0" max="1" value="0" step="0.1">
+                                <label>8th Harmonic (6hr)</label>
+                                <input class="harmonic-mixer__slider" data-harmonic="8" type="range" min="0" max="1" value="0" step="0.1">
+                            </div>
+                            <div>
+                                <button id="Harmonic_Mixer_play" class="harmonic-mixer__play">Play</button>
+                            </div>
+                        </div>
                         <h4>Circadian Mode</h4>
                         <p>
                             Since only genes oscillating around 24hrs are kept, the sonic separation of harmonics is not helpful. 

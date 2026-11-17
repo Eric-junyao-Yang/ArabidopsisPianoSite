@@ -8,7 +8,7 @@ import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
  * @param {HTMLElement} host
  * @param {{TOC1: ArrayLike<number>, PP2AA3: ArrayLike<number>}} genes  16 VST values each, at EXP_HOURS
  */
-export function plotExpressionSeries(host, { TOC1, PP2AA3 }) {
+export function plotExpressionExplainer(host, { TOC1, PP2AA3 }) {
     host.replaceChildren()
 
     const series = [

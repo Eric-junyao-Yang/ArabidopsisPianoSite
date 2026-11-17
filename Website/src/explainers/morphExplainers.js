@@ -1,7 +1,6 @@
 import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
-import { plotExpressionSeries } from "/src/plots/plotScienceDiv.js"
 
-function drawWave({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
+function morphSamples({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
     return Array.from({ length: steps }, (_, i) => {
         const phase = 2 * Math.PI * cycles * (i / steps)
         const sin = Math.sin(phase)
@@ -11,7 +10,7 @@ function drawWave({ steps = 2000, cycles = 4, amplitude = 1, shape = 0 }) {
     })
 }
 
-function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, myName = null, title = null }) {
+function plotMorphWave(host, voiceOwner, { varyingParam, playSoundBtn = false, name = null, title = null }) {
     host.replaceChildren()
 
     const width = 220
@@ -23,7 +22,7 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
     const svg = d3.select(host).append("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
-        .attr("class", "synth-science__svg")
+        .attr("class", "explainer__svg")
 
     const xScale = d3.scaleLinear().domain([0, 2000]).range([0, innerWidth])
     const yScale = d3.scaleLinear().domain([-1, 1]).range([innerHeight, 0])
@@ -57,7 +56,7 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
     let resetBtn = null
     if (playSoundBtn) {
         const button = chart.append("g")
-            .attr("class", "synth-science__play")
+            .attr("class", "explainer__play")
             .attr("transform", `translate(${innerWidth / 2}, ${innerHeight + 62})`)
             .style("cursor", "pointer")
 
@@ -100,18 +99,18 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
 
         button.on("click", async (event) => {
             event.stopPropagation()
-            if (controller.soundFocus === myName) {
-                controller.stopSound()
+            if (voiceOwner.owner === name) {
+                voiceOwner.release()
                 return
             }
-            await controller.playSound(myName, resetBtn)
+            await voiceOwner.claim(name, resetBtn)
             progress.interrupt().attr("width", 0)
                 .transition()
                 .duration(4000)
                 .ease(d3.easeLinear)
                 .attr("width", 96)
                 .on("end", () => {
-                    if (controller.soundFocus === myName) controller.stopSound()
+                    if (voiceOwner.owner === name) voiceOwner.release()
                 })
             text.text("Stop")
         })
@@ -137,73 +136,65 @@ function makeWavePlot(host, controller, { varyingParam, playSoundBtn = false, my
         if (varyingParam === "cycles") params.cycles = 3 + Math.sin(t)
         if (varyingParam === "shape") params.shape = Math.abs(Math.sin(t * 0.5))
 
-        if (controller.bus && controller.soundFocus === myName) {
-            controller.bus.execute_event("updateParams", params)
+        if (voiceOwner.bus && voiceOwner.owner === name) {
+            voiceOwner.bus.execute_event("updateParams", params)
         }
 
-        path.datum(drawWave(params)).attr("d", lineGen)
+        path.datum(morphSamples(params)).attr("d", lineGen)
         requestAnimationFrame(animate)
     }
     animate()
 }
 
 /**
- * Mount expression + interactive waveform demos into #Synth_Science_div.
+ * Mount the amplitude / frequency / shape explainers into root.
  * Audio still uses the shared bus events `updateParams` / `stopSlideSound`.
  */
-export function mountSynthScienceDiv({
-    root = document.getElementById("Synth_Science_div"),
-    geneRows = null,
-    bus = null,
-    initAudio = null,
-} = {}) {
+export function mountMorphExplainers(root, { bus = null, initAudio = null } = {}) {
     if (!root) return null
 
-    const controller = {
+    const voiceOwner = {
         bus,
-        soundFocus: null,
-        soundTimer: null,
-        activeResetBtn: null,
-        internalInitAudio: initAudio,
+        owner: null,
+        releaseTimer: null,
+        onRelease: null,
+        initAudio,
 
-        async playSound(myName, resetBtn) {
-            this.stopSound()
-            if (this.internalInitAudio) await this.internalInitAudio()
-            this.soundFocus = myName
-            this.activeResetBtn = resetBtn
-            clearTimeout(this.soundTimer)
-            this.soundTimer = setTimeout(() => this.stopSound(), 4000)
+        async claim(name, onRelease) {
+            this.release()
+            if (this.initAudio) await this.initAudio()
+            this.owner = name
+            this.onRelease = onRelease
+            clearTimeout(this.releaseTimer)
+            this.releaseTimer = setTimeout(() => this.release(), 4000)
         },
 
-        stopSound() {
-            clearTimeout(this.soundTimer)
-            const resetBtn = this.activeResetBtn
-            this.activeResetBtn = null
-            if (resetBtn) resetBtn()
-            this.soundFocus = null
-            this.soundTimer = null
+        release() {
+            clearTimeout(this.releaseTimer)
+            const onRelease = this.onRelease
+            this.onRelease = null
+            if (onRelease) onRelease()
+            this.owner = null
+            this.releaseTimer = null
             this.bus?.execute_event("stopSlideSound", null)
         },
     }
 
-    const dataHost = root.querySelector("#Synth_Science_data_plot")
-    if (dataHost) plotExpressionSeries(dataHost, geneRows)
-
-    const waveSpecs = [
-        { sel: "#amp_plot", varyingParam: "amplitude", myName: "Amplitude", title: "Amplitude" },
-        { sel: "#freq_plot", varyingParam: "cycles", myName: "Frequency", title: "Frequency" },
-        { sel: "#shape_plot", varyingParam: "shape", myName: "Shape", title: "Shape" },
+    const morphSpecs = [
+        { sel: "#Morph_amplitude", varyingParam: "amplitude", name: "Amplitude", title: "Amplitude" },
+        { sel: "#Morph_frequency", varyingParam: "cycles", name: "Frequency", title: "Frequency" },
+        { sel: "#Morph_shape", varyingParam: "shape", name: "Shape", title: "Shape" },
     ]
-    for (const spec of waveSpecs) {
+    for (const spec of morphSpecs) {
         const host = root.querySelector(spec.sel)
         if (!host) continue
-        makeWavePlot(host, controller, {
+        plotMorphWave(host, voiceOwner, {
             varyingParam: spec.varyingParam,
             playSoundBtn: true,
-            myName: spec.myName,
+            name: spec.name,
             title: spec.title,
         })
     }
 
-    return controller
+    return voiceOwner
 }

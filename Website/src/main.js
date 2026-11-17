@@ -3,7 +3,8 @@ import { PEAK_HOUR_FIELD, phaseField, qvalField } from "/src/umap/umapColors.js"
 import { bin_to_array } from "/src/binHelper.js"
 import { plotViolin } from "/src/plots/plotViolin.js"
 import { plotWaveformsClass } from "/src/plots/plotWaveforms.js"
-import { mountSynthScienceDiv } from "/src/synthScienceDiv.js"
+import { mountMorphExplainers } from "/src/explainers/explainers.js"
+import { plotExpressionExplainer } from "/src/plots/plotExpressionExplainer.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
 import { virtualPiano } from "/src/virtualPiano.js"
 import { searchbar } from "/src/searchbar.js"
@@ -494,35 +495,46 @@ const synthReady = (async () => {
     console.error("Synth audio setup failed", err)
 })
 
-// Synth science fold demos (same worklet as the old slides)
-let synthSlidesAudioContext = null
-let synthSlides_node = null
-let synthSlideDestinationConnection = false
-let synthSlidesReady = null
-async function initSynthScienceAudio() {
-    if (!synthSlidesReady) {
-        synthSlidesReady = (async () => {
-            synthSlidesAudioContext = await sharedContext()
-            synthSlides_node = new AudioWorkletNode(synthSlidesAudioContext, "synthslides-audio-processor")
-            synthSlides_node.connect(globalAudio.input)
-            synthSlideDestinationConnection = true
+// Explainer voice: one oscillator shared by the sound explainers (morph demos, harmonic mixer)
+let explainerNode = null
+let explainerConnected = false
+let explainerReady = null
+async function initExplainerAudio() {
+    if (!explainerReady) {
+        explainerReady = (async () => {
+            const ctx = await sharedContext()
+            explainerNode = new AudioWorkletNode(ctx, "explainer-voice-processor")
+            explainerNode.connect(globalAudio.input)
+
+            document.querySelectorAll(".harmonic-mixer__slider").forEach(el => {
+                el.addEventListener("input", event => {
+                    const item = harmonic_values.find(v => v.harmonics === Number(event.target.dataset.harmonic))
+                    item.value = event.target.value
+                    explainerNode?.port.postMessage({
+                        type: "updateHarmonics",
+                        harmonic_values
+                    })
+                })
+            })
+
+            explainerConnected = true
         })().catch((err) => {
-            synthSlidesReady = null
+            explainerReady = null
             throw err
         })
     }
-    await synthSlidesReady
+    await explainerReady
     await globalAudio.resume()
 }
 
 // The demo plots publish their animated wave every frame while their button is playing
 bus.subscribe_to("updateParams", "main", (params) => {
-    if (!synthSlides_node) return
-    if (!synthSlideDestinationConnection) {
-        synthSlides_node.connect(globalAudio.input)
-        synthSlideDestinationConnection = true
+    if (!explainerNode) return
+    if (!explainerConnected) {
+        explainerNode.connect(globalAudio.input)
+        explainerConnected = true
     }
-    synthSlides_node.port.postMessage({
+    explainerNode.port.postMessage({
         type: "updateWave",
         amplitude: params.amplitude,
         shape: params.shape,
@@ -532,9 +544,9 @@ bus.subscribe_to("updateParams", "main", (params) => {
 
 // The worklet never stops generating, so silence it by unplugging it
 bus.subscribe_to("stopSlideSound", "main", () => {
-    if (synthSlides_node && synthSlideDestinationConnection) {
-        synthSlides_node.disconnect(globalAudio.input)
-        synthSlideDestinationConnection = false
+    if (explainerNode && explainerConnected) {
+        explainerNode.disconnect(globalAudio.input)
+        explainerConnected = false
     }
 })
 
@@ -1048,14 +1060,14 @@ for (const type of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
 
 setupHelpPopUps(document, window)
 
-// --------------------------------------- Synth science fold ---------------------------------------
+// --------------------------------------- Sound explainers ---------------------------------------
 const TOC1 = VSTlookup_to_arr(VST_lookup.get("AT5G61380"))
 const PP2AA3 = VSTlookup_to_arr(VST_lookup.get("AT1G13320"))
-mountSynthScienceDiv({
-    root: document.getElementById("Synth_Science_div"),
-    geneRows: {TOC1, PP2AA3},
+const expressionHost = document.getElementById("Expression_Explainer_plot")
+if (expressionHost) plotExpressionExplainer(expressionHost, { TOC1, PP2AA3 })
+mountMorphExplainers(document.getElementById("Morph_Explainers"), {
     bus,
-    initAudio: initSynthScienceAudio,
+    initAudio: initExplainerAudio,
 })
 
 // --------------------------------------- Search Bars ---------------------------------------
@@ -1085,6 +1097,26 @@ for (const track of MIDI_TRACKS) {
         }
     ))
 }
+
+// --------------------------------------- Harmonic mixer ---------------------------------------
+const harmonic_values = Array.from({length: 8}).map((v,i) => ({
+    harmonics: i+1,
+    value: 0
+}))
+
+document.getElementById("Harmonic_Mixer_play").addEventListener("click", async (event) => {
+    if(!explainerNode) await initExplainerAudio()
+    explainerNode?.port.postMessage({
+        type: "switchMode",
+        mode: "harmonics"
+    })
+    explainerNode?.port.postMessage({
+        type: "updateHarmonics",
+        harmonic_values
+    })
+    explainerNode.connect(globalAudio.input)
+})
+
 
 // --------------------------------------- Bus subscriptions ---------------------------------------
 bus.subscribe_to("midi_track_gene", "main", ({ trackIndex, GeneID }) => {

@@ -690,12 +690,12 @@ main {
 
 /* ---------- Synth: science fold ---------- */
 
-.synth-science {
+.explainer {
     width: 100%;
     padding: var(--space-1);
 }
 
-.synth-science__plot {
+.explainer__plot {
     width: 100%;
     max-width: 40rem;
     margin: var(--space-3) 0 var(--space-4);
@@ -706,20 +706,20 @@ main {
     box-shadow: var(--shadow-sm);
 }
 
-.synth-science__svg {
+.explainer__svg {
     display: block;
     width: 100%;
     height: auto;
 }
 
-.synth-science__waves {
+.explainer__waves {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-3);
     margin: var(--space-4) 0;
 }
 
-.synth-science__wave {
+.explainer__wave {
     display: flex;
     flex-direction: column;
     margin: 0;
@@ -730,7 +730,7 @@ main {
     box-shadow: var(--shadow-sm);
 }
 
-.synth-science__plotCaption {
+.explainer__caption {
     margin: 0;
     padding: var(--space-3) var(--space-2) var(--space-3);
     border: 1px solid var(--color-border);
@@ -739,12 +739,12 @@ main {
     box-shadow: var(--shadow-sm);    
 }
 
-.synth-science__wave-plot {
+.explainer__wave-plot {
     width: 100%;
     flex: 0 0 auto;
 }
 
-.synth-science__wave figcaption {
+.explainer__wave figcaption {
     flex: 1 1 auto;
     display: flex;
     align-items: center;
@@ -758,12 +758,12 @@ main {
     text-align: center;
 }
 
-.synth-science__play:hover rect:first-child {
+.explainer__play:hover rect:first-child {
     fill: var(--color-accent-soft);
 }
 
 @media (max-width: 720px) {
-    .synth-science__waves {
+    .explainer__waves {
         grid-template-columns: minmax(0, 1fr);
     }
 }
