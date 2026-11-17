@@ -22,7 +22,24 @@ export function mountHarmonicMixer(root, voiceOwner, bus) {
     }
     const update = () => voiceOwner.send(NAME, harmonicsMessage())
 
-    for (const slider of sliders) slider.addEventListener("input", update)
+    // Each fader's readout is its share of the total (what is actually heard), not its raw position
+    const showLevels = () => {
+        const total = sliders.reduce((sum, slider) => sum + Number(slider.value), 0)
+        for (const slider of sliders) {
+            const value = Number(slider.value)
+            slider.style.setProperty("--fill", `${value * 100}%`)
+            const readout = slider.closest(".harmonic-mixer__channel")?.querySelector(".harmonic-mixer__value")
+            if (readout) readout.textContent = `${total > 0 ? Math.round((value / total) * 100) : 0}%`
+        }
+    }
+
+    for (const slider of sliders) {
+        slider.addEventListener("input", () => {
+            showLevels()
+            update()
+        })
+    }
+    showLevels()
 
     // Monophonic: the latest held key wins; releasing it falls back to the one held before,
     // and letting go of everything keeps the last pitch so the drone continues
@@ -44,6 +61,7 @@ export function mountHarmonicMixer(root, voiceOwner, bus) {
 
     const onRelease = () => {
         playBtn.textContent = "Play"
+        root.classList.remove("is-playing")
         heldKeys.clear()
         bus.execute_event("piano_capture", null)
     }
@@ -55,5 +73,6 @@ export function mountHarmonicMixer(root, voiceOwner, bus) {
         voiceOwner.claim(NAME, onRelease, harmonicsMessage)
         bus.execute_event("piano_capture", keyboard)
         playBtn.textContent = "Stop"
+        root.classList.add("is-playing")
     })
 }

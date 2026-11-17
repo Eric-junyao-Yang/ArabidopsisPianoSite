@@ -593,162 +593,200 @@
                     <div class="explainer prose-block">
                         <h3>Graph Grouping</h3>
                         <p>
-                            These plots are called UMAPs, and data points that are similar are grouped together.
+                            These plots are UMAPs: each point is a gene, and genes with similar profiles are placed near each other.
+                            Only the local neighborhoods are meaningful; the distances between far-apart clusters and the sizes of clusters are not.
                         </p>
                         <h4>All Genes Mode</h4>
                         <p>
-                            In "Group by Biology", you will notice the organizing principles are "peak time" and oscillation energy. 
-                            In "Group by Sound", phase information is discarded because we assume the waveform repeats indefinitely, 
-                            so the plot is organized by oscillation energy only.
+                            In "Group by Biology", you will notice the organizing principles are "peak time" and oscillation energy.
+                            In "Group by Sound", only the strength of each frequency component is kept and phase is discarded. Because the sound
+                            loops indefinitely, shifting the peak time only changes where the loop starts, which you can't hear.
+                            So the plot is organized only by how the oscillation energy is split across frequencies.
                         </p>
                         <h4>Circadian Mode</h4>
                         <p>
-                            "Group by Biology" is still strongly organized by "peak time", but "Group by Sound" no longer groups by oscillation energy
-                            because only genes that oscillate around 24hr are kept. The plot is largely organized by waveform confidence, 
-                            which correlates highly with noisiness of the data. 
+                            "Group by Biology" is still strongly organized by "peak time", but "Group by Sound" no longer separates genes by their dominant frequency,
+                            because only genes MetaCycle calls circadian (20–28 hr period, q ≤ 0.01) are kept, and nearly all of them are dominated by the 24 hr component.
+                            Instead, the plot is largely organized by waveform confidence (the Gaussian Process fit quality), which tracks how noisy the data is.
                         </p>
 
                         <h3>Sonic Grouping</h3>
 
                         <p> 
-                            Because we're exploring the shape of waveforms between genes, 
-                            the sonic profile is determined by the frequency composition of the waveforms 
-                            (found in oscillation energy colorings or the energy % plot). Two things are at play here
-                            that are closely related: brightness and pitch.
+                            Because we're comparing the shapes of waveforms between genes,
+                            the sonic profile is determined by the frequency composition of each waveform
+                            (shown in the oscillation energy colorings and the energy % plot). Two closely related things
+                            are at play here: brightness and pitch.
                         </p>
 
                         <p>
-                            With 16 data points, there can be 8 frequency components after fourier transfomration. These components
-                            are called harmonics. Each associated harmonics is a whole number multiple of the fundemental frequency, 
-                            as shown in the table here:
+                            With 16 time points spanning 48 hrs, a Fourier transform can resolve at most 8 frequency components
+                            above the mean. These components are called harmonics. Each harmonic is a whole-number multiple of 
+                            the fundamental frequency,
+                            which here is one cycle per 48 hrs, that's the length of the experiment.
+                            The table below shows each harmonic's period and the musical interval it forms with the fundamental:
                         </p>
 
-                        <table>
+                        <table class="harmonics-table">
                             <thead>
                                 <tr>
-                                    <th>Harmonics</th>
+                                    <th>Harmonic</th>
                                     <th>Ratio</th>
-                                    <th>Interval</th>
+                                    <th>Interval above fundamental</th>
                                     <th>Period (hrs)</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>1st</td>
+                                    <td>1st (fundamental)</td>
                                     <td>1:1</td>
                                     <td>Unison</td>
                                     <td>48</td>
                                 </tr>
                                 <tr>
                                     <td>2nd</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>2:1</td>
+                                    <td>Octave</td>
+                                    <td>24</td>
                                 </tr>
                                 <tr>
                                     <td>3rd</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>3:1</td>
+                                    <td>Octave + perfect fifth</td>
+                                    <td>16</td>
                                 </tr>
                                 <tr>
                                     <td>4th</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>4:1</td>
+                                    <td>2 octaves</td>
+                                    <td>12</td>
                                 </tr>
                                 <tr>
                                     <td>5th</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>5:1</td>
+                                    <td>2 octaves + major third</td>
+                                    <td>9.6</td>
                                 </tr>
                                 <tr>
                                     <td>6th</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>6:1</td>
+                                    <td>2 octaves + perfect fifth</td>
+                                    <td>8</td>
                                 </tr>
                                 <tr>
                                     <td>7th</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>7:1</td>
+                                    <td>2 octaves + minor seventh</td>
+                                    <td>6.9</td>
                                 </tr>
                                 <tr>
                                     <td>8th</td>
-                                    <td>1:1</td>
-                                    <td>Unison</td>
-                                    <td>48</td>
+                                    <td>8:1</td>
+                                    <td>3 octaves</td>
+                                    <td>6</td>
                                 </tr>
                             </tbody>
                         </table>
-
                         <p>
-                            Since each harmonic has a different (higher) frequency than the fundemental, they all have different pitches.
-                            But when you mix them together, something interesting happens. Human ears tend to interpret a mix of related harmonics
-                            as the fundamental frequency with varying "brightness". The stronger the higher frequency components, the brighter the sound.
-                            But the notes will still sound like the fundamental note.
+                            The blending of harmonics is hard to explain with words, so before we continue exploring the topic of harmonics, 
+                            here's a applet you can come back to and experiment as we go!
+                            Each slider sets that harmonic's share of the energy. The fundamental (1st harmonic) starts at 440 Hz. 
+                            Hearing the same note over and over can be distracting, so while the mixer plays, 
+                            the synth keyboard changes the drone's pitch.
+                        </p>
+                        <div id="Harmonic_Mixer" class="harmonic-mixer">
+                            <div class="harmonic-mixer__faders" role="group" aria-label="Energy share of each harmonic">
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="8" type="range" min="0" max="1" value="0" step="0.1" aria-label="8th harmonic, 6 hr period">
+                                    <span class="harmonic-mixer__num">8th</span>
+                                    <span class="harmonic-mixer__period">6h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="7" type="range" min="0" max="1" value="0" step="0.1" aria-label="7th harmonic, 6.9 hr period">
+                                    <span class="harmonic-mixer__num">7th</span>
+                                    <span class="harmonic-mixer__period">6.9h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="6" type="range" min="0" max="1" value="0" step="0.1" aria-label="6th harmonic, 8 hr period">
+                                    <span class="harmonic-mixer__num">6th</span>
+                                    <span class="harmonic-mixer__period">8h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="5" type="range" min="0" max="1" value="0" step="0.1" aria-label="5th harmonic, 9.6 hr period">
+                                    <span class="harmonic-mixer__num">5th</span>
+                                    <span class="harmonic-mixer__period">9.6h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="4" type="range" min="0" max="1" value="0" step="0.1" aria-label="4th harmonic, 12 hr period">
+                                    <span class="harmonic-mixer__num">4th</span>
+                                    <span class="harmonic-mixer__period">12h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="3" type="range" min="0" max="1" value="0" step="0.1" aria-label="3rd harmonic, 16 hr period">
+                                    <span class="harmonic-mixer__num">3rd</span>
+                                    <span class="harmonic-mixer__period">16h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="2" type="range" min="0" max="1" value="0" step="0.1" aria-label="2nd harmonic, 24 hr period">
+                                    <span class="harmonic-mixer__num">2nd</span>
+                                    <span class="harmonic-mixer__period">24h</span>
+                                </label>
+                                <label class="harmonic-mixer__channel">
+                                    <output class="harmonic-mixer__value">0%</output>
+                                    <input class="harmonic-mixer__slider" data-harmonic="1" type="range" min="0" max="1" value="0" step="0.1" aria-label="1st harmonic, 48 hr period">
+                                    <span class="harmonic-mixer__num">1st</span>
+                                    <span class="harmonic-mixer__period">48h</span>
+                                </label>
+                            </div>
+                            <div class="harmonic-mixer__footer">
+                                <span class="harmonic-mixer__axis">Harmonics</span>
+                                <button id="Harmonic_Mixer_play" class="btn btn--primary harmonic-mixer__play">Play</button>
+                            </div>
+                        </div>
+                        <p>
+                            Since each harmonic has a higher frequency than the fundamental, when played alone each one would have a different pitch.
+                            But when you mix them together, something interesting happens. Human ears tend to fuse a set of related harmonics
+                            into a single note at the fundamental's pitch, with varying "brightness". The stronger the higher-frequency components, 
+                            the brighter the sound.
                         </p>
                         <p>
-                            Interestingly, even if the fundamental note is completely missing. If the associated harmonics are present, we still
-                            tend to interpet the note as the fundamental note. Its called the 
+                            Interestingly, even if the fundamental is completely missing, as long as the higher harmonics are present we still
+                            tend to hear the note as the fundamental. It's called the
                             <a href="https://en.wikipedia.org/wiki/Missing_fundamental">missing fundamental</a>. Psychoacoustics is wild.
                         </p>
                         <p>
-                            This means using the filters above, you can hone down sounds of varying brightness by finding genes with 
-                            progressively higher % of higher harmonics. But 3 interesting cases stands out in the dataset.
+                            This means that using the filters above, you can narrow down sounds of varying brightness by finding genes with
+                            a progressively higher % of energy in the higher harmonics. But a few interesting cases stand out in the dataset.
                         </p>
                         <p>
-                            Because there are true circadian genes that oscillate at 24hrs. Those genes can have such a dominant 24hr component 
-                            that they will sound like an octave higher instead of just a brighter fundamental note. Same with genes with a prominant
-                            12hr period in the data set. There are no other harmonics that are as dominant as the 48, 24, and 12hr periods in the dataset,
-                            so if you try to pick a gene with a really strong 16hr harmonic, it will likely sound like a brighter sound instead of a perfect
-                            fifth, but that's mostly because of the dataset.
+                            Some genes are true circadian genes that oscillate every 24 hrs. Their 24 hr component can be so dominant
+                            that the line between pitch and brightness begins to blur. If a waveform repeats every 24 hrs within the 48 hr window,
+                            its true fundamental really is 24 hrs. The same goes for genes with a prominent 12 hr period, which sound two octaves higher.
+                            In this dataset, no other harmonic is as dominant as the 48, 24, and 12 hr components. 
+                            If you pick a gene with a really strong 16 hr harmonic, it will likely sound brighter rather than jumping up
+                            an octave and a fifth.
                         </p>
-                        <p>
-                            The blending of harmonics is hard to explain with words so here is a applet that lets you play with it yourself!
-                            Each slider sets that harmonic's share of the energy, and the mix is always played at the same loudness, 
-                            so only the balance changes the sound. The fundamental (1st harmonic) starts at 440 Hz. Keep hearing the same note
-                            can be distracting so while the mixer plays, the synth keyboard changes the drone's pitch.
-                        </p>
-                        <div id="Harmonic_Mixer" class="harmonic-mixer">
-                            <div>
-                                <label>1st Harmonic (48hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="1" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>2nd Harmonic (24hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="2" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>3rd Harmonic (16hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="3" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>4th Harmonic (12hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="4" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>5th Harmonic (9.6hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="5" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>6th Harmonic (8hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="6" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>7th Harmonic (6.9hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="7" type="range" min="0" max="1" value="0" step="0.1">
-                                <label>8th Harmonic (6hr)</label>
-                                <input class="harmonic-mixer__slider" data-harmonic="8" type="range" min="0" max="1" value="0" step="0.1">
-                            </div>
-                            <div>
-                                <button id="Harmonic_Mixer_play" class="harmonic-mixer__play">Play</button>
-                            </div>
-                        </div>
-
 
                         <h4>Circadian Mode</h4>
                         <p>
-                            The pitch difference aspect really only applies in "All Genes Mode". 
-                            Since only genes oscillating around 24hrs are kept, most difference you can hear will be varying brightness. 
-                            However, the most prominant difference you will notice is the "wobble". It is the confidence of the shape of 
-                            the wave since the sound is continuously sampled. I absolutely love the sound.
+                            The pitch jumps really only apply in "All Genes Mode".
+                            Since only genes oscillating around 24 hrs are kept, most of the differences you hear will be in brightness.
+                            However, the most prominent difference you will notice is the "wobble". The sound morphs continuously between random
+                            waveforms drawn from the gene's Gaussian Process fit, so the less confident the fit, the more the waveform
+                            (and the sound) wobbles. I absolutely love the sound.
                         </p>
                         <h3>Picking Sounds for Jukebox</h3>
                         <p>
-                            In audio mixing, letting instruments dodge each other in terms of occupied frequencies prevents the music from sounding muddy.
-                            In "All Genes Mode", we have three main audio registers (48, 24, and 12 hrs). The 12 hr component sounds the brightest; those genes are suitable for vocal or brass.
-                            48hr is the dullest, and those genes are suitable as bass.
+                            In audio mixing, giving instruments their own frequency ranges so they don't overlap keeps the music from sounding muddy.
+                            In "All Genes Mode", we have three main registers (48, 24, and 12 hrs). Genes dominated by the 12 hr component sit two octaves above
+                            the 48 hr ones and suit lead parts like vocals or brass. Genes dominated by the 48 hr component sit lowest and suit the bass.
                         </p>
                     </div>
                 </div>

@@ -397,6 +397,176 @@ main {
     color: color-mix(in srgb, var(--color-ink) 90%, white);
 }
 
+/* Harmonic series reference table in the Discussion */
+.harmonics-table {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: var(--space-4) 0;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.harmonics-table th,
+.harmonics-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.harmonics-table th {
+    border-bottom-color: var(--color-border-strong);
+    color: var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.harmonics-table tbody tr:nth-child(even) {
+    background: var(--color-bg-sunken);
+}
+
+/* Harmonic mixer: a row of vertical faders, 8th harmonic on the left like the energy % plot */
+.harmonic-mixer {
+    max-width: 40rem;
+    margin: var(--space-4) 0 var(--space-5);
+    padding: var(--space-4) var(--space-4) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-elevated);
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.harmonic-mixer.is-playing {
+    border-color: color-mix(in srgb, var(--cb-indigo) 45%, white);
+    box-shadow: var(--shadow-sm), 0 0 0 3px var(--color-accent-soft-2);
+}
+
+.harmonic-mixer__faders {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-sunken);
+}
+
+.harmonic-mixer__channel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    cursor: pointer;
+}
+
+.harmonic-mixer__value {
+    min-height: 1.2em;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-muted);
+}
+
+.harmonic-mixer__num {
+    margin-top: var(--space-1);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.harmonic-mixer__period {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-muted);
+}
+
+/* Vertical range: bottom = 0. Filled track via --fill (set from JS) */
+.harmonic-mixer__slider {
+    -webkit-appearance: none;
+    appearance: none;
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 1.75rem;
+    height: 9rem;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.harmonic-mixer__slider::-webkit-slider-runnable-track {
+    width: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to top, var(--cb-indigo) var(--fill, 0%), var(--color-border-strong) var(--fill, 0%));
+}
+
+.harmonic-mixer__slider::-moz-range-track {
+    width: 6px;
+    border-radius: 999px;
+    background: var(--color-border-strong);
+}
+
+.harmonic-mixer__slider::-moz-range-progress {
+    width: 6px;
+    border-radius: 999px;
+    background: var(--cb-indigo);
+}
+
+.harmonic-mixer__slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 12px;
+    margin-left: -8px;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    background: var(--cb-indigo);
+    box-shadow: 0 1px 3px rgb(27 29 41 / 35%);
+}
+
+.harmonic-mixer__slider::-moz-range-thumb {
+    width: 18px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    background: var(--cb-indigo);
+    box-shadow: 0 1px 3px rgb(27 29 41 / 35%);
+}
+
+.harmonic-mixer__slider:focus-visible {
+    outline: none;
+}
+
+.harmonic-mixer__slider:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
+.harmonic-mixer__slider:focus-visible::-moz-range-thumb { box-shadow: var(--focus-ring); }
+
+.harmonic-mixer__footer {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    margin-top: var(--space-2);
+}
+
+.harmonic-mixer__axis {
+    grid-column: 2;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+}
+
+.harmonic-mixer__play {
+    grid-column: 3;
+    justify-self: end;
+    min-width: 5rem;
+}
+
+@media (max-width: 520px) {
+    .harmonic-mixer { padding: var(--space-3) var(--space-2) var(--space-2); }
+    .harmonic-mixer__slider { height: 7.5rem; }
+}
+
 /* ---------- Foldable Science / Music theory briefs ---------- */
 
 .fold-stack {

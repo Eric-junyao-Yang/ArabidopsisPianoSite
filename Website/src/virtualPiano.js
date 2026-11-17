@@ -1,5 +1,7 @@
 import { PALETTE, THEME } from "/src/plots/plotTheme.js"
 
+const NON_TEXT_INPUTS = new Set(["range", "checkbox", "radio", "button", "submit", "reset", "color"])
+
 export class virtualPiano {
     constructor(synth_node, div, bus){
         this.synth_node = synth_node
@@ -245,7 +247,9 @@ export class virtualPiano {
     isTypingTarget(el) {
         if (!el || el === document.body) return false
         const tag = el.tagName
-        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable
+        // Sliders, checkboxes and buttons don't take letters, so the piano keys still play while they have focus
+        if (tag === "INPUT") return !NON_TEXT_INPUTS.has(el.type)
+        return tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable
     }
 
     assign_keyboard_keys(){
