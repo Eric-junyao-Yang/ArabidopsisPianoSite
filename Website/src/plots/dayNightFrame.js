@@ -14,8 +14,12 @@ const LIGHT_BANDS = [[0, 16, "light"], [16, 24, "dark"], [24, 40, "light"], [40,
  *   line: d3.line for points shaped { x: hours, y }
  *   setYDomain(domain): rescale y (niced) and redraw the y axis
  */
+// Phones get a narrower drawing so the plot isn't a thin strip and its labels stay readable
+const COMPACT_WIDTH = 420
+const isCompact = () => window.innerWidth <= 600
+
 export function createDayNightFrame(host, {
-    width = 1000,
+    width = isCompact() ? COMPACT_WIDTH : 1000,
     height = 200,
     margin = { top: 22, left: 56, bottom: 36, right: 16 },
     yLabel = "expression (VST)",

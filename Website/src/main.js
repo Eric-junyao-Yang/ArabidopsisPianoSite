@@ -5,7 +5,7 @@ import { plotViolin } from "/src/plots/plotViolin.js"
 import { plotWaveformsClass } from "/src/plots/plotWaveforms.js"
 import { mountSynthScienceDiv } from "/src/synthScienceDiv.js"
 import { setupHelpPopUps } from "/src/helpPopup.js"
-import { setupVirtualPiano, assign_keyboard_keys } from "/src/virtualPiano.js"
+import { virtualPiano } from "/src/virtualPiano.js"
 import { searchbar } from "/src/searchbar.js"
 import { initGlobalAudio } from "/src/audio/globalVolumeControl.js"
 import {
@@ -198,8 +198,7 @@ updateSynthGeneUI(null)
 const jukeboxHandle = document.getElementById("midi_handle")
 const jukeboxContainer = document.getElementById("midi_container")
 jukeboxHandle?.addEventListener("click", () => {
-    const open = jukeboxContainer.classList.toggle("is-open")
-    jukeboxHandle.setAttribute("aria-expanded", open ? "true" : "false")
+    setJukeboxOpen(!jukeboxContainer.classList.contains("is-open"))
 })
 
 const MIDI_TRACKS = [
@@ -411,16 +410,28 @@ synthToMidiSendBtn?.addEventListener("click", () => {
     setSynthToMidiStatus(`Assigned to ${trackLabel}`, "success")
 })
 
+function setJukeboxOpen(open) {
+    jukeboxContainer?.classList.toggle("is-open", open)
+    jukeboxHandle?.setAttribute("aria-expanded", open ? "true" : "false")
+}
+
+async function playJukebox() {
+    await ensureMidiReady()
+    // Sources are already in the worklet: sent on assignment, or by initMidiAudio for earlier ones
+    midiTransport.play()
+    document.getElementById("midi_play").textContent = "stop"
+}
+
+function stopJukebox() {
+    if (!midiTransport?.isPlaying) return
+    midiTransport.stop()
+    document.getElementById("midi_play").textContent = "play"
+}
+
 document.getElementById("midi_play").addEventListener("click", async () => {
     await ensureMidiReady()
-    if (midiTransport.isPlaying) {
-        midiTransport.stop()
-        document.getElementById("midi_play").textContent = "play"
-    } else {
-        // Sources are already in the worklet: sent on assignment, or by initMidiAudio for earlier ones
-        midiTransport.play()
-        document.getElementById("midi_play").textContent = "stop"
-    }
+    if (midiTransport.isPlaying) stopJukebox()
+    else await playJukebox()
 })
 
 // ------------------------------- Display Mode Switching -------------------------------
@@ -478,8 +489,7 @@ const synthReady = (async () => {
     synth_node.port.onmessage = (event) => {
         if (event.data.type === "gpDraw" && watchedTrack === null) plotWaveforms.drawSample(event.data.draw)
     }
-    assign_keyboard_keys(synth_node)
-    setupVirtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"), bus)
+    new virtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"), bus)
 })().catch((err) => {
     console.error("Synth audio setup failed", err)
 })
@@ -709,8 +719,10 @@ function swapViolin(mode){
 
     // keep non-plot children (e.g. the help button)
     violinDiv.selectAll(":scope > svg").remove()
+    // Shorter on phones, where the violin stacks between the two UMAPs
+    const violinHeight = window.innerWidth <= 520 ? 320 : 500
     violin = plotViolin(
-        130, 500, { top: 20, right: 20, bottom: 20, left: 50 },
+        130, violinHeight, { top: 20, right: 20, bottom: 20, left: 50 },
         values, violinDiv, label, bus, "umap_value_filter", null, null, { levels }
     )
     // New metric, new units: the old scrubber range is meaningless, so clear the filter
@@ -785,16 +797,36 @@ bus.subscribe_to("umap_color_mode", "colorModeHelp", updateColorModeHelp)
 bus.subscribe_to("DisplayModeSet", "colorModeHelp", updateColorModeHelp)
 updateColorModeHelp()
 
-// ---- DEMO: phase coloring on the Counts UMAP, then sweep a peak-time window up and back down ----
-const DEMO_WINDOW_HOURS = 6 // two sample hours; the peak-hour violin snaps to whole 3 h bins
-const DEMO_SWEEP_MS = 4000 // per direction
-let demoRun = 0 // bumped to cancel a running demo
+// -------------------------------------------- DEMO --------------------------------------------
+const DEMO_ENERGY_PERIOD = "24"
+const DEMO_WINDOW_FRACTION = 0.1 // window height as a share of the violin's range (10 points of a 0–100% scale)
+const DEMO_SWEEP_MS = 4000
+const DEMO_CHORD = ["a", "d", "f", "h"]
+const DEMO_CIRCADIAN_GENES = ["AT1G21810", "AT5G45010", "AT5G25810"]
+const DEMO_ALL_GENES = ["AT1G73220", "AT1G78600", "AT5G46400"]
+// [gene, track index] loaded into the jukebox (All genes mode, since the demo ends there)
+const DEMO_TRACKS = [["AT5G46400", 1], ["AT1G78600", 2], ["AT1G73220", 3]]
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+// Set while a demo runs; aborting it makes every pending delay / animation in runDemo throw
+let demoAbort = null
 
-/** Resolves once a smooth scroll settles (or after `timeout`, e.g. when there was nothing to scroll). */
-function scrollSettled(timeout = 1000) {
-    return new Promise((resolve) => {
+const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+const scrollToEl = (id, block = "start") =>
+    document.getElementById(id)?.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block })
+
+function delay(ms, signal) {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) return reject(signal.reason)
+        const timer = setTimeout(resolve, ms)
+        signal?.addEventListener("abort", () => {
+            clearTimeout(timer)
+            reject(signal.reason)
+        }, { once: true })
+    })
+}
+
+function scrollSettled(signal, timeout = 1000) {
+    return new Promise((resolve, reject) => {
         const done = () => {
             clearTimeout(timer)
             window.removeEventListener("scrollend", done)
@@ -802,68 +834,217 @@ function scrollSettled(timeout = 1000) {
         }
         const timer = setTimeout(done, timeout)
         window.addEventListener("scrollend", done)
+        signal.addEventListener("abort", () => {
+            done()
+            reject(signal.reason)
+        }, { once: true })
     })
 }
 
-/** Calls step(easedT) every frame for `ms`. Resolves true when finished, false if isLive() turns false first. */
-function animateFor(ms, ease, step, isLive) {
-    return new Promise((resolve) => {
+// Calls step(ease(t)) every frame for ms, t: 0→1
+function animateFor(ms, ease, step, signal) {
+    return new Promise((resolve, reject) => {
         const timer = d3.timer((elapsed) => {
-            if (!isLive()) {
-                timer.stop()
-                return resolve(false)
-            }
             const t = Math.min(1, elapsed / ms)
             step(ease(t))
             if (t === 1) {
                 timer.stop()
-                resolve(true)
+                resolve()
             }
         })
+        signal.addEventListener("abort", () => {
+            timer.stop()
+            reject(signal.reason)
+        }, { once: true })
     })
 }
+
+// Pulse an element's border (.demo-glow in styles.css) to point the viewer at it
+const glow = (selector) => document.querySelector(selector)?.classList.add("demo-glow")
+const unglow = (selector) => document.querySelector(selector)?.classList.remove("demo-glow")
+const clearGlows = () => document.querySelectorAll(".demo-glow").forEach((el) => el.classList.remove("demo-glow"))
+
+const pressChord = () => DEMO_CHORD.forEach((key) => bus.execute_event("synthetic_keyDown", key))
+const releaseChord = () => DEMO_CHORD.forEach((key) => bus.execute_event("synthetic_keyUp", key))
+
+// What the page looks like on load: All genes, nothing selected, no coloring, jukebox empty and closed
+function resetToDefault() {
+    clearGlows()
+    releaseChord()
+    stopJukebox()
+    setJukeboxOpen(false)
+    bus.execute_event("point_select", null)
+    setDisplayMode("All") // also empties the jukebox and rebuilds the violin
+    oscillation_energy = "24"
+    const periodRadio = document.querySelector('input[name="oscillation_energy"][value="24"]')
+    if (periodRadio) periodRadio.checked = true
+    setUmapColorMode("none") // rebuilds the violin at full range and clears the filter
+    scrollToEl("Synth_Waveform_container")
+}
+
+function stopDemo() {
+    if (!demoAbort) return
+    demoAbort.abort()
+    demoAbort = null
+    resetToDefault()
+}
+
+// Holds the chord while selecting each gene in turn
+async function playGenes(genes, signal) {
+    scrollToEl("Synth_Keyboard_div", "center")
+    await delay(1000, signal)
+    pressChord()
+    await delay(1000, signal)
+
+    scrollToEl("fft")
+    glow("#read_counts")
+    glow("#fft")
+    await delay(2000, signal)
+    for (const GeneID of genes) {
+        bus.execute_event("point_select", GeneID)
+        await delay(2000, signal)
+    }
+    unglow("#read_counts")
+    unglow("#fft")
+    releaseChord()
+}
+
+// Same steps a user takes: select the gene, pick the track, press Assign
+async function assignTrack(GeneID, trackIndex, signal, speed) {
+    let long_wait = null
+    let short_wait = null
+    if (speed === "slow"){
+        long_wait = 800
+        short_wait = 600
+    } else {
+        long_wait = 2000
+        short_wait = 600
+    }
+
+    glow(".synth-to-jukebox__gene")
+    await delay(long_wait, signal)
+    bus.execute_event("point_select", GeneID)
+    await delay(short_wait, signal)
+    unglow(".synth-to-jukebox__gene")
+
+    glow(".synth-to-jukebox__select")
+    await delay(long_wait, signal)
+    synthToMidiTrackSelect.value = String(trackIndex)
+    await delay(short_wait, signal)
+    unglow(".synth-to-jukebox__select")
+
+    glow("#send_waveform_to_midi")
+    await delay(long_wait, signal)
+    synthToMidiSendBtn.click()
+    await delay(short_wait, signal)
+    unglow("#send_waveform_to_midi")
+
+    speed = "fast"
+}
+
+// const testing = new AbortController()
+// console.log(testing.signal)
+// testing.abort()
+// console.log(testing.signal)
 
 async function runDemo() {
-    const run = ++demoRun
+    stopDemo()
+    const controller = new AbortController()
+    demoAbort = controller
+    const { signal } = controller
 
-    // Switching gene set empties the jukebox, so only switch when needed
-    if (displayMode !== "All") setDisplayMode("All")
-    setUmapColorMode("phase") // rebuilds the violin with peak time and clears the filter
+    try {
+        // Step 1: All vs Circadian gene sets
+        scrollToEl("gene_set_label")
+        await scrollSettled(signal)
+        glow(".gene-set-toggle__options")
+        await delay(2000, signal)
+        for (const mode of ["All", "Circadian", "All", "Circadian"]) {
+            setDisplayMode(mode)
+            await delay(800, signal)
+        }
+        unglow(".gene-set-toggle__options")
 
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    document.getElementById("read_counts")?.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: "center",
-    })
-    await scrollSettled()
+        // Step 2: cycle the UMAP color options
+        glow(".capsule-toggle")
+        await delay(2000, signal)
+        for (const mode of ["qval", "phase", "energyPct", "waveConf", "phase"]) {
+            setUmapColorMode(mode)
+            await delay(1000, signal)
+        }
+        unglow(".capsule-toggle")
+        // Step 3: sweep the violin filter up through % 24 h energy
+        scrollToEl("filter_slider")
+        glow("#filter_slider")
+        await delay(2000, signal)
 
-    // Any user change to the violin (drag, color mode, gene set) or another DEMO press ends the demo
-    const v = violin
-    const isLive = () => run === demoRun && violin === v
-    if (!isLive()) return
 
-    const [ymin, ymax] = v.domain
-    const top = ymax - DEMO_WINDOW_HOURS
-    const showWindow = (low) => v.setRange(low, low + DEMO_WINDOW_HOURS)
+        const v = violin
+        const [ymin, ymax] = v.domain
+        const windowSize = (ymax - ymin) * DEMO_WINDOW_FRACTION
+        const top = ymax - windowSize
+        v.setRange(ymin, ymin + windowSize, { animate: true })
+        await delay(500, signal) // let the 400 ms scrubber transition finish before driving it per frame
+        await animateFor(DEMO_SWEEP_MS, d3.easeCubicInOut, (t) => {
+            const low = ymin + t * (top - ymin)
+            v.setRange(low, low + windowSize)
+        }, signal)
+        await delay(400, signal)
+        v.setRange(ymin, ymax, { animate: true })
+        unglow("#filter_slider")
+        // Step 4: play circadian genes, then all genes
+        
+        await playGenes(DEMO_CIRCADIAN_GENES, signal)
 
-    v.setRange(ymin, ymin + DEMO_WINDOW_HOURS, { animate: true })
-    await delay(800) // let the 400 ms scrubber transition finish before driving it per frame
-    if (!isLive()) return
+        scrollToEl("gene_set_label")
+        glow(".gene-set-toggle__options")
+        await delay(1300, signal)
+        
+        setDisplayMode("All")
+        await delay(1000, signal)
+        glow(".gene-set-toggle__options")
 
-    const up = await animateFor(DEMO_SWEEP_MS, d3.easeCubicInOut, (t) => showWindow(ymin + t * (top - ymin)), isLive)
-    if (!up) return
-    const down = await animateFor(DEMO_SWEEP_MS, d3.easeCubicInOut, (t) => showWindow(top - t * (top - ymin)), isLive)
-    if (!down) return
+        await playGenes(DEMO_ALL_GENES, signal)
 
-    await delay(400)
-    if (isLive()) v.setRange(ymin, ymax, { animate: true })
+        // Step 5: load genes into the jukebox and play the song
+        scrollToEl("pushSound", "center")
+        glow("#pushSound")
+        await delay(2000, signal)
+        unglow("#pushSound")
+        let speed = "slow"
+        for (const [GeneID, trackIndex] of DEMO_TRACKS) await assignTrack(GeneID, trackIndex, signal, speed)
+
+        glow("#midi_handle")
+        await delay(2000, signal)
+        setJukeboxOpen(true)
+        unglow("#midi_handle")
+        await delay(1000, signal)
+        await playJukebox()
+        await delay(8000, signal)
+        stopJukebox()
+        await delay(1000, signal)
+    } catch (err) {
+        if (signal.aborted) return // stopDemo already reset the page
+        throw err
+    }
+
+    // Natural finish: same reset as an interruption
+    if (demoAbort === controller) stopDemo()
 }
 
-document.getElementById("DEMO")?.addEventListener("click", runDemo)
-// User grabbed the scrubber (the help button sits in the same div, so only count the plot)
-violinDiv.node()?.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("svg")) demoRun++
-})
+// Intro button and the inline link in How To
+for (const el of document.querySelectorAll("[data-demo]")) el.addEventListener("click", runDemo)
+
+// Any real user input mid-demo stops it and resets the page (synthetic events have isTrusted = false).
+// Capture phase so it runs first; a grab on the violin is swallowed so d3-drag doesn't start on a
+// violin the reset is about to replace (d3-drag starts on mousedown / touchstart).
+for (const type of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
+    window.addEventListener(type, (e) => {
+        if (!demoAbort || !e.isTrusted) return
+        if (violinDiv.node()?.contains(e.target) && e.target.closest("svg")) e.stopPropagation()
+        stopDemo()
+    }, { capture: true, passive: type === "wheel" || type === "touchstart" ? true : undefined })
+}
 
 setupHelpPopUps(document, window)
 

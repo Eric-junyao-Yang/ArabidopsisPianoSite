@@ -19,56 +19,43 @@
             <p class="site-eyebrow">Sonifying transcription</p>
             <h1 class="site-title">Arabidopsis Synthesizer</h1>
             <p class="site-lede">
-                Have you ever looked at a wiggly graph and wondered what would happen if you plug the shape into a synthesizer?
-                Who hasn't?</p>
-            <p class="site-lede">
-                Transcription measurements reflect gene activity, which can be affected by external or internal stimuli. 
+                Have you ever looked at a wiggly graph and wondered what would happen if you plugged the shape into a synthesizer?
+                Who hasn't?
+            </p>
+            <p class="site-intro">
+                Transcription measurements reflect gene activity, which can be affected by external or internal stimuli.
                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                 measured the effect of the day/night cycle on each of the roughly
-                27,000 genes in Arabidopsis thaliana. This interactive data "sonification" explores this experimental dataset using
+                27,000 genes in <em>Arabidopsis thaliana</em>. This interactive data "sonification" explores this experimental dataset using
                 <span class="sound-wave" aria-label="sound">
                     <span class="sound-wave__letter" style="--i:0">s</span><span class="sound-wave__letter" style="--i:1">o</span><span class="sound-wave__letter" style="--i:2">u</span><span class="sound-wave__letter" style="--i:3">n</span><span class="sound-wave__letter" style="--i:4">d</span>
                 </span>.
             </p>
 
-            <h3>FAQ: But why? Why would you do such a thing?</h3>
-            <p>Shushhhh... don't ruin this for me.</p>
+            <div class="site-cta">
+                <p>Feel free to play around with the synthesizer or watch a quick demo of the visualization.</p>
+                <div class="site-cta__actions">
+                    <a class="btn btn--primary" href="#Synth_Waveform_container">Jump to Synth</a>
+                    <button type="button" class="btn" data-demo>DEMO</button>
+                </div>
+            </div>
 
-            <p>
-                Feel free to go ahead and start loading up sounds to play with the synth keyboard. But if you're curious to learn more about the biology, here are some questions to get you started:
-            </p>
-            <ol>
+            <p class="site-questions__intro">If you're curious to learn more about the biology, here are some questions to get you started:</p>
+            <ol class="site-questions">
                 <li>How are the plots organized in "All Genes Mode"? How about "Circadian Only Mode"?</li>
                 <li>How can the plots help you pick out the most "differently sounding" genes in each mode to load into the Jukebox?</li>
                 <li>How does the biology relate to the sound quality in each mode?</li>
             </ol>
+            <aside class="site-faq" aria-label="FAQ">
+                <p class="site-faq__q">FAQ: But why? Why would you do such a thing?</p>
+                <p class="site-faq__a">Shushhhh... don't ruin this for me.</p>
+            </aside>
 
-            <!-- <h4>The web app is split into two main sections:</h4>
-            <ol class="section-toc">
-                <li><a href="#SynthDiv">Arabidopsis synthesizer</a>: custom "instruments" derived directly from biological data.</li>
-                <li><a href="#SequencerDiv">Arabidopsis step sequencer</a>: explore gene oscillations using harmony.</li>
-            </ol>
-            <p>
-                Each section includes a foldable <strong>Science</strong> brief.
-                The step sequencer also has a foldable <strong>Music theory</strong> brief —
-                both start collapsed so you can open them when you want the background.
-            </p> -->
         </div>
     </header>
 
-    <!-- <nav class="section-nav" aria-label="Sections">
-        <span class="section-nav__brand" aria-hidden="true">Arabidopsis Piano</span>
-        <a href="#SynthDiv">Synthesizer</a>
-        <a href="#SequencerDiv">Sequencer</a>
-        <a href="#methods">Methods</a>
-    </nav> -->
-
     <main id="main">
-        <section id="SynthDiv" class="app-section" aria-labelledby="synth-heading">
-            <!-- <header class="section-header">
-                <span class="section-header__index" aria-hidden="true">01</span>
-                <h2 id="synth-heading">Arabidopsis Synthesizer</h2>
-            </header> -->
+        <section id="SynthDiv" class="app-section" aria-label="Arabidopsis Synthesizer">
 
             <div class="fold-stack">
                 <details class="fold fold--science">
@@ -80,7 +67,7 @@
                     <div class="fold__body" id="Synth_Science_div">
                         <div class="synth-science prose-block">
                             <p>
-                                Arabidopsis thaliana is a plant that scientists love to study.
+                                <em>Arabidopsis thaliana</em> is a plant that scientists love to study.
                                 <a href="https://doi.org/10.1074/jbc.RA120.013513">Yuchen Yang and colleagues</a>
                                 grew Arabidopsis under <span style="color: #DDCC77">16hr light</span> and <span style="color: #332288">8hr dark</span> cycles, 
                                 and measured the activity of each of the roughly 27,000 genes every three hours for two days.
@@ -132,7 +119,7 @@
                         <div class="synth-science prose-block">
                             <h3>Picking a Sound</h3>
                             <p>
-                                There are two linked plots below "Group by Biology" vs "Group by Sound".
+                                Click on a circle in any of the two linked plots below: "Group by Biology" or "Group by Sound".
                             </p> 
                             <h4>Group by Biology</h4>
                             <p>
@@ -165,7 +152,7 @@
                             </p>
                             <h3>Filtering</h3>
                             <p>
-                                Filtering is a great way to explore the colored graph dynamically. Here is a <button type="button" id="DEMO" class="link-button">DEMO</button>.
+                                Filtering is a great way to explore the colored graph dynamically. Here is a <button type="button" class="link-button" data-demo>DEMO</button>.
                                 The vertical plot between the two larger
                                 plots is called a violin plot. The top and bottom circles can be clicked and dragged to set the upper and lower 
                                 filtering thresholds. The body of the window can be dragged and repositioned as well. The filter updates 
@@ -188,7 +175,7 @@
                             <p>
                                 Instead of simple interpolation, circadian genes can be modeled. 
                                 The model starts by assuming a smooth curve that repeats every 24hrs. 
-                                The model compares day1 vs day2 of the experimental data and the less they agree on, 
+                                The model compares day 1 vs day 2 of the experimental data, and the less they agree, 
                                 the less confident we are of the shape of the wave.
                             </p>    
                             <p>When you play a sound, 
@@ -553,18 +540,8 @@
                                 <ul id="synth-results" class="gene-search-results" hidden></ul>
                             </div>
                         </div>                       
-                        <!-- <div id="Waveform_Button_div">
-                            <div class="btn-group" role="group" aria-label="Waveform presets">
-                                <button type="button" id="reset" class="btn">reset</button>
-                                <button type="button" id="sine" class="btn">sine</button>
-                                <button type="button" id="square" class="btn">square</button>
-                                <button type="button" id="saw" class="btn">saw</button>
-                                <button type="button" id="triangle" class="btn">triangle</button>
-                            </div>
-                        </div> -->
                     </div>
                     <div class="canvas-shell">
-                        <!-- <canvas id="Synth_Waveform" width="1000" height="200"></canvas> -->
                         <div id="Waveform"></div>
                     </div>
                 </div>
@@ -639,13 +616,15 @@
                             the experiment lasted.
                         </p>
                         <p>
-                            The best way to separate sound quality is by their oscillation energy. The stronger the higher harmonic content,
-                            the "brighter" the sound. The three clearest types of sound come from 
+                            The best way to separate sound quality is by their oscillation energy. The three clearest types of sound come from 
                             genes with strong 48, 24 and 12 hr components. A gene with a strong 24hr component will sound an octave 
                             higher than a gene with a strong 48hr component. A gene with a strong 12hr component will sound another octave 
                             higher still. A gene with a strong 16hr component should sound a perfect fifth away from a gene with a 
                             strong 24hr component, but unfortunately there are no genes with a really strong 16hr component so the difference
                             sounds reaaaaaally subtle (but there!).
+                        </p>
+                        <p>
+                            Another aspect of the frequency component is that the higher the
                         </p>
                         <h4>Circadian Mode</h4>
                         <p>
@@ -657,7 +636,7 @@
                         <h3>Picking Sounds for Jukebox</h3>
                         <p>
                             In audio mixing, letting instruments dodge each other in terms of occupied frequencies prevents the music from sounding muddy.
-                            In "All Genes Mode", we have 3 main audio repertoire (48, 24, and 12hrs). The 12 hr component sounds the brightest, those genes are suitable for vocal or brass.
+                            In "All Genes Mode", we have three main audio registers (48, 24, and 12 hrs). The 12 hr component sounds the brightest; those genes are suitable for vocal or brass.
                             48hr is the dullest, and those genes are suitable as bass.
                         </p>
                     </div>
@@ -724,25 +703,25 @@
 
                     <h3>Oscillating Gene Detection</h3>
                     <p>
-                        Lomb-Scargle algorithm from astropy was used to detect inherent rhythms using VST from all genes with a search grid of
+                        The Lomb-Scargle algorithm from astropy was used to detect inherent rhythms using VST from all genes with a search grid of
                         minimum_frequency = 1/48; maximum_frequency = 1/6; samples_per_peak = 30. 
                         The maximum of 1/6 is due to the Nyquist frequency.
                         Taking the False Alarm Probabilities (FAP) and accounting for multiple-testing with Benjamini/Hochberg, q-value is calculated.
                         The q-value is used for coloring and filtering in All Genes Mode.
                     </p>
                     <p>
-                        MetaCycle R package is used for specifically circadian gene detection. Default search range of 20~28hrs is used. 
+                        The MetaCycle R package is used specifically for circadian gene detection. The default search range of 20~28hrs is used. 
                         Phase and q-value from the MetaCycle result are used for coloring and filtering in Circadian Mode.
-                        q-value of less than 0.01 is considered circadian.
+                        A q-value of 0.01 or less is considered circadian.
                     </p>
 
                     <h3>Gaussian Process Modeling</h3>
                     <p>
-                        For circadian genes (MetaCycle q-val <= 0.01), Gaussian Process was used to model the waveform from VST data.
+                        For circadian genes (MetaCycle q-value ≤ 0.01), a Gaussian Process was used to model the waveform from VST data.
                         GPflow was used to fit the GP model with a fixed period of 24 hrs and a Periodic kernel with a SquaredExponential base kernel.
-                        After fitting multiple low qval genes with different starting length scales without a prior, length scale was found to be around 0.4 ~ 0.5.
+                        After fitting multiple low q-value genes with different starting length scales without a prior, length scale was found to be around 0.4 ~ 0.5.
                         0.4 was chosen to be the initial length scale and prior.
-                        Variance is initialized to the variance, and mean is initalized to the mean of all measurements for the gene.
+                        The kernel variance is initialized to the variance, and the mean to the mean, of all measurements for the gene.
                         Multiple QC metrics are derived but as they mostly correlate well with a Spearman correlation of 0.7~0.9, only the relative std is kept as a
                         metric for fit quality.
                     </p>

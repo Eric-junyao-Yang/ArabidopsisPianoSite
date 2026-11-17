@@ -138,7 +138,9 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('rx', 4)
         .style('cursor', 'grab')
         .style('touch-action', 'none')
-        .on("dblclick", () => setRange(ymin, ymax, { animate: true }))
+
+    // Double click anywhere on the plot (not just the window) resets to the full range
+    svg.on("dblclick", () => setRange(ymin, ymax, { animate: true }))
 
     // Top bar
     const SCRUBBER_HANDLES_HEIGHT = 14 // generous hit area for touch

@@ -213,7 +213,7 @@ li::marker { color: var(--color-ink-muted); }
 /* ---------- Site chrome ---------- */
 
 .site-header {
-    padding: clamp(var(--space-6), 8vw, 5rem) var(--space-5) var(--space-6);
+    padding: clamp(var(--space-6), 7vw, 4.5rem) var(--space-5) var(--space-4);
 }
 
 .site-header__inner {
@@ -279,76 +279,46 @@ li::marker { color: var(--color-ink-muted); }
     }
 }
 
-.site-header h3 {
-    font-size: 1rem;
+.site-intro {
+    color: var(--color-ink-muted);
 }
 
-.section-toc {
-    list-style: none;
-    padding: 0;
-    display: grid;
+/* FAQ: a short aside, question muted, answer as the punchline */
+.site-faq {
+    margin: var(--space-5) 0;
+    padding: var(--space-3) var(--space-4);
+    border-left: 3px solid var(--color-accent-soft-2);
+    background: var(--color-bg-elevated);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+.site-faq p { margin: 0; }
+.site-faq__q {
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--color-ink-muted);
+}
+.site-faq__a {
+    font-weight: 300;
+}
+
+.site-cta {
+    margin: var(--space-5) 0;
+}
+.site-cta p { margin-bottom: var(--space-3); }
+.site-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    /* justify-content: center; */
     gap: var(--space-3);
 }
-
-.section-toc li {
-    margin: 0;
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-}
-
-.section-toc a {
+a.btn { text-decoration: none; }
+.site-questions__intro {
+    margin-bottom: var(--space-2);
     font-weight: 600;
 }
-
-/* Sticky nav */
-
-.section-nav {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: var(--nav-h);
-    padding: var(--space-2) max(var(--space-4), calc((100% - var(--content-max)) / 2));
-    background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
-    border-bottom: 1px solid var(--color-border);
-    backdrop-filter: saturate(180%) blur(14px);
-    -webkit-backdrop-filter: saturate(180%) blur(14px);
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.section-nav::-webkit-scrollbar { display: none; }
-
-.section-nav__brand {
-    margin-right: auto;
-    padding-right: var(--space-4);
-    font-weight: 700;
-    font-size: 0.95rem;
-    letter-spacing: -0.01em;
-    color: var(--cb-indigo);
-    white-space: nowrap;
-}
-
-.section-nav a {
-    padding: 0.4rem 0.8rem;
-    border-radius: 999px;
-    color: var(--color-ink-muted);
-    font-size: 0.88rem;
-    font-weight: 500;
-    text-decoration: none;
-    white-space: nowrap;
-    transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.section-nav a:hover,
-.section-nav a:focus-visible {
-    background: var(--color-accent-soft);
-    color: var(--cb-indigo);
+.site-questions {
+    margin: 0;
+    padding-left: 1.4rem;
 }
 
 main {
@@ -1252,6 +1222,32 @@ main {
     cursor: pointer;
 }
 
+/* Phones: the capsule can't fit on one line, so let the buttons wrap and an open sub-menu
+   drop onto its own row under its button instead of running off-screen */
+@media (max-width: 600px) {
+    .umap-color-toggles .capsule-toggle {
+        flex-wrap: wrap;
+        width: 100%;
+        border-radius: var(--radius-md);
+    }
+    .umap-color-choice-wrap {
+        flex-wrap: wrap;
+        max-width: 100%;
+        border-radius: var(--radius-md);
+    }
+    .umap-color-choice-wrap[data-expanded="true"] {
+        padding: 0 0 0.3rem;
+    }
+    .umap-color-choice-wrap[data-expanded="true"] .umap-color-menu-clip {
+        flex-basis: 100%;
+    }
+    .umap-color-choice-wrap[data-expanded="true"] .umap-color-menu {
+        flex-wrap: wrap;
+        width: auto;
+        padding-left: 0.3rem;
+    }
+}
+
 /* Gene-set-specific choices are toggled with [hidden]; beat the inline-flex above and on .btn */
 .umap-color-menu__option[hidden],
 .umap-color-mode .btn[hidden] {
@@ -1570,6 +1566,15 @@ main {
     --jukebox-gutter: calc(var(--jukebox-handle-w) + var(--space-2));
 }
 
+/* Phones: a slimmer handle gives the plots more of the screen */
+@media (max-width: 520px) {
+    #SynthDiv,
+    #discussion {
+        --jukebox-handle-w: 2.25rem;
+        --jukebox-gutter: calc(var(--jukebox-handle-w) + var(--space-1));
+    }
+}
+
 /* #discussion: same gutter so its fold lines up with the Science / How To folds above */
 #SynthDiv > :not(.synth-sticky-region),
 #discussion > .fold-stack {
@@ -1590,6 +1595,7 @@ main {
     inset: 0;
     z-index: 40;
     pointer-events: none;
+    overflow-x: clip; /* the collapsed jukebox slides off-screen; don't let it widen the page (clip keeps sticky working) */
 }
 
 #midi_container {
@@ -2963,20 +2969,6 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
         padding: var(--space-4);
     }
 
-    .section-nav__brand {
-        display: none;
-    }
-
-    .section-nav {
-        justify-content: center;
-    }
-
-    #Waveform_Button_div {
-        justify-content: stretch;
-        width: 100%;
-        margin-left: 0;
-    }
-
     .btn-group {
         width: 100%;
     }
@@ -3024,10 +3016,6 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
     #filter_slider {
         width: 100%;
     }
-
-    .section-nav {
-        justify-content: flex-start;
-    }
 }
 
 @media (hover: none) {
@@ -3048,7 +3036,6 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
 
 /* Print: keep content readable, drop chrome */
 @media print {
-    .section-nav,
     .skip-link,
     .help-button,
     #help-popup {
@@ -3068,5 +3055,38 @@ svg .tick text { fill: var(--color-ink-muted); font-size: 11px; font-variant-num
     .plot-frame {
         box-shadow: none;
         break-inside: avoid;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   DEMO attention glow: add .demo-glow to any element to pulse its border.
+   Uses box-shadow (no layout change, follows border-radius, keeps sticky/absolute
+   positioning intact). Running animations override the element's own box-shadow.
+   --------------------------------------------------------------------------- */
+:root {
+    --demo-glow-color: var(--color-accent);
+}
+
+.demo-glow {
+    animation: demo-glow-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes demo-glow-pulse {
+    0%, 100% {
+        box-shadow:
+            0 0 0 2px color-mix(in srgb, var(--demo-glow-color) 70%, transparent),
+            0 0 8px 2px color-mix(in srgb, var(--demo-glow-color) 25%, transparent);
+    }
+    50% {
+        box-shadow:
+            0 0 0 3px var(--demo-glow-color),
+            0 0 18px 6px color-mix(in srgb, var(--demo-glow-color) 45%, transparent);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .demo-glow {
+        animation: none;
+        box-shadow: 0 0 0 3px var(--demo-glow-color);
     }
 }

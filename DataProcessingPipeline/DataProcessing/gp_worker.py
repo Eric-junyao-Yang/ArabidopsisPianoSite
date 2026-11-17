@@ -5,8 +5,19 @@ Standalone worker for multiprocessing.Pool (spawn).
 def fit_single_gene(args):
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = ""  # CPU parallelization
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
 
     import numpy as np
+    import tensorflow as tf
+
+    # Parallelism comes from the Pool; one TF thread per worker avoids oversubscribing the CPUs.
+    # Only settable before TF initializes, i.e. on the first gene a worker sees.
+    try:
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+    except RuntimeError:
+        pass
+
     from gp_functions import fit_gp_with_qc
 
     (
