@@ -1854,6 +1854,13 @@ main {
     }
 }
 
+/* Touch screens can't hover, so the hover card would only ever show "—" */
+@media (hover: none) {
+    .umap-gene-card--hover {
+        display: none;
+    }
+}
+
 .plot-frame {
     position: relative;
     background: var(--color-bg-elevated);
