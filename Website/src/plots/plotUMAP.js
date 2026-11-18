@@ -1,9 +1,5 @@
 import { THEME, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "./plotTheme.js"
-import {
-    buildColorRgbArr,
-    rgb01ToCss,
-    selectedEnergyPeriodHours,
-} from "../umap/umapColors.js"
+import { buildColorRgbArr, rgb01ToCss } from "../umap/umapColors.js"
 import {
     ScatterGL,
     ACTIVE_ALPHA,
@@ -15,16 +11,16 @@ import {
 } from "../umap/umapScatterGL.js"
 import { renderColorLegend } from "../umap/umapLegend.js"
 
-export { selectedEnergyPeriodHours }
-
 // width/height are fallbacks: the plot fills its container and redraws (keeping filter + selection)
 // when the container is resized.
 // Returns { setData, destroy } — use setData(nextUmapArr) to swap embeddings (e.g. all vs circadian)
 // without stacking ResizeObservers / WebGL contexts (re-calling plotUMAP would).
-export function plotUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name, plot_title, displayGeneID = false, bus){
+// Points are colored and filtered on d.metricVal, which main.js writes; the color scale arrives on
+// the "umap_color_scale" bus event (see COLOR_MODES in umap/colorModes.js).
+export function plotUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID = false, bus){
     const container = document.getElementById(div_name)
     // State that must survive a redraw (resize or setData)
-    const state = { low: null, high: null, selected: null, colorMode: "none", displayMode: "All" }
+    const state = { low: null, high: null, selected: null, colorScale: null }
     let data = umap_arr
     let current = null
 
@@ -33,13 +29,11 @@ export function plotUMAP(width, height, umap_arr, per_gene_meta, specsLookup, di
         // keep non-plot children (e.g. the help button added by helpPopup.js)
         container.querySelectorAll(':scope > svg, :scope > canvas').forEach((n) => n.remove())
         const [w, h] = containerSize(container, width, height)
-        current = buildUMAP(w, h, data, per_gene_meta, specsLookup, div_name, plot_title, displayGeneID, bus, state)
+        current = buildUMAP(w, h, data, div_name, plot_title, displayGeneID, bus, state)
     }
 
-    /** @param {string} [displayMode] "All" | "Circadian" — selects LS vs MetaCycle metrics */
-    function setData(nextArr, displayMode) {
+    function setData(nextArr) {
         data = nextArr
-        if (displayMode === "All" || displayMode === "Circadian") state.displayMode = displayMode
         redraw()
     }
 
@@ -55,7 +49,7 @@ export function plotUMAP(width, height, umap_arr, per_gene_meta, specsLookup, di
     }
 }
 
-function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name, plot_title, displayGeneID, bus, state){
+function buildUMAP(width, height, umap_arr, div_name, plot_title, displayGeneID, bus, state){
 
     const margin = { top: 34, right: 16, bottom: 40, left: 46 }
     const dpr = window.devicePixelRatio || 1 //1 css coordinate = typically 2x2 physical pixel
@@ -102,8 +96,7 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
         .style('top', margin.top + 'px')
         .style('left', margin.left + 'px')
 
-    const metaByGene = new Map(per_gene_meta.map((d) => [d.GeneID, d]))
-    let colorRgbArr = buildColorRgbArr(state.colorMode, umap_arr, metaByGene, specsLookup, state.displayMode)
+    let colorRgbArr = buildColorRgbArr(umap_arr, state.colorScale)
 
     // ---- WebGL ----
     const scatter = new ScatterGL(
@@ -153,22 +146,14 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
     const legend = plotArea.append("g").attr("class", "umap-color-legend")
         .attr("transform", `translate(${innerWidth - 4}, 8)`)
 
-    const legendCtx = {
-        svg,
-        legend,
-        div_name,
-        umap_arr,
-        metaByGene,
-        specsLookup,
-        get displayMode() { return state.displayMode },
-    }
+    const legendCtx = { svg, legend, div_name }
 
-    function applyColorMode(mode) {
-        state.colorMode = mode
-        colorRgbArr = buildColorRgbArr(mode, umap_arr, metaByGene, specsLookup, state.displayMode)
+    function applyColorScale(scale) {
+        state.colorScale = scale
+        colorRgbArr = buildColorRgbArr(umap_arr, scale)
         if (scatter.isSupported) scatter.updateColors(colorRgbArr)
         else if (mainCtx) drawPointsCanvas(mainCtx, currentXScale, currentYScale)
-        renderColorLegend(legendCtx, mode)
+        renderColorLegend(legendCtx, scale)
     }
 
     if (state.low !== null && scatter.isSupported) scatter.updateSelected(state.low, state.high)
@@ -268,7 +253,7 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
         .attr("y", -16))
         .text(plot_title)
 
-    renderColorLegend(legendCtx, state.colorMode)
+    renderColorLegend(legendCtx, state.colorScale)
 
     const hoverLabel = plotArea.append("text")
         .attr("id", `hover-label-${div_name}`)
@@ -427,9 +412,9 @@ function buildUMAP(width, height, umap_arr, per_gene_meta, specsLookup, div_name
         }
     })
 
-    bus.subscribe_to("umap_color_mode", div_name, (mode) => {
+    bus.subscribe_to("umap_color_scale", div_name, (scale) => {
         if (destroyed) return
-        applyColorMode(mode || "none")
+        applyColorScale(scale)
     })
 
     bus.subscribe_to("point_select", div_name, (GeneID) => {

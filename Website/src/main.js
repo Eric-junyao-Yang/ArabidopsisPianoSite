@@ -1,5 +1,5 @@
-import { plotUMAP, selectedEnergyPeriodHours } from "./plots/plotUMAP.js"
-import { PEAK_HOUR_FIELD, phaseField, qvalField } from "./umap/umapColors.js"
+import { plotUMAP } from "./plots/plotUMAP.js"
+import { COLOR_MODES, PEAK_HOUR_FIELD, isModeAvailable, modeForGeneSet } from "./umap/colorModes.js"
 import { bin_to_array } from "./binHelper.js"
 import { plotViolin } from "./plots/plotViolin.js"
 import { plotWaveformsClass } from "./plots/plotWaveforms.js"
@@ -21,7 +21,7 @@ import {
     watchTrack,
 } from "./midiplayer.js"
 import { midiTrackPlots } from "./plots/midiTrackPlot.js"
-import { plotHarmonics, energyPctAtPeriod } from "./plots/plotHarmonics.js"
+import { plotHarmonics, toEnergyPct, hasPeriod } from "./plots/plotHarmonics.js"
 import { gpSamplerClass, VSTlookup_to_arr, EXP_HOURS } from "./GaussianProcess/GPalgo.js"
 
 // ---- add a bus for communication between modules ----
@@ -84,14 +84,6 @@ const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 const per_gene_meta_lookup = new Map(per_gene_meta.map((val) => [val.GeneID, val]))
 const gp_params_lookup = new Map(gp_params_arr.map((val) => [val.GeneID, val]))
-// GP fit quality rides along with the other per-gene metrics, so UMAP coloring reads it from meta
-for (const { GeneID, relative_std } of gp_params_arr) {
-    const meta = per_gene_meta_lookup.get(GeneID)
-    if (meta) meta.gp_relative_std = relative_std
-}
-// Peak time = sample hour of the highest measurement, no period fitting or folding. It can only be
-// one of the 16 sample hours, so the violin shows it as bars (see violinMetric's levels). All genes only;
-// Circadian mode keeps MetaCycle phase (see phaseField).
 for (const [GeneID, meta] of per_gene_meta_lookup) {
     const row = VST_lookup.get(GeneID)
     if (row) meta[PEAK_HOUR_FIELD] = EXP_HOURS[d3.maxIndex(VSTlookup_to_arr(row))]
@@ -107,18 +99,32 @@ for (let i = 0; i < gp_params_arr.length; i++) {
     circadian_fft_arr[i].id = GeneID
     circadian_fft_arr[i].log_TPM = log_TPM
 }
-// Amplitude spectrum per gene (period hours → FFT amplitude). Energy % is derived on read.
-const HARMONIC_PERIODS_H = [48, 24, 16, 12, 9.6, 8, 6.9, 6]
-const specs_lookup = new Map(per_gene_meta.map((v) => [
-    v.GeneID,
-    HARMONIC_PERIODS_H.map((period, i) => ({
-        period,
-        amplitude: v[`spec${i + 1}`],
-    })),
-]))
+
+const ALL_HARMONICS = [1, 2, 3, 4, 5, 6, 7, 8]
+const CIRCADIAN_HARMONICS = [1, 2, 3, 4]
+const ALL_PERIODS = ALL_HARMONICS.map((k) => 48 / k)
+const CIRCADIAN_PERIODS = CIRCADIAN_HARMONICS.map((k) => 24 / k)
+const SPECS = {
+    All: {
+        periods: ALL_PERIODS,
+        byGene: new Map(per_gene_meta.map((v) => [v.GeneID, toEnergyPct(
+            ALL_HARMONICS.map((k, i) => ({ period: ALL_PERIODS[i], energy: v[`spec${k}`] ** 2 }))
+        )])),
+    },
+    Circadian: {
+        periods: CIRCADIAN_PERIODS,
+        byGene: new Map(gp_params_arr.map((v) => [v.GeneID, toEnergyPct(
+            CIRCADIAN_HARMONICS.map((k, i) => ({
+                period: CIRCADIAN_PERIODS[i],
+                energy: v[`mean_power_${k}`] + v[`wobble_power_${k}`],
+            }))
+        )])),
+    },
+}
+
+
 // --------------------------------------- Synth waveform ---------------------------------------
 
-/** Current gene driving the synth waveform (null = custom / preset). */
 let currentSynthGeneID = null
 let synthToMidiStatusTimer = null
 
@@ -175,19 +181,12 @@ function updateSynthGeneUI(GeneID) {
 function renderWaveformLabel() {
     let label = "No gene selected"
     if (currentSynthGeneID) {
-        // Only reached after load, once MIDI_TRACKS / watchedTrack (declared further down) exist
         const track = MIDI_TRACKS.find((t) => t.trackIndex === watchedTrack)
         label = track ? `${currentSynthGeneID} · ${track.label}` : currentSynthGeneID
     }
     if (synthWaveformLabelTextEl) synthWaveformLabelTextEl.textContent = label
     else if (synthWaveformLabelEl) synthWaveformLabelEl.textContent = label
     synthWaveformLabelEl?.classList.toggle("has-gene", Boolean(currentSynthGeneID))
-}
-
-function applySynthPreset(fn) {
-    fn()
-    // Presets / reset leave the gene data behind — clear selection so UI matches the sound.
-    bus.execute_event("point_select", null)
 }
 
 synthToMidiTrackSelect?.addEventListener("change", () => {
@@ -239,7 +238,6 @@ function setMidiTrackLoaded(trackIndex, GeneID) {
     if (geneEl) {
         geneEl.replaceChildren()
         if (GeneID) {
-            // Circadian: clicking the gene shows it in the waveform plot with this track's live draws
             const idSpan = document.createElement(displayMode === "Circadian" ? "button" : "span")
             idSpan.className = "midi-gene-name__id"
             idSpan.textContent = GeneID
@@ -490,7 +488,10 @@ const synthReady = (async () => {
     // In Circadian mode the worklet samples the GP itself and reports each draw it starts
     // morphing towards, so the plot follows the sound
     synth_node.port.onmessage = (event) => {
-        if (event.data.type === "gpDraw" && watchedTrack === null) plotWaveforms.drawSample(event.data.draw)
+        if (event.data.type === "gpDraw" && watchedTrack === null) {
+            const color = plotWaveforms.drawSample(event.data.draw)
+            harmonics_plot.drawSample(event.data.draw, color) // same color ties the ticks to their curve
+        }
     }
     new virtualPiano(synth_node, document.getElementById("Synth_Keyboard_div"), bus)
 })().catch((err) => {
@@ -547,10 +548,11 @@ async function initMidiAudio() {
                 },
             }, bus)
             if (midiEvents && midiSongTime) midiTransport.setEvents(midiEvents, midiSongTime)
-            // Draws from the watched track feed the waveform plot
+            // Draws from the watched track feed the waveform and harmonics plots
             midiNode.port.onmessage = (event) => {
                 if (event.data.type === "trackDraw" && event.data.trackIndex === watchedTrack) {
-                    plotWaveforms.drawSample(event.data.draw)
+                    const color = plotWaveforms.drawSample(event.data.draw)
+                    harmonics_plot.drawSample(event.data.draw, color)
                 }
             }
             // Genes may have been assigned before the worklet existed — push them now.
@@ -566,9 +568,9 @@ async function initMidiAudio() {
 }
 
 // --------------------------------------- Plots ---------------------------------------
-const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, per_gene_meta, specs_lookup, "read_counts", "Group by Biology", false, bus)
-const umapFft = plotUMAP(600, 500, allgenes_fft_arr, per_gene_meta, specs_lookup, "fft", "Group by Sound", false, bus)
-plotHarmonics(specs_lookup, bus)
+const umapReadCounts = plotUMAP(600, 500, allgenes_VST_arr, "read_counts", "Group by Biology", false, bus)
+const umapFft = plotUMAP(600, 500, allgenes_fft_arr, "fft", "Group by Sound", false, bus)
+const harmonics_plot = plotHarmonics(SPECS, bus)
 const plotWaveforms = new plotWaveformsClass()
 plotWaveforms.showAll(null)
 
@@ -578,38 +580,48 @@ const gpSampler = new gpSamplerClass(gp_params_arr, VST_lookup)
 
 
 
-// UMAP color-mode toggles (TPM filter stays independent)
-// Oscillating genes / oscillation energy each expand their own options to the right.
-const OSCILLATING_MODES = new Set(["qval", "circadian"])
-const umapColorChoices = [
+// ---- UMAP color modes ----
+// What each mode colors by lives in COLOR_MODES (umap/colorModes.js). Here: the buttons, the
+// options their menus set, and applyColorMode, which pushes the mode to the UMAPs, violin and panels.
+
+// Data a mode's metric can read (ctx.data in colorModes.js)
+const COLOR_DATA = {
+    meta: per_gene_meta_lookup,
+    gp: gp_params_lookup,
+    counts: normalized_counts_lookup,
+    specs: SPECS,
+}
+const DEFAULT_ENERGY_PERIOD = 24
+// Set by the buttons' menus
+const colorOptions = { oscillatingType: "circadian", energyPeriod: DEFAULT_ENERGY_PERIOD }
+
+// One row per button. A button with several modes turns on the one its menu picks.
+const COLOR_BUTTONS = [
     {
         id: "UMAP_oscillation",
         menuId: "UMAP_oscillation_menu",
-        isActive: (m) => OSCILLATING_MODES.has(m),
+        modes: ["qval", "circadian"],
+        pick: () => colorOptions.oscillatingType,
     },
-    { id: "UMAP_phase", isActive: (m) => m === "phase" },
-    {
-        id: "UMAP_energy",
-        menuId: "UMAP_energy_menu",
-        isActive: (m) => m === "energyPct",
-    },
-    { id: "UMAP_waveConf", isActive: (m) => m === "waveConf" },
+    { id: "UMAP_phase", modes: ["phase"] },
+    { id: "UMAP_energy", menuId: "UMAP_energy_menu", modes: ["energyPct"] },
+    { id: "UMAP_waveConf", modes: ["waveConf"] },
 ]
+
 let umapColorMode = "none"
+let colorMetric = COLOR_MODES.none.metric({ displayMode: "All", options: colorOptions, data: COLOR_DATA })
 
-function selectedOscillatingType() {
-    const el = document.querySelector('input[name="oscillating_type"]:checked')
-    return OSCILLATING_MODES.has(el?.value) ? el.value : "circadian"
-}
-
-function syncUmapColorSuboptions() {
-    for (const { id, menuId, isActive } of umapColorChoices) {
-        const open = Boolean(menuId) && isActive(umapColorMode)
+/** Pressed state and open menu follow umapColorMode. */
+function syncColorButtons() {
+    for (const { id, menuId, modes } of COLOR_BUTTONS) {
+        const active = modes.includes(umapColorMode)
+        const open = Boolean(menuId) && active
         const btn = document.getElementById(id)
+        btn?.setAttribute("aria-pressed", String(active))
         btn?.setAttribute("aria-expanded", String(open))
-        const menu = menuId ? document.getElementById(menuId) : null
         const wrap = btn?.closest(".umap-color-choice-wrap")
         if (wrap) wrap.dataset.expanded = open ? "true" : "false"
+        const menu = menuId ? document.getElementById(menuId) : null
         if (!menu) continue
         menu.setAttribute("aria-hidden", String(!open))
         if (open) menu.removeAttribute("inert")
@@ -617,168 +629,114 @@ function syncUmapColorSuboptions() {
     }
 }
 
+/**
+ * Hide choices the gene set doesn't have: buttons and oscillating types whose mode isn't available
+ * (COLOR_MODES availableIn), and energy periods the set's spectrum doesn't have (48 h / 16 h in Circadian).
+ * A hidden choice that was picked moves to one that is still there.
+ */
+function syncColorChoicesToGeneSet() {
+    for (const { id, modes } of COLOR_BUTTONS) {
+        const btn = document.getElementById(id)
+        if (btn) btn.hidden = !modes.some((m) => isModeAvailable(m, displayMode))
+    }
+    for (const radio of document.querySelectorAll('input[name="oscillating_type"]')) {
+        radio.closest("label").hidden = !isModeAvailable(radio.value, displayMode)
+    }
+    colorOptions.oscillatingType = modeForGeneSet(colorOptions.oscillatingType, displayMode)
+    checkRadio("oscillating_type", colorOptions.oscillatingType)
+
+    const spec = SPECS[displayMode]
+    for (const radio of document.querySelectorAll('input[name="oscillation_energy"]')) {
+        radio.closest("label").hidden = !hasPeriod(spec, radio.value)
+    }
+    if (!hasPeriod(spec, colorOptions.energyPeriod)) colorOptions.energyPeriod = DEFAULT_ENERGY_PERIOD
+    checkRadio("oscillation_energy", colorOptions.energyPeriod)
+
+    umapColorMode = modeForGeneSet(umapColorMode, displayMode)
+}
+
+function checkRadio(name, value) {
+    const radio = document.querySelector(`input[name="${name}"][value="${value}"]`)
+    if (radio) radio.checked = true
+}
+
 function setUmapColorMode(mode) {
     umapColorMode = mode
-    for (const { id, isActive } of umapColorChoices) {
-        document.getElementById(id)?.setAttribute("aria-pressed", String(isActive(umapColorMode)))
-    }
-    syncUmapColorSuboptions()
-    bus.execute_event("umap_color_mode", umapColorMode)
+    applyColorMode()
 }
 
 /**
- * Color choices that only make sense for one gene set:
- * - waveform confidence needs a GP fit, so Circadian only
- * - the binary "circadian" split is trivial when every gene shown is circadian, so All only
- * Moves the color mode off a choice that just disappeared.
+ * Push the current mode everywhere: write every point's metricVal (all four embeddings, so a gene-set
+ * switch stays in sync), color the UMAPs, rebuild the violin, then the help text and gene panels.
+ * Call after the mode, its options or the gene set change.
  */
-function syncColorChoicesToGeneSet(mode) {
-    const circadian = mode === "Circadian"
-    document.getElementById("UMAP_waveConf").hidden = !circadian
-    document.getElementById("oscillating_type_circadian").hidden = circadian
-    if (circadian) {
-        const qvalRadio = document.querySelector('input[name="oscillating_type"][value="qval"]')
-        if (qvalRadio) qvalRadio.checked = true
-    }
+function applyColorMode() {
+    const def = COLOR_MODES[umapColorMode]
+    const ctx = { displayMode, options: colorOptions, data: COLOR_DATA }
+    colorMetric = def.metric(ctx)
 
-    if (circadian && umapColorMode === "circadian") setUmapColorMode("qval")
-    else if (!circadian && umapColorMode === "waveConf") setUmapColorMode("none")
+    for (const arr of [allgenes_VST_arr, allgenes_fft_arr, circadian_VST_arr, circadian_fft_arr]) {
+        for (const d of arr) d.metricVal = colorMetric.valueOf(d.GeneID)
+    }
+    // Scales and the violin span the genes currently on the map
+    const shownArr = displayMode === "Circadian" ? circadian_VST_arr : allgenes_VST_arr
+    const values = shownArr.map((d) => d.metricVal).filter(Number.isFinite)
+
+    syncColorButtons()
+    bus.execute_event("umap_color_scale", def.scale(ctx, values))
+    swapViolin(values)
+    updateColorModeHelp()
+    refreshUmapGenePanels()
 }
+
 // ---- Violin / filter: shows (and filters on) whatever the UMAPs are colored by ----
-// "none" and "circadian" (binary) fall back to mean expression.
-function violinMetric(mode){
-    if (mode === "qval") {
-        const field = qvalField(displayMode)
-        return {
-            label: `−log10 q (${displayMode === "Circadian" ? "MetaCycle" : "LS"})`,
-            valueOf: (GeneID) => {
-                const q = per_gene_meta_lookup.get(GeneID)?.[field]
-                return Number.isFinite(q) ? -Math.log10(Math.max(q, 1e-300)) : NaN
-            },
-        }
-    }
-    if (mode === "phase") {
-        const field = phaseField(displayMode)
-        const isRawPeak = field === PEAK_HOUR_FIELD
-        return {
-            label: isRawPeak ? "peak hour (h)" : "MetaCycle peak (h)",
-            valueOf: (GeneID) => per_gene_meta_lookup.get(GeneID)?.[field] ?? NaN,
-            levels: isRawPeak ? EXP_HOURS : null, // only the raw peak is limited to sample hours
-        }
-    }
-    if (mode === "energyPct") {
-        const period = selectedEnergyPeriodHours()
-        return {
-            label: `% ${period}h energy`,
-            valueOf: (GeneID) => energyPctAtPeriod(GeneID, specs_lookup, period) ?? NaN,
-        }
-    }
-    if (mode === "waveConf") {
-        return {
-            label: "relative std",
-            valueOf: (GeneID) => gp_params_lookup.get(GeneID)?.relative_std ?? NaN,
-        }
-    }
-    return {
-        label: "log10(mean TPM)",
-        valueOf: (GeneID) => normalized_counts_lookup.get(GeneID)?.log_TPM ?? NaN,
-    }
-}
-
 const violinDiv = d3.select("#filter_slider")
 let violin = null // handle of the violin on screen ({ domain, setRange, node }); replaced on every swap
 
-function swapViolin(mode){
-    const { label, valueOf, levels = null } = violinMetric(mode)
-
-    // UMAP points filter on filterVal; set it on every embedding so a later mode switch stays in sync
-    for (const arr of [allgenes_VST_arr, allgenes_fft_arr, circadian_VST_arr, circadian_fft_arr]) {
-        for (const d of arr) d.filterVal = valueOf(d.GeneID)
-    }
-
-    // Distribution of the genes currently on the map
-    const shownArr = displayMode === "Circadian" ? circadian_VST_arr : allgenes_VST_arr
-    const values = shownArr.map((d) => d.filterVal).filter(Number.isFinite)
-
+function swapViolin(values){
     // keep non-plot children (e.g. the help button)
     violinDiv.selectAll(":scope > svg").remove()
     // Shorter on phones, where the violin stacks between the two UMAPs
     const violinHeight = window.innerWidth <= 520 ? 320 : 500
     violin = plotViolin(
         130, violinHeight, { top: 20, right: 20, bottom: 20, left: 50 },
-        values, violinDiv, label, bus, "umap_value_filter", null, null, { levels }
+        values, violinDiv, colorMetric.label, bus, "umap_value_filter", null, null,
+        { levels: colorMetric.levels ?? null }
     )
     // New metric, new units: the old scrubber range is meaningless, so clear the filter
     bus.execute_event("umap_value_filter", [Infinity, -Infinity])
 }
 
-const umapOscillationChoice = umapColorChoices.find((c) => c.id === "UMAP_oscillation")
-const umapEnergyChoice = umapColorChoices.find((c) => c.id === "UMAP_energy")
-
-document.getElementById("UMAP_oscillation")?.addEventListener("click", () => {
-    setUmapColorMode(
-        umapOscillationChoice.isActive(umapColorMode) ? "none" : selectedOscillatingType()
-    )
-})
-document.getElementById("UMAP_phase")?.addEventListener("click", () => {
-    setUmapColorMode(umapColorMode === "phase" ? "none" : "phase")
-})
-document.getElementById("UMAP_energy")?.addEventListener("click", () => {
-    setUmapColorMode(umapEnergyChoice.isActive(umapColorMode) ? "none" : "energyPct")
-})
-document.getElementById("UMAP_waveConf")?.addEventListener("click", () => {
-    setUmapColorMode(umapColorMode === "waveConf" ? "none" : "waveConf")
-})
+// Clicking a button toggles its mode; its menu stays open while the mode is on
+for (const { id, modes, pick } of COLOR_BUTTONS) {
+    document.getElementById(id)?.addEventListener("click", () => {
+        setUmapColorMode(modes.includes(umapColorMode) ? "none" : (pick?.() ?? modes[0]))
+    })
+}
 
 document.querySelectorAll('input[name="oscillating_type"]').forEach((radio) => {
     radio.addEventListener("change", () => {
-        if (!radio.checked || !OSCILLATING_MODES.has(radio.value)) return
-        if (umapColorMode !== radio.value) setUmapColorMode(radio.value)
-        else bus.execute_event("umap_color_mode", radio.value)
+        if (!radio.checked) return
+        colorOptions.oscillatingType = radio.value
+        setUmapColorMode(radio.value)
     })
 })
 
-let oscillation_energy = "24"
 document.querySelectorAll('input[name="oscillation_energy"]').forEach((radio) => {
     radio.addEventListener("change", () => {
         if (!radio.checked) return
-        oscillation_energy = radio.value
-        if (umapColorMode !== "energyPct") setUmapColorMode("energyPct")
-        else bus.execute_event("umap_color_mode", "energyPct")
+        colorOptions.energyPeriod = Number(radio.value)
+        setUmapColorMode("energyPct")
     })
 })
 
-// umap_color_mode also fires when the energy period or oscillating type changes within a mode
-bus.subscribe_to("umap_color_mode", "violin", swapViolin)
-swapViolin(umapColorMode)
-
-// ---- Color-mode hint box: text per coloring mode, per gene set ----
-const COLOR_MODE_HELP = {
-    none: { All: "Color Mode Help Text", Circadian: "Color Mode Help Text" },
-    circadian: { 
-        All: "Binary cutoff with q-value of 0.01. Circadian is <= 0.01", 
-        Circadian: "Binary cutoff with q-value of 0.01. Circadian is <= 0.01" },
-    qval: { 
-        All: "How confident we are that a gene is oscillating. A q-value cut off of 0.01 would mean a 1% false discovery rate when calling an oscillating gene.", 
-        Circadian: "How confident we are that a gene is oscillating around 20~28hrs (Circadian). A q-value cut off of 0.01 would mean a 1% false positive rate when calling a circadian gene." },
-    phase: { 
-        All: "The sample hour at which the gene's measured expression is highest.", 
-        Circadian: "Within the detected period (20~28 hrs), the hour at which the fitted MetaCycle curve peaks."},
-    energyPct: { 
-        All: "% composition of the selected frequency component", 
-        Circadian: "% composition of the selected frequency component" },
-    waveConf: { All: "", Circadian: 'A metric for "spread" of the sampled wave.'},
-}
-
+// ---- Color-mode hint box: text per coloring mode, per gene set (COLOR_MODES help) ----
 function updateColorModeHelp() {
     const el = document.getElementById("color_mode_help_text")
     if (!el) return
-    el.textContent = COLOR_MODE_HELP[umapColorMode]?.[displayMode] ?? ""
+    el.textContent = COLOR_MODES[umapColorMode]?.help?.[displayMode] ?? ""
     el.hidden = !el.textContent
 }
-bus.subscribe_to("umap_color_mode", "colorModeHelp", updateColorModeHelp)
-bus.subscribe_to("DisplayModeSet", "colorModeHelp", updateColorModeHelp)
-updateColorModeHelp()
 
 // -------------------------------------------- DEMO --------------------------------------------
 const DEMO_ENERGY_PERIOD = "24"
@@ -858,9 +816,8 @@ function resetToDefault() {
     setJukeboxOpen(false)
     bus.execute_event("point_select", null)
     setDisplayMode("All") // also empties the jukebox and rebuilds the violin
-    oscillation_energy = "24"
-    const periodRadio = document.querySelector('input[name="oscillation_energy"][value="24"]')
-    if (periodRadio) periodRadio.checked = true
+    colorOptions.energyPeriod = DEFAULT_ENERGY_PERIOD
+    checkRadio("oscillation_energy", DEFAULT_ENERGY_PERIOD)
     setUmapColorMode("none") // rebuilds the violin at full range and clears the filter
     scrollToEl("Synth_Waveform_container")
 }
@@ -1109,60 +1066,23 @@ const umapGenePanels = {
 let umapHoverGeneId = null
 let umapSelectedGeneId = null
 
-function formatUmapNumber(value, digits = 2) {
-    if (value == null || !Number.isFinite(Number(value))) return "—"
-    const n = Number(value)
-    if (Math.abs(n) > 0 && Math.abs(n) < 1e-3) return n.toExponential(2)
-    return n.toFixed(digits)
-}
-
-function umapMetricForMode(mode, geneId) {
-    if (!OSCILLATING_MODES.has(mode) && !["phase", "energyPct", "waveConf"].includes(mode)) return null
-    const meta = geneId ? per_gene_meta_lookup.get(geneId) : null
-    const useMetaCycle = displayMode === "Circadian"
-    // Categorical circadian coloring is always MetaCycle; continuous qval follows display mode.
-    if (mode === "circadian") {
-        return { label: "MetaCycle q", value: formatUmapNumber(meta?.metacycle_qval, 3) }
-    }
-    if (mode === "qval") {
-        const q = useMetaCycle ? meta?.metacycle_qval : meta?.LS_qval
-        return {
-            label: useMetaCycle ? "MetaCycle q" : "LS q",
-            value: formatUmapNumber(q, 3),
-        }
-    }
-    if (mode === "phase") {
-        if (useMetaCycle) {
-            const phase = formatUmapNumber(meta?.metacycle_phase, 2)
-            return { label: "MetaCycle peak", value: phase === "—" ? phase : `${phase} h` }
-        }
-        const peak = meta?.[PEAK_HOUR_FIELD]
-        return { label: "peak hour", value: Number.isFinite(peak) ? `${peak} h` : "—" }
-    }
-    if (mode === "waveConf") {
-        return { label: "relative std", value: formatUmapNumber(meta?.gp_relative_std, 3) }
-    }
-    const energy = geneId ? energyPctAtPeriod(geneId, specs_lookup, oscillation_energy) : null
-    const pct = formatUmapNumber(energy, 1)
-    return { label: "energy", value: pct === "—" ? pct : `${pct}%` }
-}
 
 function updateUmapGenePanel(panel, geneId) {
     const hasGene = Boolean(geneId)
     panel.root?.classList.toggle("is-empty", !hasGene)
     if (panel.geneId) panel.geneId.textContent = hasGene ? geneId : "—"
 
-    const metric = umapMetricForMode(umapColorMode, geneId)
     if (!panel.metric) return
-    if (!metric) {
+    // Uncolored map: nothing extra to show
+    if (umapColorMode === "none") {
         panel.metric.hidden = true
         if (panel.metricLabel) panel.metricLabel.textContent = ""
         if (panel.metricValue) panel.metricValue.textContent = "—"
         return
     }
     panel.metric.hidden = false
-    if (panel.metricLabel) panel.metricLabel.textContent = metric.label
-    if (panel.metricValue) panel.metricValue.textContent = hasGene ? metric.value : "—"
+    if (panel.metricLabel) panel.metricLabel.textContent = colorMetric.short
+    if (panel.metricValue) panel.metricValue.textContent = hasGene ? colorMetric.format(colorMetric.valueOf(geneId)) : "—"
 }
 
 function refreshUmapGenePanels() {
@@ -1207,10 +1127,6 @@ bus.subscribe_to("point_select", "main", (GeneID) => {
     updateWaveformDisplay()
 })
 
-bus.subscribe_to("umap_color_mode", "main", () => {
-    refreshUmapGenePanels()
-})
-
 bus.subscribe_to("point_hover", "main", (GeneID) => {
     umapHoverGeneId = GeneID || null
     updateUmapGenePanel(umapGenePanels.hover, umapHoverGeneId)
@@ -1221,18 +1137,22 @@ bus.subscribe_to("DisplayModeSet", "main", (mode) => {
     for (const search of geneSearches) search.setGenes(genesForMode())
     // A selected gene that isn't circadian has nothing to show or play in Circadian mode
     if (umapSelectedGeneId && !geneInMode(umapSelectedGeneId)) bus.execute_event("point_select", null)
+    // Metric fields and scale ranges depend on the gene set; recolor before the UMAPs redraw on the new points
+    syncColorChoicesToGeneSet()
+    applyColorMode()
     if (mode === "All") {
-        umapReadCounts.setData(allgenes_VST_arr, "All")
-        umapFft.setData(allgenes_fft_arr, "All")
+        umapReadCounts.setData(allgenes_VST_arr)
+        umapFft.setData(allgenes_fft_arr)
     } else if (mode === "Circadian") {
-        umapReadCounts.setData(circadian_VST_arr, "Circadian")
-        umapFft.setData(circadian_fft_arr, "Circadian")
+        umapReadCounts.setData(circadian_VST_arr)
+        umapFft.setData(circadian_fft_arr)
     }
-    syncColorChoicesToGeneSet(mode)
     // Tints the synth panel and jukebox (see .gene-set-scope in styles.css) so the switch to a different dataset is obvious
     for (const el of document.querySelectorAll(".gene-set-scope")) el.dataset.geneSet = mode
     syncSynthToMidiControls() // Assign depends on whether the gene is in the new mode
-    refreshUmapGenePanels()
     updateWaveformDisplay()
-    swapViolin(umapColorMode) // gene set and LS vs MetaCycle fields changed
 })
+
+// Initial coloring (none): violin on mean expression, hint text, gene panels
+syncColorChoicesToGeneSet()
+applyColorMode()

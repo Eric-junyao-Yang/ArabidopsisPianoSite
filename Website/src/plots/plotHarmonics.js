@@ -1,10 +1,8 @@
 /**
- * Clarification:
- *   amplitudeSpectrum  = raw FFT coefficient magnitude (from per_gene_meta.spec*)
- *   energy     — amplitude**2
- *   energyShare = energy / total energy in [0, 1]
- *   energyPct   = energyShare * 100
- *   period      = oscillation period in hours (48, 24, …)
+ * Energy spectra, one per gene set, built once in main.js:
+ *   specs[displayMode] = { periods, byGene: Map(GeneID → [{ period, energyPct }]) }
+ *   period    — oscillation period in hours (All: 48/k, Circadian: 24/k, k = 1..8)
+ *   energyPct — the harmonic's share of the gene's oscillation energy (no DC), in %
  */
 
 import {
@@ -14,38 +12,75 @@ import {
     containerSize,
     onResize,
 } from "./plotTheme.js"
+import { FADE_TIME, SAMPLE_COLORS } from "./plotWaveforms.js"
 
-/** Harmonics 1..8 of a 48h fundamental → 48, 24, 16, … */
-const TICK_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => 48 / k)
-
-export function spectrumToEnergyPct(amplitudeSpectrum) {
-    if (!amplitudeSpectrum?.length) return []
-    const totalEnergy = amplitudeSpectrum.reduce((sum, d) => sum + d.amplitude ** 2, 0)
-    if (!(totalEnergy > 0)) {
-        return amplitudeSpectrum.map((d) => ({ period: d.period, energyPct: 0 }))
-    }
-    return amplitudeSpectrum.map((d) => ({
+/** rows: [{ period, energy }] → [{ period, energyPct }], shares summing to 100. */
+export function toEnergyPct(rows) {
+    const total = rows.reduce((sum, d) => sum + d.energy, 0)
+    return rows.map((d) => ({
         period: d.period,
-        energyPct: (d.amplitude ** 2 / totalEnergy) * 100,
+        energyPct: total > 0 ? (d.energy / total) * 100 : 0,
     }))
 }
 
-export function geneSpectrumEnergyPct(geneId, specsLookup) {
-    const amplitudeSpectrum = specsLookup.get(geneId)
-    if (!amplitudeSpectrum) return []
-    return spectrumToEnergyPct(amplitudeSpectrum)
+// Periods like 48/7 and radio values like "6.9" won't compare with ===
+const samePeriod = (a, b) => Math.abs(a - b) < 0.05
+
+export function hasPeriod(spec, periodHours) {
+    return spec.periods.some((p) => samePeriod(p, Number(periodHours)))
 }
 
-export function energyPctAtPeriod(geneId, specsLookup, periodHours) {
-    const hours = typeof periodHours === "number" ? periodHours : parseInt(periodHours, 10)
-    const bin = geneSpectrumEnergyPct(geneId, specsLookup)
-        .find((d) => d.period === hours)
+export function energyPctAtPeriod(geneId, spec, periodHours) {
+    const bin = spec.byGene.get(geneId)?.find((d) => samePeriod(d.period, Number(periodHours)))
     return bin ? bin.energyPct : null
 }
 
-export function plotHarmonics(specsLookup, bus) {
+// cos / sin of k cycles over the window (k = 1..nHarmonics), per draw length. They depend only
+// on the length, so they're built once instead of on every draw
+const dftTableCache = new Map()
+function dftTables(n, nHarmonics) {
+    const key = `${n}:${nHarmonics}`
+    if (!dftTableCache.has(key)) {
+        const cos = []
+        const sin = []
+        for (let k = 1; k <= nHarmonics; k++) {
+            const c = new Float64Array(n)
+            const s = new Float64Array(n)
+            for (let j = 0; j < n; j++) {
+                const angle = (2 * Math.PI * k * j) / n
+                c[j] = Math.cos(angle)
+                s[j] = Math.sin(angle)
+            }
+            cos.push(c)
+            sin.push(s)
+        }
+        dftTableCache.set(key, { cos, sin })
+    }
+    return dftTableCache.get(key)
+}
+
+/**
+ * Energy % of one GP draw at each harmonic of its window. Direct DFT at just these bins:
+ * multiplying by a probe wave and summing picks out the part of the draw at that frequency
+ * (DC and other harmonics sum to 0), and re² + im² is its energy whatever its phase.
+ * The draw must span exactly one period, and periods[i] = period / (i + 1) (SPECS.Circadian.periods).
+ */
+export function drawEnergyPct(draw, periods) {
+    const { cos, sin } = dftTables(draw.length, periods.length)
+    return toEnergyPct(periods.map((period, i) => {
+        let re = 0
+        let im = 0
+        for (let j = 0; j < draw.length; j++) {
+            re += draw[j] * cos[i][j]
+            im -= draw[j] * sin[i][j]
+        }
+        return { period, energy: re * re + im * im }
+    }))
+}
+
+export function plotHarmonics(specs, bus) {
     const container = document.getElementById("Harmonic_div")
-    if (!container) return
+    if (!container) return { drawSample() {} }
 
     const MARGINS = { top: 16, right: 12, bottom: 20, left: 28 }
     const FALLBACK_W = 1000
@@ -54,8 +89,11 @@ export function plotHarmonics(specsLookup, bus) {
     let spectrum = []
     let innerWidth = 0
     let innerHeight = 0
+    let displayMode = "All"
+    let selectedGene = null
 
-    const xScale = d3.scaleLinear().domain([5, 50])
+    // Log axis: the short-period harmonics (3, 3.4, 4 h) would pile up on a linear one
+    const xScale = d3.scaleLog()
     let yScale = d3.scaleLinear().domain([0, 100])
 
     const svg = d3.select(container).append("svg")
@@ -66,6 +104,7 @@ export function plotHarmonics(specsLookup, bus) {
     const xAxisG = plotArea.append("g").attr("class", "harmonics-axis harmonics-axis--x")
     const yAxisG = plotArea.append("g").attr("class", "harmonics-axis harmonics-axis--y")
     const barsG = plotArea.append("g").attr("class", "harmonics-bars")
+    const drawsG = plotArea.append("g").attr("class", "harmonics-draws") // above the bars
 
     // Corner label instead of a rotated y-axis title (saves horizontal space).
     const yCornerLabel = plotArea.append("text")
@@ -92,6 +131,8 @@ export function plotHarmonics(specsLookup, bus) {
         return Number.isInteger(n) ? `${n}h` : `${n.toFixed(1)}h`
     }
 
+    const periods = () => specs[displayMode].periods
+
     function layout() {
         const [width, height] = containerSize(container, FALLBACK_W, FALLBACK_H, 280, 64)
         innerWidth = Math.max(40, width - MARGINS.left - MARGINS.right)
@@ -99,7 +140,8 @@ export function plotHarmonics(specsLookup, bus) {
 
         svg.attr("viewBox", `0 0 ${width} ${height}`)
         plotArea.attr("transform", `translate(${MARGINS.left}, ${MARGINS.top})`)
-        xScale.range([0, innerWidth])
+        const [lo, hi] = d3.extent(periods())
+        xScale.domain([lo * 0.9, hi * 1.1]).range([0, innerWidth])
         yScale.range([innerHeight, 0])
 
         xAxisG.attr("transform", `translate(0, ${innerHeight})`)
@@ -109,7 +151,7 @@ export function plotHarmonics(specsLookup, bus) {
         drawAxis(
             xAxisG,
             d3.axisBottom(xScale)
-                .tickValues(TICK_PERIODS)
+                .tickValues(periods())
                 .tickSizeOuter(0)
                 .tickFormat(formatPeriodTick),
         )
@@ -134,7 +176,7 @@ export function plotHarmonics(specsLookup, bus) {
         const hasData = spectrum.length > 0
         emptyLabel.attr("opacity", hasData ? 0 : 1)
 
-        const barWidth = Math.max(4, Math.min(10, innerWidth / (TICK_PERIODS.length * 2.2)))
+        const barWidth = currentBarWidth()
 
         barsG.selectAll("rect.harmonics-bar")
             .data(spectrum, (d) => d.period)
@@ -154,23 +196,74 @@ export function plotHarmonics(specsLookup, bus) {
             .attr("opacity", hasData ? 0.92 : 0)
     }
 
-    function updatePlot(energyPctSpectrum) {
-        spectrum = energyPctSpectrum ?? []
+    const currentBarWidth = () => Math.max(4, Math.min(10, innerWidth / (periods().length * 2.2)))
+
+    // Ticks are placed with the current scales, so any change to them (gene, gene set, size) clears them
+    function clearDraws() {
+        drawsG.selectAll("*").interrupt().remove()
+    }
+
+    function updatePlot() {
+        clearDraws()
+        spectrum = (selectedGene && specs[displayMode].byGene.get(selectedGene)) || []
         render()
     }
 
     layout()
     render()
     onResize(container, () => {
+        clearDraws()
         layout()
         render()
     })
 
     bus.subscribe_to("point_select", "harmonics", (geneId) => {
-        if (!geneId) {
-            updatePlot([])
-            return
-        }
-        updatePlot(geneSpectrumEnergyPct(geneId, specsLookup))
+        selectedGene = geneId || null
+        updatePlot()
     })
+
+    // Different period ladder per gene set
+    bus.subscribe_to("DisplayModeSet", "harmonics", (mode) => {
+        displayMode = mode
+        layout()
+        updatePlot()
+    })
+
+    /**
+     * One tick per harmonic at this draw's energy %, like the waveform draws: the previous set fades
+     * out over FADE_TIME. Only GP draws (Circadian) span the 24 h window the periods assume.
+     */
+    function drawSample(draw, color = SAMPLE_COLORS[0]) {
+        if (displayMode !== "Circadian" || !spectrum.length) return
+        const pcts = drawEnergyPct(draw, periods())
+        const yMax = yScale.domain()[1]
+        const y = (d) => yScale(Math.min(d.energyPct, yMax)) // a draw can beat the mean's axis; pin it to the top
+        const tickWidth = currentBarWidth() + 6
+
+        drawsG.selectAll("g.current")
+            .classed("current", false)
+            .transition()
+            .duration(FADE_TIME)
+            .ease(d3.easeLinear)
+            .attr("opacity", 0)
+            .remove()
+
+        drawsG.append("g")
+            .attr("class", "current")
+            .attr("opacity", 0.95)
+            .selectAll("line")
+            .data(pcts)
+            .join("line")
+            .attr("x1", (d) => xScale(d.period) - tickWidth / 2)
+            .attr("x2", (d) => xScale(d.period) + tickWidth / 2)
+            .attr("y1", y)
+            .attr("y2", y)
+            .attr("stroke", color)
+            .attr("stroke-width", 2)
+            .attr("stroke-linecap", "round")
+    }
+
+    return {
+        drawSample
+    }
 }
