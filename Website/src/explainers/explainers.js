@@ -1,6 +1,5 @@
 // Explainers: the small teaching sound toys in the folds. They share one oscillator (the explainer voice).
 export { mountMorphExplainers } from "./morphExplainers.js"
-export { mountHarmonicMixer } from "./harmonicMixer.js"
 
 /**
  * Decides which explainer is sounding: one owner at a time, and claiming the voice releases

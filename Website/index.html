@@ -633,6 +633,7 @@
                                     <th>Ratio</th>
                                     <th>Interval above fundamental</th>
                                     <th>Period (hrs)</th>
+                                    <th>Mapped to Freq</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -641,48 +642,56 @@
                                     <td>1:1</td>
                                     <td>Unison</td>
                                     <td>48</td>
+                                    <td><input id="freq_mapping" type="number" value="440"></td>
                                 </tr>
                                 <tr>
                                     <td>2nd</td>
                                     <td>2:1</td>
                                     <td>Octave</td>
                                     <td>24</td>
+                                    <td id="table2"></td>
                                 </tr>
                                 <tr>
                                     <td>3rd</td>
                                     <td>3:1</td>
                                     <td>Octave + perfect fifth</td>
                                     <td>16</td>
+                                    <td id="table3"></td>
                                 </tr>
                                 <tr>
                                     <td>4th</td>
                                     <td>4:1</td>
                                     <td>2 octaves</td>
                                     <td>12</td>
+                                    <td id="table4"></td>
                                 </tr>
                                 <tr>
                                     <td>5th</td>
                                     <td>5:1</td>
                                     <td>2 octaves + major third</td>
                                     <td>9.6</td>
+                                    <td id="table5"></td>
                                 </tr>
                                 <tr>
                                     <td>6th</td>
                                     <td>6:1</td>
                                     <td>2 octaves + perfect fifth</td>
                                     <td>8</td>
+                                    <td id="table6"></td>
                                 </tr>
                                 <tr>
                                     <td>7th</td>
                                     <td>7:1</td>
                                     <td>2 octaves + minor seventh</td>
                                     <td>6.9</td>
+                                    <td id="table7"></td>
                                 </tr>
                                 <tr>
                                     <td>8th</td>
                                     <td>8:1</td>
                                     <td>3 octaves</td>
                                     <td>6</td>
+                                    <td id="table8"></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -752,52 +761,65 @@
                             Hearing the same note over and over can be distracting, so while the mixer plays, 
                             the synth keyboard changes the drone's pitch.
                         </h5>
-                        <p>
-                            Since each harmonic has a higher frequency than the fundamental, when played alone each one would have a different pitch.
-                        </p>
-                        <div>
+                        <div class="Harmonic___solos">
                             <p>
-                                Can you hear the distinct pitches?
+                                Try these harmonic mixes here, what do you hear?
                             </p>
-                            <button>1st</button>
-                            <button>2nd</button>
-                            <button>3rd</button>
-                            <button>4th</button>
-                            <button>5th</button>
-                            <button>6th</button>
-                            <button>7th</button>
-                            <button>8th</button>
+                            <div class="mixer-presets" role="group" aria-labelledby="Harmonic_Solos_label">
+                                <button type="button" class="btn" data-levels="1 0 0 0 0 0 0 0" aria-pressed="false">1st</button>
+                                <button type="button" class="btn" data-levels="0 1 0 0 0 0 0 0" aria-pressed="false">2nd</button>
+                                <button type="button" class="btn" data-levels="0 0 1 0 0 0 0 0" aria-pressed="false">3rd</button>
+                                <button type="button" class="btn" data-levels="0 0 0 1 0 0 0 0" aria-pressed="false">4th</button>
+                                <button type="button" class="btn" data-levels="0 0 0 0 1 0 0 0" aria-pressed="false">5th</button>
+                                <button type="button" class="btn" data-levels="0 0 0 0 0 1 0 0" aria-pressed="false">6th</button>
+                                <button type="button" class="btn" data-levels="0 0 0 0 0 0 1 0" aria-pressed="false">7th</button>
+                                <button type="button" class="btn" data-levels="0 0 0 0 0 0 0 1" aria-pressed="false">8th</button>
+                            </div>
+                            <details class="spoiler">
+                                <p>
+                                    Since each harmonic has a higher frequency than the fundamental, when played alone each one should have a distinct pitch.
+                                </p>
+                            </details>
                         </div>
 
-                        <p>
-                            But when you mix them together, something interesting happens. Human ears tend to fuse a set of related harmonics
-                            into a single note at the fundamental's pitch, with varying "brightness". The stronger the higher-frequency components, 
-                            the brighter the sound.
-                        </p>
-                        <div>
+                        <div class="Harmonic___freqMix">
                             <p>
-                                Do you hear higher pitches or the same note but brighter sound quality?
+                                But when you mix them together, something interesting happens. Try out these mixes with increasily stronger mix of 
+                                high frequency harmonics. What do you hear?
                             </p>
-                            <button>Pure Fundamental</button>
-                            <button>Increase Harmonics</button>
-                            <button>Boot high freq harmonics</button>
-                        </div>
 
-                        <p>
-                            Interestingly, even if the fundamental is completely missing, as long as the higher harmonics are present we still
-                            tend to hear the note as the fundamental. It's called the
-                            <a href="https://en.wikipedia.org/wiki/Missing_fundamental">missing fundamental</a>. Psychoacoustics is wild.
-                        </p>
-                        <div>
+                            <div class="mixer-presets" role="group" aria-labelledby="Harmonic_Brightness_label">
+                                <button type="button" class="btn" data-levels="1 0.1 0.1 0.1 0.1 0.1 0.1 0.1" aria-pressed="false">Low harmonics</button>
+                                <button type="button" class="btn" data-levels="0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5" aria-pressed="false">Mid harmonics</button>
+                                <button type="button" class="btn" data-levels="0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9" aria-pressed="false">High harmonics</button>
+                            </div>
+
+                            <details class="spoilers">
+                                <p>
+                                    Human ears tend to fuse a set of related harmonics
+                                    into a single note at the fundamental's pitch, with varying "brightness". The stronger the higher-frequency components, 
+                                    the brighter the sound. Does your experience match?
+                                </p>
+                            </details>
+                        </div>
+                        <div class="Harmonic___missFund">
                             <p>
-                                Which note sounds higher?
+                                Interestingly, even if the fundamental is completely missing, as long as the higher harmonics are present we still
+                                tend to hear the note as the fundamental. It's called the
+                                <a href="https://en.wikipedia.org/wiki/Missing_fundamental">missing fundamental</a>. Psychoacoustics is wild.
                             </p>
-                            <button>2nd with harmonics</button>
-                            <button>2nd alone</button>
-                            <p class="spoilers">
-                                If you think 2nd alone sounds higher, that's the effect of the missing fundamental.
-                                Notice only higher frequencies are added.
-                            </p>
+                            <p>Try out these 2 sounds and try to determine which one sounds higher?</p>
+                            <div class="mixer-presets" role="group" aria-labelledby="Missing_Fundamental_label">
+                                <button type="button" class="btn" data-levels="0 1 0 0 0 0 0 0" aria-pressed="false">2nd alone</button>
+                                <button type="button" class="btn" data-levels="0 1 1 1 1 1 1 1" aria-pressed="false">2nd to 8th together</button>
+                            </div>
+                            <details class="spoiler">
+                                <p>
+                                    If "2nd alone" sounds higher, you just heard the missing fundamental. The mix only adds frequencies
+                                    above the 2nd harmonic, yet together you might have heard them at the pitch of the absent 1st harmonic, 
+                                    an octave lower.
+                                </p>
+                            </details>
                         </div>
 
                         <p>
@@ -806,19 +828,20 @@
                         </p>
                         <p>
                             Some genes are true circadian genes that oscillate every 24 hrs. Their 24 hr component can be so dominant
-                            that the line between pitch and brightness begins to blur. If a waveform repeats every 24 hrs within the 48 hr window,
-                            its true fundamental really is 24 hrs. The same goes for genes with a prominent 12 hr period, which sound two octaves higher.
+                            that it might sound like an octave higher rather than just brighter. If a waveform repeats every 24 hrs 
+                            within the 48 hr window, its true fundamental really is 24 hrs. 
+                            The same goes for genes with a prominent 12 hr period, which sound two octaves higher.
                             In this dataset, no other harmonic is as dominant as the 48, 24, and 12 hr components. 
-                            If you pick a gene with a really strong 16 hr harmonic, it will likely sound brighter rather than jumping up
-                            an octave and a fifth.
+                            This is why if you pick a gene with a really strong 16 hr, 8hr, or 6hr harmonic, you might expect a higher pitch but instead, 
+                            it will likely just sound brighter.
                         </p>
 
                         <h4>Circadian Mode</h4>
                         <p>
                             Only genes oscillating around 24 hrs are kept, so most of the differences you hear will be in brightness, not pitch.
-                            However, the most prominent difference you will notice is the "wobble". The sound morphs continuously between random
-                            waveforms drawn from the gene's Gaussian Process fit, so the less confident the fit, the more the waveform
-                            (and the sound) wobbles. I absolutely love the sound.
+                            However, the most prominent difference you will notice in this mode is likely the "wobble". 
+                            The sound morphs continuously between random waveforms drawn from the gene's Gaussian Process fit, 
+                            so the less confident the fit, the more the waveform (and the sound) wobbles. I absolutely love the sound.
                         </p>
                         <h3>Picking Sounds for Jukebox</h3>
                         <p>

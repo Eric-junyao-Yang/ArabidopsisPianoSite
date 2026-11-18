@@ -562,6 +562,49 @@ main {
     min-width: 5rem;
 }
 
+/* Preset buttons that set and play the harmonic mixer; the one playing is lit */
+.mixer-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 var(--space-4);
+}
+
+.mixer-presets .btn {
+    min-width: 3.25rem;
+}
+
+.mixer-presets .btn[aria-pressed="true"],
+.mixer-presets .btn[aria-pressed="true"]:hover {
+    background: var(--cb-indigo);
+    border-color: var(--cb-indigo);
+    color: #fff;
+}
+
+/* Collapsed answer under a listening question */
+.spoiler {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-sunken);
+}
+
+.spoiler summary {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+}
+
+.spoiler[open] summary {
+    margin-bottom: var(--space-2);
+}
+
+.spoiler p {
+    margin: 0;
+}
+
 @media (max-width: 520px) {
     .harmonic-mixer { padding: var(--space-3) var(--space-2) var(--space-2); }
     .harmonic-mixer__slider { height: 7.5rem; }
