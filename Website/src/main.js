@@ -5,6 +5,7 @@ import { plotViolin } from "./plots/plotViolin.js"
 import { plotWaveformsClass } from "./plots/plotWaveforms.js"
 import { createVoiceOwner, mountMorphExplainers } from "./explainers/explainers.js"
 import { mountHarmonicMixer } from "./explainers/harmonicMixer.js"
+import { mountHarmonicsTable } from "./explainers/harmonicsTable.js"
 import { plotExpressionExplainer } from "./plots/plotExpressionExplainer.js"
 import { setupHelpPopUps } from "./helpPopup.js"
 import { virtualPiano } from "./virtualPiano.js"
@@ -1044,15 +1045,7 @@ mountHarmonicMixer(
     bus,
     [...document.querySelectorAll(".mixer-presets [data-levels]")],
 )
-
-//table changes
-function updateTable(base_freq){
-    Array.from({length: 7}).forEach((_, i) => {
-        document.getElementById(`table${i+2}`).textContent = base_freq * (i+2)
-    })
-}
-updateTable(440)
-document.querySelector("#freq_mapping").addEventListener("input", (e) => updateTable(e.target.value))
+mountHarmonicsTable(document.getElementById("Harmonics_Table"))
 
 // --------------------------------------- Search Bars ---------------------------------------
 // Each search only offers genes from the current mode (lists swapped on DisplayModeSet)
