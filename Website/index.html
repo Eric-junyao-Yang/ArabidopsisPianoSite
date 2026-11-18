@@ -615,8 +615,7 @@
                         <p> 
                             Because we're comparing the shapes of waveforms between genes,
                             the sonic profile is determined by the frequency composition of each waveform
-                            (shown in the oscillation energy colorings and the energy % plot). Two closely related things
-                            are at play here: brightness and pitch.
+                            (shown in the oscillation energy colorings and the energy % plot).
                         </p>
 
                         <p>
@@ -688,11 +687,9 @@
                             </tbody>
                         </table>
                         <p>
-                            The blending of harmonics is hard to explain with words, so before we continue exploring the topic of harmonics, 
-                            here's a applet you can come back to and experiment as we go!
-                            Each slider sets that harmonic's share of the energy. The fundamental (1st harmonic) starts at 440 Hz. 
-                            Hearing the same note over and over can be distracting, so while the mixer plays, 
-                            the synth keyboard changes the drone's pitch.
+                            Two closely related things are at play here: brightness and pitch.
+                            It all depends on the blending of harmonics. It is hard to explain with words only, 
+                            so before we continue, here's a applet you can refer to and experiment as we go!
                         </p>
                         <div id="Harmonic_Mixer" class="harmonic-mixer">
                             <div class="harmonic-mixer__faders" role="group" aria-label="Energy share of each harmonic">
@@ -750,17 +747,59 @@
                                 <button id="Harmonic_Mixer_play" class="btn btn--primary harmonic-mixer__play">Play</button>
                             </div>
                         </div>
+                        <h5>
+                            Each slider sets that harmonic's share of the energy. The fundamental (1st harmonic) starts at 440 Hz. 
+                            Hearing the same note over and over can be distracting, so while the mixer plays, 
+                            the synth keyboard changes the drone's pitch.
+                        </h5>
                         <p>
                             Since each harmonic has a higher frequency than the fundamental, when played alone each one would have a different pitch.
+                        </p>
+                        <div>
+                            <p>
+                                Can you hear the distinct pitches?
+                            </p>
+                            <button>1st</button>
+                            <button>2nd</button>
+                            <button>3rd</button>
+                            <button>4th</button>
+                            <button>5th</button>
+                            <button>6th</button>
+                            <button>7th</button>
+                            <button>8th</button>
+                        </div>
+
+                        <p>
                             But when you mix them together, something interesting happens. Human ears tend to fuse a set of related harmonics
                             into a single note at the fundamental's pitch, with varying "brightness". The stronger the higher-frequency components, 
                             the brighter the sound.
                         </p>
+                        <div>
+                            <p>
+                                Do you hear higher pitches or the same note but brighter sound quality?
+                            </p>
+                            <button>Pure Fundamental</button>
+                            <button>Increase Harmonics</button>
+                            <button>Boot high freq harmonics</button>
+                        </div>
+
                         <p>
                             Interestingly, even if the fundamental is completely missing, as long as the higher harmonics are present we still
                             tend to hear the note as the fundamental. It's called the
                             <a href="https://en.wikipedia.org/wiki/Missing_fundamental">missing fundamental</a>. Psychoacoustics is wild.
                         </p>
+                        <div>
+                            <p>
+                                Which note sounds higher?
+                            </p>
+                            <button>2nd with harmonics</button>
+                            <button>2nd alone</button>
+                            <p class="spoilers">
+                                If you think 2nd alone sounds higher, that's the effect of the missing fundamental.
+                                Notice only higher frequencies are added.
+                            </p>
+                        </div>
+
                         <p>
                             This means that using the filters above, you can narrow down sounds of varying brightness by finding genes with
                             a progressively higher % of energy in the higher harmonics. But a few interesting cases stand out in the dataset.
@@ -776,8 +815,7 @@
 
                         <h4>Circadian Mode</h4>
                         <p>
-                            The pitch jumps really only apply in "All Genes Mode".
-                            Since only genes oscillating around 24 hrs are kept, most of the differences you hear will be in brightness.
+                            Only genes oscillating around 24 hrs are kept, so most of the differences you hear will be in brightness, not pitch.
                             However, the most prominent difference you will notice is the "wobble". The sound morphs continuously between random
                             waveforms drawn from the gene's Gaussian Process fit, so the less confident the fit, the more the waveform
                             (and the sound) wobbles. I absolutely love the sound.
