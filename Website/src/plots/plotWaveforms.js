@@ -4,11 +4,11 @@ import { createDayNightFrame, periodicCurve, EXPERIMENT_HOURS } from "./dayNight
 
 const PERIOD = 24
 const SWEEP_TIME = 50 // ms, keep in sync with SYNTH_SWEEP_SECONDS in audio_processor.js
-const FADE_TIME = 5 * SWEEP_TIME // ~5 previous draws visible while fading
+export const FADE_TIME = 5 * SWEEP_TIME // ~5 previous draws visible while fading (plotHarmonics too)
 const RAW_COLOR = PALETTE.indigo
 const GP_MEAN_COLOR = "#2c7f72"
 const GP_BAND_COLOR = PALETTE.teal
-const SAMPLE_COLORS = [PALETTE.rose, PALETTE.purple, PALETTE.wine, PALETTE.green]
+export const SAMPLE_COLORS = [PALETTE.rose, PALETTE.purple, PALETTE.wine, PALETTE.green]
 
 /**
  * Waveform panel under the synth. Two modes, matching the Circadian / All genes toggle:
@@ -142,7 +142,7 @@ export class plotWaveformsClass{
             .attr("d", this.muLine)
     }
 
-    /** Add one posterior draw; the previous draw fades out over FADE_TIME. */
+    /** Add one posterior draw; the previous draw fades out over FADE_TIME. Returns the draw's color. */
     drawSample(sample){
         const dat = this.tileGrid(sample.length, (x, i) => ({ x, y: sample[i] }))
         const color = SAMPLE_COLORS[Math.floor(Math.random() * SAMPLE_COLORS.length)]
@@ -164,5 +164,6 @@ export class plotWaveformsClass{
             .attr("stroke-linejoin", "round")
             .attr("opacity", 0.95)
             .attr("d", this.frame.line)
+        return color
     }
 }

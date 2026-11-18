@@ -12,11 +12,11 @@ export const POINT_OUTLINE_PX = 1
 const FILL_RADIUS_FRAC = POINT_RADIUS_PX / (POINT_RADIUS_PX + POINT_OUTLINE_PX)
 
 /**
- * Violin scrubber filter on d.filterVal (whatever metric the violin shows, inclusive bounds).
+ * Violin scrubber filter on d.metricVal (the color mode's value, also shown on the violin; inclusive bounds).
  * Genes without a value (NaN) always pass: they can't be filtered on this metric.
  */
 export function passesFilter(d, low_val, high_val) {
-    return !(d.filterVal < low_val || d.filterVal > high_val)
+    return !(d.metricVal < low_val || d.metricVal > high_val)
 }
 
 export class ScatterGL {

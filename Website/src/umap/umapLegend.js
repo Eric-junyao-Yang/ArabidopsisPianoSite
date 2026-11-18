@@ -1,5 +1,4 @@
-import { PALETTE, THEME } from "../plots/plotTheme.js"
-import { QVAL_CUTOFF, continuousColorScale } from "./umapColors.js"
+import { THEME } from "../plots/plotTheme.js"
 
 function drawContinuousLegend(svg, legend, gradId, interpolator, leftLabel, rightLabel, title) {
     const barW = 88
@@ -49,18 +48,18 @@ function drawContinuousLegend(svg, legend, gradId, interpolator, leftLabel, righ
 }
 
 /**
- * Draw / replace the UMAP color legend for the current color + display mode.
- * @param {{ svg, legend, div_name, umap_arr, metaByGene, specsLookup, displayMode }} ctx
+ * Draw / replace the UMAP color legend for a color scale (see COLOR_MODES in colorModes.js).
+ * @param {{ svg, legend, div_name }} ctx
+ * @param {object|null} scale null = no coloring, no legend
  */
-export function renderColorLegend(ctx, mode) {
-    const { svg, legend, div_name, umap_arr, metaByGene, specsLookup, displayMode } = ctx
+export function renderColorLegend(ctx, scale) {
+    const { svg, legend, div_name } = ctx
     legend.selectAll("*").remove()
-    if (mode === "none") return
+    if (!scale) return
 
-    if (mode === "circadian") {
+    if (scale.categories) {
         const items = [
-            { label: `q ≤ ${QVAL_CUTOFF}`, color: PALETTE.teal },
-            { label: `q > ${QVAL_CUTOFF}`, color: THEME.pointActive },
+            ...scale.categories,
             { label: "filtered out", color: THEME.pointInactive },
         ]
         items.forEach((item, i) => {
@@ -77,12 +76,10 @@ export function renderColorLegend(ctx, mode) {
         return
     }
 
-    const scale = continuousColorScale(mode, umap_arr, metaByGene, specsLookup, displayMode)
-    if (!scale) return
     drawContinuousLegend(
         svg,
         legend,
-        `umap-${scale.gradIdSuffix}-grad-${div_name}`,
+        `umap-color-grad-${div_name}`,
         scale.interpolator,
         scale.leftLabel,
         scale.rightLabel,
