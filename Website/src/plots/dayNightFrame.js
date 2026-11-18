@@ -1,6 +1,6 @@
-import { PALETTE, THEME, styleAxis, axisLabel } from "/src/plots/plotTheme.js"
-import { catmullrom } from "/src/catmullrom.js"
-import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
+import { PALETTE, THEME, styleAxis, axisLabel } from "./plotTheme.js"
+import { catmullrom } from "../catmullrom.js"
+import { EXP_HOURS } from "../GaussianProcess/GPalgo.js"
 
 export const EXPERIMENT_HOURS = 48
 const SAMPLE_SPACING = EXP_HOURS[1] - EXP_HOURS[0] // 3 h between time points

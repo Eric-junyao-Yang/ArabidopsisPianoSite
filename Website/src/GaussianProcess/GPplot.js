@@ -1,5 +1,5 @@
-import { PALETTE, THEME, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
-import { ldTimepoints } from "/src/catmullrom.js"
+import { PALETTE, THEME, axisLabel, plotTitle } from "../plots/plotTheme.js"
+import { ldTimepoints } from "../catmullrom.js"
 
 export function plotGPWave(width, height, div_name = "#StepSeqGPPlot"){
     const host = document.querySelector(div_name)

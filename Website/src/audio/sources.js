@@ -7,7 +7,7 @@
 //
 // Runs on the audio thread: nothing here allocates after construction.
 
-import { catmullrom, writeUnipolarWavetable } from "/src/catmullrom.js"
+import { catmullrom, writeUnipolarWavetable } from "../catmullrom.js"
 
 export const TABLE_SIZE = 2048
 

@@ -1,4 +1,4 @@
-import { midiToFreq } from "/src/midiplayer.js"
+import { midiToFreq } from "../midiplayer.js"
 
 const DISPLAY_WIDTH_SEC = 30
 const WIDTH = 1000

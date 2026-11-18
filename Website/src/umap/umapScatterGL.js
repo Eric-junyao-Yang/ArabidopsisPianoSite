@@ -1,4 +1,4 @@
-import { THEME, hexToRgb01 } from "/src/plots/plotTheme.js"
+import { THEME, hexToRgb01 } from "../plots/plotTheme.js"
 
 // Point RGB is set by color mode; selected/inactive = violin value filter (orthogonal).
 const INACTIVE_RGB = hexToRgb01(THEME.pointInactive).map((v) => v.toFixed(4)).join(", ")

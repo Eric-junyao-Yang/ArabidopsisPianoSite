@@ -1,4 +1,4 @@
-import { TABLE_SIZE, StaticSource, GPSource, stepEnvelope } from "/src/audio/sources.js"
+import { TABLE_SIZE, StaticSource, GPSource, stepEnvelope } from "./sources.js"
 
 const SYNTH_SWEEP_SECONDS = 0.05 // keep in sync with SWEEP_TIME in plotWaveforms.js
 

@@ -1,4 +1,4 @@
-import { PALETTE, THEME, drawAxis, axisLabel } from "/src/plots/plotTheme.js"
+import { PALETTE, THEME, drawAxis, axisLabel } from "./plotTheme.js"
 
 /**
  * levels: optional sorted, evenly spaced values the data can take (e.g. the 16 sample hours).

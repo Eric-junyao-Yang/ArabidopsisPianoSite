@@ -1,6 +1,6 @@
-import { createDayNightFrame, periodicCurve } from "/src/plots/dayNightFrame.js"
-import { PALETTE } from "/src/plots/plotTheme.js"
-import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
+import { createDayNightFrame, periodicCurve } from "./dayNightFrame.js"
+import { PALETTE } from "./plotTheme.js"
+import { EXP_HOURS } from "../GaussianProcess/GPalgo.js"
 
 /**
  * TOC1 (circadian) next to PP2AA3 (housekeeping) over the 48 h experiment.

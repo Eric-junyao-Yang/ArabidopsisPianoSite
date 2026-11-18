@@ -1,6 +1,6 @@
-import { PALETTE, THEME } from "/src/plots/plotTheme.js"
-import { EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
-import { createDayNightFrame, periodicCurve, EXPERIMENT_HOURS } from "/src/plots/dayNightFrame.js"
+import { PALETTE, THEME } from "./plotTheme.js"
+import { EXP_HOURS } from "../GaussianProcess/GPalgo.js"
+import { createDayNightFrame, periodicCurve, EXPERIMENT_HOURS } from "./dayNightFrame.js"
 
 const PERIOD = 24
 const SWEEP_TIME = 50 // ms, keep in sync with SYNTH_SWEEP_SECONDS in audio_processor.js

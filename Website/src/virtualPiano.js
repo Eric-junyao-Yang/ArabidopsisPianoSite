@@ -1,4 +1,4 @@
-import { PALETTE, THEME } from "/src/plots/plotTheme.js"
+import { PALETTE, THEME } from "./plots/plotTheme.js"
 
 const NON_TEXT_INPUTS = new Set(["range", "checkbox", "radio", "button", "submit", "reset", "color"])
 

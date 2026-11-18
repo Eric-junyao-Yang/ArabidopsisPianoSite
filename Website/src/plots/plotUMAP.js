@@ -1,9 +1,9 @@
-import { THEME, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "/src/plots/plotTheme.js"
+import { THEME, withAlpha, drawAxis, axisLabel, plotTitle, containerSize, onResize } from "./plotTheme.js"
 import {
     buildColorRgbArr,
     rgb01ToCss,
     selectedEnergyPeriodHours,
-} from "/src/umap/umapColors.js"
+} from "../umap/umapColors.js"
 import {
     ScatterGL,
     ACTIVE_ALPHA,
@@ -12,8 +12,8 @@ import {
     POINT_RADIUS_PX,
     POINT_OUTLINE_PX,
     passesFilter,
-} from "/src/umap/umapScatterGL.js"
-import { renderColorLegend } from "/src/umap/umapLegend.js"
+} from "../umap/umapScatterGL.js"
+import { renderColorLegend } from "../umap/umapLegend.js"
 
 export { selectedEnergyPeriodHours }
 

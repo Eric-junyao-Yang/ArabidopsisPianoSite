@@ -1,14 +1,14 @@
-import { plotUMAP, selectedEnergyPeriodHours } from "/src/plots/plotUMAP.js"
-import { PEAK_HOUR_FIELD, phaseField, qvalField } from "/src/umap/umapColors.js"
-import { bin_to_array } from "/src/binHelper.js"
-import { plotViolin } from "/src/plots/plotViolin.js"
-import { plotWaveformsClass } from "/src/plots/plotWaveforms.js"
-import { createVoiceOwner, mountMorphExplainers, mountHarmonicMixer } from "/src/explainers/explainers.js"
-import { plotExpressionExplainer } from "/src/plots/plotExpressionExplainer.js"
-import { setupHelpPopUps } from "/src/helpPopup.js"
-import { virtualPiano } from "/src/virtualPiano.js"
-import { searchbar } from "/src/searchbar.js"
-import { initGlobalAudio } from "/src/audio/globalVolumeControl.js"
+import { plotUMAP, selectedEnergyPeriodHours } from "./plots/plotUMAP.js"
+import { PEAK_HOUR_FIELD, phaseField, qvalField } from "./umap/umapColors.js"
+import { bin_to_array } from "./binHelper.js"
+import { plotViolin } from "./plots/plotViolin.js"
+import { plotWaveformsClass } from "./plots/plotWaveforms.js"
+import { createVoiceOwner, mountMorphExplainers, mountHarmonicMixer } from "./explainers/explainers.js"
+import { plotExpressionExplainer } from "./plots/plotExpressionExplainer.js"
+import { setupHelpPopUps } from "./helpPopup.js"
+import { virtualPiano } from "./virtualPiano.js"
+import { searchbar } from "./searchbar.js"
+import { initGlobalAudio } from "./audio/globalVolumeControl.js"
 import {
     loadMidiEvents,
     createMidiTransport,
@@ -17,10 +17,10 @@ import {
     clearTrack,
     clearAllTracks,
     watchTrack,
-} from "/src/midiplayer.js"
-import { midiTrackPlots } from "/src/plots/midiTrackPlot.js"
-import { plotHarmonics, energyPctAtPeriod } from "/src/plots/plotHarmonics.js"
-import { gpSamplerClass, VSTlookup_to_arr, EXP_HOURS } from "/src/GaussianProcess/GPalgo.js"
+} from "./midiplayer.js"
+import { midiTrackPlots } from "./plots/midiTrackPlot.js"
+import { plotHarmonics, energyPctAtPeriod } from "./plots/plotHarmonics.js"
+import { gpSamplerClass, VSTlookup_to_arr, EXP_HOURS } from "./GaussianProcess/GPalgo.js"
 
 // ---- add a bus for communication between modules ----
 const bus = {
@@ -36,19 +36,21 @@ const bus = {
 
 // ---- one shared AudioContext + master volume for the whole page ----
 // Context is created now and auto-resumes on the first user gesture (see globalVolumeControl.js).
-const globalAudio = initGlobalAudio({ workletUrl: "/src/audio/audio_processor.js" })
+const globalAudio = initGlobalAudio({ workletUrl: new URL("./audio/audio_processor.js", import.meta.url) })
 
 // --------------------------------------- load data ---------------------------------------
+// Resolved from this file, so the site works at any base path (domain root or a subfolder).
+const DAT = new URL("../dat/", import.meta.url).href
 // UMAP bins are x/y only (same gene order as Normalized_counts / VST).
-const count_arr = await bin_to_array("/dat/Normalized_counts.bin", "/dat/bin_meta.json")
-const VST_arr = await bin_to_array("/dat/VST.bin", "/dat/bin_meta.json")
-const allgenes_VST_arr = await bin_to_array("/dat/allgenes_VST_umap.bin", "/dat/bin_meta.json")
-const allgenes_fft_arr = await bin_to_array("/dat/allgenes_fft_umap.bin", "/dat/bin_meta.json")
-const per_gene_meta = await bin_to_array("/dat/per_gene_meta.bin", "/dat/bin_meta.json")
+const count_arr = await bin_to_array(DAT + "Normalized_counts.bin", DAT + "bin_meta.json")
+const VST_arr = await bin_to_array(DAT + "VST.bin", DAT + "bin_meta.json")
+const allgenes_VST_arr = await bin_to_array(DAT + "allgenes_VST_umap.bin", DAT + "bin_meta.json")
+const allgenes_fft_arr = await bin_to_array(DAT + "allgenes_fft_umap.bin", DAT + "bin_meta.json")
+const per_gene_meta = await bin_to_array(DAT + "per_gene_meta.bin", DAT + "bin_meta.json")
 
-const gp_params_arr = await bin_to_array("/dat/gp_params.bin", "/dat/bin_meta.json")
-const circadian_VST_arr = await bin_to_array("/dat/circadian_VST_umap.bin", "/dat/bin_meta.json")
-const circadian_fft_arr = await bin_to_array("/dat/circadian_fft_umap.bin", "/dat/bin_meta.json")
+const gp_params_arr = await bin_to_array(DAT + "gp_params.bin", DAT + "bin_meta.json")
+const circadian_VST_arr = await bin_to_array(DAT + "circadian_VST_umap.bin", DAT + "bin_meta.json")
+const circadian_fft_arr = await bin_to_array(DAT + "circadian_fft_umap.bin", DAT + "bin_meta.json")
 if (
     count_arr.length !== allgenes_VST_arr.length ||
     count_arr.length !== allgenes_fft_arr.length ||
@@ -76,8 +78,6 @@ for (let i = 0; i < count_arr.length; i++) {
     allgenes_fft_arr[i].log_TPM = log_TPM
     per_gene_meta[i].GeneID = GeneID
 }
-// const [metaValues, osc_perGene_meta, shared, osc_perGene_mu, osc_perGene_std] =
-//     await load_waveforms("/dat/waveforms.bin", "/dat/bin_meta.json")
 const normalized_counts_lookup = new Map(count_arr.map((val) => [val.GeneID, val]))
 const VST_lookup = new Map(VST_arr.map((val) => [val.GeneID, val]))
 const per_gene_meta_lookup = new Map(per_gene_meta.map((val) => [val.GeneID, val]))
@@ -209,7 +209,7 @@ const MIDI_TRACKS = [
     { id: "bass", label: "Bass", trackIndex: 3 },
     { id: "brass", label: "Brass", trackIndex: 4 },
 ]
-const MIDI_FILE = "/dat/NGGYU.mid"
+const MIDI_FILE = DAT + "NGGYU.mid"
 let midiEvents = null
 let midiTransport = null
 let midiTrackCounts = null

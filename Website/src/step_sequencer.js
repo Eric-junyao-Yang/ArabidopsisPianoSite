@@ -1,5 +1,5 @@
-import { ldTimepoints } from "/src/catmullrom.js"
-import { PALETTE, THEME, withAlpha, drawAxis, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
+import { ldTimepoints } from "./catmullrom.js"
+import { PALETTE, THEME, withAlpha, drawAxis, axisLabel, plotTitle } from "./plots/plotTheme.js"
 
 // Point colors shared by the main plot: indigo = passes filters, grey = filtered out,
 // teal = hover, rose = in the play list, sand = in focus (matches the UMAP highlight colors).

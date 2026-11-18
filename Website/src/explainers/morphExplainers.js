@@ -1,4 +1,4 @@
-import { PALETTE, drawAxis, axisLabel, plotTitle } from "/src/plots/plotTheme.js"
+import { PALETTE, drawAxis, axisLabel, plotTitle } from "../plots/plotTheme.js"
 
 const PLAY_MS = 4000 // how long a morph explainer plays per press
 
