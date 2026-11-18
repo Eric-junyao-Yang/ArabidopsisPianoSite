@@ -3,21 +3,33 @@ import { PALETTE, THEME, drawAxis, axisLabel } from "./plotTheme.js"
 /**
  * levels: optional sorted, evenly spaced values the data can take (e.g. the 16 sample hours).
  * When given, draws one bar per level instead of a smoothed violin, and the window snaps to whole bins.
+ * horizontal: values run left → right and counts grow upward (phones). The plot is still drawn as the
+ * vertical violin, inside a group mapped onto the screen, so only the axis is drawn differently.
  */
 export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 20, left: 50}, 
     Arr, d3_select_div, y_lab, bus, execute_event = "", default_high = null, default_low = null,
-    { levels = null } = {}){
+    { levels = null, horizontal = false } = {}){
 
-    const innerWidth = width - margin.left - margin.right
-    const innerHeight = height - margin.top - margin.bottom
+    // In the vertical drawing's terms: innerWidth = count extent, innerHeight = value extent
+    const outerWidth = width - margin.left - margin.right
+    const outerHeight = height - margin.top - margin.bottom
+    const innerWidth = horizontal ? outerHeight : outerWidth
+    const innerHeight = horizontal ? outerWidth : outerHeight
 
     const svg = d3_select_div
         .append("svg")
             .attr("width", width)
             .attr("height", height)
     
-    const plotArea = svg.append("g")
+    const frame = svg.append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`)
+    // Horizontal: drawing (x = count, y = value position) → screen (x = innerHeight - y, y = innerWidth - x),
+    // so high values land on the right and counts rise from the bottom. d3.drag reports pointer
+    // positions in this group's coordinates, so the drag handlers below work unchanged.
+    const plotArea = horizontal
+        ? frame.append("g").attr("transform", `matrix(0, -1, -1, 0, ${innerHeight}, ${innerWidth})`)
+        : frame
+    const resizeCursor = horizontal ? "ew-resize" : "ns-resize"
     
     // Discrete: each level owns a bin of width `step` centred on it
     const step = levels ? levels[1] - levels[0] : 0
@@ -25,15 +37,28 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
     if (levels) yScale.domain([levels[0] - step / 2, levels.at(-1) + step / 2])
     else yScale.domain(d3.extent(Arr)).nice()
 
-    const yAxis = levels
-        ? d3.axisLeft(yScale).tickValues(levels)
-        : d3.axisLeft(yScale).ticks(Math.max(4, Math.floor(innerHeight / 50)))
-    drawAxis(plotArea.append("g"), yAxis.tickSizeOuter(0))
-    axisLabel(plotArea.append("text")
-        .attr("transform", "rotate(90)")
-        .attr("x", innerHeight/2)
-        .attr("y", 40))
-        .text(y_lab)
+    // Axis and label sit outside the mapped group, so their text isn't mirrored
+    const axisScale = horizontal ? yScale.copy().range([0, innerHeight]) : yScale
+    const axisFor = horizontal ? d3.axisBottom : d3.axisLeft
+    const valueAxis = levels
+        ? axisFor(axisScale).tickValues(horizontal ? levels.filter((_, i) => i % 2 === 0) : levels)
+        : axisFor(axisScale).ticks(Math.max(4, Math.floor(innerHeight / (horizontal ? 70 : 50))))
+    const axisG = frame.append("g")
+    if (horizontal) axisG.attr("transform", `translate(0, ${innerWidth})`)
+    drawAxis(axisG, valueAxis.tickSizeOuter(0))
+    if (horizontal) {
+        axisLabel(frame.append("text")
+            .attr("x", innerHeight / 2)
+            .attr("y", innerWidth + 32)
+            .attr("text-anchor", "middle"))
+            .text(y_lab)
+    } else {
+        axisLabel(frame.append("text")
+            .attr("transform", "rotate(90)")
+            .attr("x", innerHeight/2)
+            .attr("y", 40))
+            .text(y_lab)
+    }
 
     const histogram = d3.histogram()
         .domain(yScale.domain())
@@ -152,7 +177,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('stroke', 'none')
         .attr('fill', PALETTE.sand)
         .attr('opacity', 0)
-        .style('cursor', 'ns-resize')
+        .style('cursor', resizeCursor)
         .style('touch-action', 'none')
         .on('mouseenter', function () { d3.select(this).attr('opacity', 0.5) })
         .on('mouseleave', function () { d3.select(this).attr('opacity', 0) })
@@ -166,7 +191,7 @@ export function plotViolin(width, height, margin = {top: 20, right: 20, bottom: 
         .attr('stroke', 'none')
         .attr('fill', PALETTE.sand)
         .attr('opacity', 0)
-        .style('cursor', 'ns-resize')
+        .style('cursor', resizeCursor)
         .style('touch-action', 'none')
         .on('mouseenter', function () { d3.select(this).attr('opacity', 0.5) })
         .on('mouseleave', function () { d3.select(this).attr('opacity', 0) })

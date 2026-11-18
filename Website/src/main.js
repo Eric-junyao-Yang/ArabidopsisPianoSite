@@ -8,6 +8,7 @@ import { mountHarmonicMixer } from "./explainers/harmonicMixer.js"
 import { mountHarmonicsTable } from "./explainers/harmonicsTable.js"
 import { plotExpressionExplainer } from "./plots/plotExpressionExplainer.js"
 import { setupHelpPopUps } from "./helpPopup.js"
+import { setupFoldBackToTop } from "./foldBackToTop.js"
 import { virtualPiano } from "./virtualPiano.js"
 import { searchbar } from "./searchbar.js"
 import { initGlobalAudio } from "./audio/globalVolumeControl.js"
@@ -693,19 +694,27 @@ function applyColorMode() {
 const violinDiv = d3.select("#filter_slider")
 let violin = null // handle of the violin on screen ({ domain, setRange, node }); replaced on every swap
 
+// Phones: the violin stacks between the two UMAPs, so it lies flat and spans the full width
+const phoneLayout = window.matchMedia("(max-width: 520px)")
+
 function swapViolin(values){
     // keep non-plot children (e.g. the help button)
     violinDiv.selectAll(":scope > svg").remove()
-    // Shorter on phones, where the violin stacks between the two UMAPs
-    const violinHeight = window.innerWidth <= 520 ? 320 : 500
+    const horizontal = phoneLayout.matches
+    const [width, height, margin] = horizontal
+        ? [violinDiv.node().clientWidth, 170, { top: 36, right: 18, bottom: 44, left: 18 }] // top clears the help button
+        : [130, 500, { top: 20, right: 20, bottom: 20, left: 50 }]
     violin = plotViolin(
-        130, violinHeight, { top: 20, right: 20, bottom: 20, left: 50 },
+        width, height, margin,
         values, violinDiv, colorMetric.label, bus, "umap_value_filter", null, null,
-        { levels: colorMetric.levels ?? null }
+        { levels: colorMetric.levels ?? null, horizontal }
     )
     // New metric, new units: the old scrubber range is meaningless, so clear the filter
     bus.execute_event("umap_value_filter", [Infinity, -Infinity])
 }
+
+// Crossing the phone breakpoint flips the violin (rebuilding it clears the filter, like a mode change)
+phoneLayout.addEventListener("change", () => applyColorMode())
 
 // Clicking a button toggles its mode; its menu stays open while the mode is on
 for (const { id, modes, pick } of COLOR_BUTTONS) {
@@ -975,18 +984,58 @@ async function runDemo() {
 // Intro button and the inline link in How To
 for (const el of document.querySelectorAll("[data-demo]")) el.addEventListener("click", runDemo)
 
-// Any real user input mid-demo stops it and resets the page (synthetic events have isTrusted = false).
+// Real user input mid-demo stops it and resets the page (synthetic events have isTrusted = false).
+// Mouse, pen and keys stop it on press. A finger only stops it when it picks something: grabbing a
+// drag surface (touch-action: none, e.g. the UMAPs, violin, sliders) stops it on touch, and tapping a
+// control stops it on click, which the browser doesn't fire when the finger scrolled.
 // Capture phase so it runs first; a grab on the violin is swallowed so d3-drag doesn't start on a
 // violin the reset is about to replace (d3-drag starts on mousedown / touchstart).
-for (const type of ["pointerdown", "mousedown", "touchstart", "keydown"]) {
+const TAPPABLE = 'a, button, input, select, textarea, label, summary, [role="button"], #Synth_Keyboard_div'
+const TOUCH_MOUSE_GRACE_MS = 1000 // browsers send compatibility mouse events after a tap
+let lastTouchTime = -Infinity
+
+function isDragSurface(el) {
+    if (el.closest?.('input[type="range"]')) return true
+    for (let node = el; node instanceof Element; node = node.parentElement) {
+        if (getComputedStyle(node).touchAction === "none") return true
+    }
+    return false
+}
+
+function stopDemoFrom(e) {
+    if (violinDiv.node()?.contains(e.target) && e.target.closest("svg")) e.stopPropagation()
+    stopDemo()
+}
+
+const demoInterrupts = {
+    pointerdown: (e) => {
+        if (e.pointerType === "touch") {
+            lastTouchTime = e.timeStamp
+            if (!isDragSurface(e.target)) return // could be a scroll; a tap is caught on click
+        }
+        stopDemoFrom(e)
+    },
+    touchstart: (e) => {
+        lastTouchTime = e.timeStamp
+        if (isDragSurface(e.target)) stopDemoFrom(e)
+    },
+    mousedown: (e) => {
+        if (e.timeStamp - lastTouchTime < TOUCH_MOUSE_GRACE_MS) return // a tap's compatibility event
+        stopDemoFrom(e)
+    },
+    click: (e) => {
+        if (e.timeStamp - lastTouchTime < TOUCH_MOUSE_GRACE_MS && e.target.closest(TAPPABLE)) stopDemo()
+    },
+    keydown: stopDemoFrom,
+}
+for (const [type, handler] of Object.entries(demoInterrupts)) {
     window.addEventListener(type, (e) => {
-        if (!demoAbort || !e.isTrusted) return
-        if (violinDiv.node()?.contains(e.target) && e.target.closest("svg")) e.stopPropagation()
-        stopDemo()
-    }, { capture: true, passive: type === "wheel" || type === "touchstart" ? true : undefined })
+        if (demoAbort && e.isTrusted) handler(e)
+    }, { capture: true, passive: type === "touchstart" ? true : undefined })
 }
 
 setupHelpPopUps(document, window)
+setupFoldBackToTop(document, window)
 
 // --------------------------------------- Sound explainers ---------------------------------------
 const TOC1 = VSTlookup_to_arr(VST_lookup.get("AT5G61380"))
