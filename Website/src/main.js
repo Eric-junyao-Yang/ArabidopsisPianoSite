@@ -3,7 +3,9 @@ import { PEAK_HOUR_FIELD, phaseField, qvalField } from "./umap/umapColors.js"
 import { bin_to_array } from "./binHelper.js"
 import { plotViolin } from "./plots/plotViolin.js"
 import { plotWaveformsClass } from "./plots/plotWaveforms.js"
-import { createVoiceOwner, mountMorphExplainers, mountHarmonicMixer } from "./explainers/explainers.js"
+import { createVoiceOwner, mountMorphExplainers } from "./explainers/explainers.js"
+import { mountHarmonicMixer } from "./explainers/harmonicMixer.js"
+import { mountHarmonicsTable } from "./explainers/harmonicsTable.js"
 import { plotExpressionExplainer } from "./plots/plotExpressionExplainer.js"
 import { setupHelpPopUps } from "./helpPopup.js"
 import { virtualPiano } from "./virtualPiano.js"
@@ -106,7 +108,7 @@ for (let i = 0; i < gp_params_arr.length; i++) {
     circadian_fft_arr[i].log_TPM = log_TPM
 }
 // Amplitude spectrum per gene (period hours → FFT amplitude). Energy % is derived on read.
-const HARMONIC_PERIODS_H = [48, 24, 16, 12, 9.6, 8, 6.8, 6]
+const HARMONIC_PERIODS_H = [48, 24, 16, 12, 9.6, 8, 6.9, 6]
 const specs_lookup = new Map(per_gene_meta.map((v) => [
     v.GeneID,
     HARMONIC_PERIODS_H.map((period, i) => ({
@@ -1037,7 +1039,13 @@ if (expressionHost) plotExpressionExplainer(expressionHost, { TOC1, PP2AA3 })
 // One owner for both, so starting one explainer stops the other
 const explainerVoiceOwner = createVoiceOwner(explainerVoice)
 mountMorphExplainers(document.getElementById("Morph_Explainers"), explainerVoiceOwner)
-mountHarmonicMixer(document.getElementById("Harmonic_Mixer"), explainerVoiceOwner, bus)
+mountHarmonicMixer(
+    document.getElementById("Harmonic_Mixer"),
+    explainerVoiceOwner,
+    bus,
+    [...document.querySelectorAll(".mixer-presets [data-levels]")],
+)
+mountHarmonicsTable(document.getElementById("Harmonics_Table"))
 
 // --------------------------------------- Search Bars ---------------------------------------
 // Each search only offers genes from the current mode (lists swapped on DisplayModeSet)
