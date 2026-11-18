@@ -3,7 +3,7 @@ const fs   = require('fs')
 const path = require('path')
 
 const PORT = 3000
-const ROOT = __dirname
+const ROOT = path.join(__dirname, 'Website')
 const MIME = {
     '.html': 'text/html',
     '.js':   'application/javascript',
@@ -21,9 +21,6 @@ const MIME = {
 }
 
 http.createServer((req, res) => {
-    res.setHeader('Cross-Origin-Opener-Policy',   'same-origin')
-    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
-
     const urlPath = decodeURIComponent((req.url || '/').split('?')[0])
     const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '')
     const filePath = path.normalize(path.join(ROOT, rel))

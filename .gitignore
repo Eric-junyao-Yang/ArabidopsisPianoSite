@@ -6,3 +6,5 @@ to_do.md
 
 #pycache
 *.pyc
+
+.Rhistory
