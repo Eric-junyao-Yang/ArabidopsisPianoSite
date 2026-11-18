@@ -1,7 +1,7 @@
 // Same synthetic gene as the last cell of Step4_GP_testing.ipynb.
 // Prints the posterior as JSON. That notebook cell recomputes it in GPflow
 // and compares the two vectors.
-import { gpSamplerClass } from "./GPalgo.js"
+import { gpSamplerClass } from "../../Website/src/GaussianProcess/GPalgo.js"
 
 const PERIOD = 24
 const variance = 1.25

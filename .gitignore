@@ -8,3 +8,5 @@ to_do.md
 *.pyc
 
 .Rhistory
+
+.claude/
