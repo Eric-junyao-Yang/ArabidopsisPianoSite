@@ -850,6 +850,20 @@
                             it will likely just sound brighter.
                         </p>
 
+                        <div class="sound-examples" data-mode="All">
+                            <p class="sound-examples__title">Try out some genes in "All Genes Mode" with:</p>
+                            <div class="sound-examples__row">
+                                <span class="sound-examples__label">Strong harmonic at</span>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT1G73220" aria-pressed="false">48 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT1G64500" aria-pressed="false">24 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT4G17680" aria-pressed="false">16 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT5G46400" aria-pressed="false">12 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT1G34200" aria-pressed="false">8 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT2G23093" aria-pressed="false">6 hr</button>
+                            </div>
+                            <p class="sound-examples__hint">Click to load a gene, then play it with the keyboard.</p>
+                        </div>
+
                         <h4>Circadian Mode</h4>
                         <p>
                             Only genes oscillating around 24 hr are kept, so most of the differences you hear will be in brightness, not pitch.
@@ -857,6 +871,24 @@
                             The sound morphs continuously between random waveforms drawn from the gene's Gaussian Process fit, 
                             so the less confident the fit, the more the waveform (and the sound) wobbles. I absolutely love the sound.
                         </p>
+
+                        <div class="sound-examples" data-mode="Circadian">
+                            <p class="sound-examples__title">Try out some genes in "Circadian Mode" with:</p>
+                            <div class="sound-examples__row">
+                                <span class="sound-examples__label">Strong harmonic at</span>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT5G02180" aria-pressed="false">24 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT1G64690" aria-pressed="false">12 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT3G02920" aria-pressed="false">8 hr</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT5G25810" aria-pressed="false">6 hr</button>
+                            </div>
+                            <div class="sound-examples__row">
+                                <span class="sound-examples__label">Wobble</span>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT1G06040" aria-pressed="false">Low</button>
+                                <button type="button" class="btn sound-examples__btn" data-gene-id="AT1G79340" aria-pressed="false">High</button>
+                            </div>
+                            <p class="sound-examples__hint">Click to load a gene, then play it with the keyboard.</p>
+                        </div>
+
                         <h3>Picking Sounds for Jukebox</h3>
                         <p>
                             In audio mixing, giving instruments their own frequency ranges so they don't overlap keeps the music from sounding muddy.
@@ -865,6 +897,8 @@
                             above the bass and fill the middle, like the synth tracks. Genes dominated by the 48 hr component sit lowest and suit the bass.
                             You can also utilize the idea of "brightness" discussed above and select genes with other harmonics mixed in to spice up the sound. 
                             For example, a bright tone with higher 6 hr harmonic might be appropriate for Brass. Experiment around!
+                        </p>
+                        <p>
                             In "Circadian Mode", nearly every gene sits in the same 24 hr register, so try separating the tracks by brightness. The wobble adds additional texture!
                         </p>
                     </div>

@@ -1053,6 +1053,18 @@ mountHarmonicMixer(
 )
 mountHarmonicsTable(document.getElementById("Harmonics_Table"))
 
+// Example sounds in Discussion: each button switches gene set and selects its gene
+const soundExampleBtns = document.querySelectorAll(".sound-examples__btn")
+soundExampleBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+        setDisplayMode(btn.closest(".sound-examples").dataset.mode)
+        bus.execute_event("point_select", btn.dataset.geneId)
+    })
+})
+bus.subscribe_to("point_select", "sound_examples", (geneId) => {
+    soundExampleBtns.forEach((btn) => btn.setAttribute("aria-pressed", String(btn.dataset.geneId === geneId)))
+})
+
 // --------------------------------------- Search Bars ---------------------------------------
 // Each search only offers genes from the current mode (lists swapped on DisplayModeSet)
 const geneSearches = []
